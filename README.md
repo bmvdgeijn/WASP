@@ -1,0 +1,4 @@
+CHT
+===
+
+Combined Haplotype Test

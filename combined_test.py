@@ -81,6 +81,7 @@ def main():
                              % infile)
             exit(2)
         infiles.append(open(infile))
+        infiles[-1].readline() #skip the header
         snpinfo.append(infiles[-1].readline().strip().split())
     infile_list.close()
 
@@ -91,12 +92,12 @@ def main():
     row_count = 0
     finished=False
     
-    while not finished:
+    while not finished: 
         try:
             test_snps=[]
             # parse SNP info from each individual file
             for i in range(len(infiles)):
-                test_snps.append(parse_test_snp(snpinfo))
+                test_snps.append(parse_test_snp(snpinfo[i], options))
 
             # how many allele-specific reads are there across all linked SNPs and
             # and individuals?
@@ -105,37 +106,41 @@ def main():
 
             if totcounts <= options.min_counts:
                 # skip, not enough allele-specific counts
+                for i in range(len(infiles)):
+                    line=infiles[i].readline().strip()
+                    if line:
+                        snpinfo[i] = line.split()
+                    else:
+                        # out of lines from at least one file, assume we are finished
+                        finished = True
                 continue
 
             row_count+=1
-            if options.shuffle == 1:
+            if options.shuffle:
                 # permute genotypes
                 perm = range(len(test_snps))
                 shuffle(perm)
-                geno1temp = [test_snps[perm[y]].geno_hap1 for y in range(len(perm))]
-                geno2temp = [test_snps[perm[y]].geno_hap2 for y in range(len(perm))]
+                geno1temp = [test_snps[y].geno_hap1 for y in perm]
+                geno2temp = [test_snps[y].geno_hap2 for y in perm]
                 for i in range(len(test_snps)):
                     test_snps[i].geno_hap1 = geno1temp[i]
                     test_snps[i].geno_hap2 = geno2temp[i]
-
             t1=time.time()
             # maximize likelihood with alpha = beta (no difference between genotypes)
             best1par = fmin(loglikelihood,(20,10), args=(test_snps, options.is_bnb_only,
                                                          options.is_as_only,
                                                          options.bnb_sigma,
-                                                         options.as_sigma, error))
+                                                         options.as_sigma, options.read_error_rate))
             
             print str(time.time()-t1)
-            
             loglike1par = loglikelihood(best1par, test_snps, options.is_bnb_only,
                                         options.is_as_only, options.bnb_sigma,
-                                        options.as_sigma, error)
+                                        options.as_sigma, options.read_error_rate)
             t1=time.time()
-
             # maximize likelihood with alpha and beta as separate parameters
             best2par = fmin(loglikelihood, (best1par[0], best1par[0], best1par[1]),
                             args=(test_snps, options.is_bnb_only,options.is_as_only,
-                                  options.bnb_sigma,options.as_sigma,error))
+                                  options.bnb_sigma,options.as_sigma,options.read_error_rate))
             
             print str(time.time()-t1)
             
@@ -143,7 +148,7 @@ def main():
             
             loglike2par = loglikelihood(best2par, test_snps, options.is_bnb_only,
                                         options.is_as_only, options.bnb_sigma,
-                                        options.as_sigma, error)
+                                        options.as_sigma, options.read_error_rate)
 
             # compute likelihood ratio test statistic:
             chisq = 2*(loglike1par-loglike2par)
@@ -264,7 +269,7 @@ def BNB_loglike(k,mean,n,sigma):
     return loglike
 
 
-def loglikelihood(x, test_snps, is_nb_only, is_as_only, bnb_sigma, as_sigma,error): 
+def loglikelihood(x, test_snps, is_bnb_only, is_as_only, bnb_sigma, as_sigma,error): 
     if len(x) == 3:
         # model with separate alpha and beta params
         alpha = x[0]
@@ -310,29 +315,29 @@ def loglikelihood(x, test_snps, is_nb_only, is_as_only, bnb_sigma, as_sigma,erro
 
 
 def parse_test_snp(snpinfo, options):
-    tot = int(snpinfo[i][16])
-    geno_hap1 = int(snpinfo[i][6].strip().split("|")[0])
-    geno_hap2 = int(snpinfo[i][6].strip().split("|")[1])
-    count = int(snpinfo[i][15])
+    tot = int(snpinfo[16])/100000
+    geno_hap1 = int(snpinfo[6].strip().split("|")[0])
+    geno_hap2 = int(snpinfo[6].strip().split("|")[1])
+    count = int(snpinfo[15])
 
-    if snpinfo[i][9].strip() == "NA":
-        # undefined, return empty data structure
-        return TestSNP(geno_hap1, geno_hap2, [], [], [], tot, count)    
+    if snpinfo[9].strip() == "NA":
+        # SNP is homozygous, so there is no AS info
+        return Test_SNP(geno_hap1, geno_hap2, [], [], [], tot, count)    
     else:
-        # positions of target SNPs (not used)
-        snplocs=[int(y.strip()) for y in snpinfo[i][9].split(';')]
+        # positions of target SNPs (not currently used)
+        snplocs=[int(y.strip()) for y in snpinfo[9].split(';')]
 
         # counts of reads that match reference overlapping linked 'target' SNPs
-        AS_target_ref = [int(y) for y in snpinfo[i][12].split(';')]
+        AS_target_ref = [int(y) for y in snpinfo[12].split(';')]
 
         # counts of reads that match alternate allele
-        AS_target_alt = [int(y) for y in snpinfo[i][13].split(';')]
+        AS_target_alt = [int(y) for y in snpinfo[13].split(';')]
 
         # heterozygote probabilities
-        hetps = [float(y.strip()) for y in snpinfo[i][10].split(';')]
+        hetps = [float(y.strip()) for y in snpinfo[10].split(';')]
 
-        # linkage probabilities, currently not used
-        linkageps = [float(y.strip()) for y in snpinfo[i][11].split(';')]
+        # linkage probabilities, not currently used
+        linkageps = [float(y.strip()) for y in snpinfo[11].split(';')]
 
         if options.shuffle:
             # permute allele-specific read counts by flipping them randomly at
@@ -343,11 +348,7 @@ def parse_test_snp(snpinfo, options):
                     AS_target_ref[y] = AS_target_alt[y]
                     AS_target_alt[y] = temp
 
-        return TestSNP(geno_hap1, geno_hap2, AS_target_ref, 
+        return Test_SNP(geno_hap1, geno_hap2, AS_target_ref, 
                        AS_target_alt, hetps, tot, count)
         
-
-
-
-
 main()

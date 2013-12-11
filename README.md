@@ -35,6 +35,13 @@ heterozygote probabilities and read count totals using information about read co
 content etc.
 
 
+Dependencies
+----------
+
+The code depends on both [numpy](http://www.numpy.org) and [scipy](http://www.scipy.org). 
+The code also depends on [argparse](https://code.google.com/p/argparse/), which is included 
+by default in newer versions of python (>= 2.7).
+
 Input Format
 ----------
 

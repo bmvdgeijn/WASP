@@ -2,7 +2,7 @@ CHT -  Combined Haplotype Test
 ======================
 
 This repository contains source code for running the Combined Haplotype Test. The 
-test is described in the supplementary material for [our paper](http://dx.doi.org/10.1126/science.1242429): McVicker G*, van de Geijn B*, Degner JF, Cain CE, Banovich NE, Raj A, 
+test is described in the supplementary material for [our paper](http://dx.doi.org/10.1126/science.1242429): McVicker G\*, van de Geijn B\*, Degner JF, Cain CE, Banovich NE, Raj A, 
 Lewellen N, Myrthil M, Gilad Y, Pritchard JK. "Identification of genetic variants that 
 affect histone modifications in human cells" Science. 2013
 
@@ -16,6 +16,7 @@ read count and genotype information for each individual.
 Each file is a space-delimited text file that contains a single header line.
 
 The columns in the input file are as follows:
+
 1. CHROM - name of chromosome, e.g. chr1
 2. TEST.SNP.POS - position of test SNP on chromosome (first base is numbered 1),  e.g. 963531
 3. TEST.SNP.ID - identifier for test SNP, rs2488994
@@ -64,13 +65,14 @@ Output
 ------
 
 The script writes a tab delimited text file with the following columns:
-    chromosome - location of tested SNP
-    position - position of tested SNP
-    chi-square value - likelihood ratio test statistic
-    best alpha parameter - maximum likelihood estimate of alpha parameter
-    best beta parameter - maximum likelihood estimate of beta parameter
-    overdispersion parameter - maximum  likelihood estimate of per-region dispersion parameter
-    number of AS reads - number  of of allele specific reads in tested region
+
+1. chromosome - location of tested SNP
+2. position - position of tested SNP
+3. chi-square value - likelihood ratio test statistic
+4. best alpha parameter - maximum likelihood estimate of alpha parameter
+5. best beta parameter - maximum likelihood estimate of beta parameter
+6. overdispersion parameter - maximum  likelihood estimate of per-region dispersion parameter
+7. number of AS reads - number  of of allele specific reads in tested region
 
 
 

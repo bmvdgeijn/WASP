@@ -30,9 +30,10 @@ from random import shuffle
 from random import randint
 
 
-class Test_SNP:
-    def __init__(self, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt, 
+class TestSNP:
+    def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt, 
                  hetps, totals, counts):
+        self.name = name
         self.geno_hap1 = geno_hap1
         self.geno_hap2 = geno_hap2
         self.AS_target_ref = AS_target_ref
@@ -56,46 +57,65 @@ class Test_SNP:
 
 
 
+def open_input_files(in_filename):
+    if not os.path.exists(in_filename) or not os.path.isfile(in_filename):
+        sys.stderr.write("input file %s does not exist or is not a regular file\n" %
+                         in_filename)
+        exit(2)
+    
+    # read file that contains list of input files
+    in_file = open(in_filename)
+
+    infiles = []
+    for line in in_file:
+        # open each input file and read first line
+        filename = line.rstrip()
+        if not filename or not os.path.exists(filename) or not os.path.isfile(filename):
+            sys.stderr.write("input file '%s' does not exist or is not a regular file\n" 
+                             % infile)
+            exit(2)
+        if filename.endswith(".gz"):
+            f = gzip.open(filename)
+        else:
+            f = open(filename)
+            
+        # skip header
+        f.readline()
+
+        infiles.append(f)
+    in_file.close()
+    
+    if len(infiles) == 0:
+        sys.stderr.write("no input files specified in file '%s'\n" % options.infile_list)
+        exit(2)
+
+    return infiles
+
+    
+    
     
 def main():
     options = parse_options()
 
-    outfile = open(options.out_file, 'w')
+    if options.out_file.endswith(".gz"):
+        outfile = gzip.open(options.out_file, "wb")
+    else:
+        outfile = open(options.out_file, 'w')
 
-    infiles = []
+    infiles = open_input_files(options.infile_list)
+    
+    # add first row of each input file to snpinfo list
     snpinfo = []
+    for f in infiles:
+        snpinfo.append(f.readline().strip().split())
 
-    if not os.path.exists(options.infile_list) or \
-      not os.path.isfile(options.infile_list):
-        sys.stderr.write("input file %s does not exist or is not a regular file\n" %
-                         options.infile_list)
-        exit(2)
-    
-    # read file that contains list of input files
-    infile_list = open(options.infile_list)
-    for infile in infile_list:
-        # open each input file and read first line
-        infile = infile.rstrip()
-        if not infile or not os.path.exists(infile) or not os.path.isfile(infile):
-            sys.stderr.write("input file '%s' does not exist or is not a regular file\n" 
-                             % infile)
-            exit(2)
-        infiles.append(open(infile))
-        infiles[-1].readline() #skip the header
-        snpinfo.append(infiles[-1].readline().strip().split())
-    infile_list.close()
-
-    if len(infiles) == 0:
-        sys.stderr.write("no input files specified in file '%s'\n" % options.infile_list)
-        exit(2)
-    
     row_count = 0
     finished=False
-    
+        
     while not finished: 
         try:
             test_snps=[]
-            # parse SNP info from each individual file
+            # parse test SNP and associated info from input file row
             for i in range(len(infiles)):
                 test_snps.append(parse_test_snp(snpinfo[i], options))
 
@@ -105,6 +125,12 @@ def main():
                              for x in test_snps])
 
             if totcounts <= options.min_counts:
+                
+                if options.verbose:
+                    sys.stderr.write("-----\nskipping SNP %s because "
+                                     "total AS counts %d <= %d\n" % 
+                                     (test_snps[0].name, totcounts, options.min_counts))
+
                 # skip, not enough allele-specific counts
                 for i in range(len(infiles)):
                     line=infiles[i].readline().strip()
@@ -115,6 +141,10 @@ def main():
                         finished = True
                 continue
 
+            if options.verbose:
+                sys.stderr.write("-----\ntesting SNP %s\n" % test_snps[0].name)
+
+            
             row_count+=1
             if options.shuffle:
                 # permute genotypes
@@ -130,9 +160,13 @@ def main():
             best1par = fmin(loglikelihood,(20,10), args=(test_snps, options.is_bnb_only,
                                                          options.is_as_only,
                                                          options.bnb_sigma,
-                                                         options.as_sigma, options.read_error_rate))
-            
-            print str(time.time()-t1)
+                                                         options.as_sigma, 
+                                                         options.read_error_rate),
+                            disp=options.verbose)
+
+            if options.verbose:
+                sys.stderr.write("null model optimization took %.3fs\n" % (time.time()-t1))
+                
             loglike1par = loglikelihood(best1par, test_snps, options.is_bnb_only,
                                         options.is_as_only, options.bnb_sigma,
                                         options.as_sigma, options.read_error_rate)
@@ -140,11 +174,11 @@ def main():
             # maximize likelihood with alpha and beta as separate parameters
             best2par = fmin(loglikelihood, (best1par[0], best1par[0], best1par[1]),
                             args=(test_snps, options.is_bnb_only,options.is_as_only,
-                                  options.bnb_sigma,options.as_sigma,options.read_error_rate))
+                                  options.bnb_sigma,options.as_sigma,options.read_error_rate),
+                            disp=options.verbose)
             
-            print str(time.time()-t1)
-            
-            sys.stdout.flush()
+            if options.verbose:
+                sys.stderr.write("alternative model optimization took %.3fs\n" % (time.time()-t1))
             
             loglike2par = loglikelihood(best2par, test_snps, options.is_bnb_only,
                                         options.is_as_only, options.bnb_sigma,
@@ -160,14 +194,17 @@ def main():
                                      str(totcounts)]) +'\n')
             outfile.flush()
         
-        except:
-            # an error occured, write to output file, but put 0s for all params and 
+        except Exception as e:
+            # an error occured, write to output file, but put 0s for all params and
+            sys.stderr.write("An error occurred, writing line with 0s for SNP:\n%s\n" % str(e))
+            
             outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], 
                                     "0", "0", "0", "0", "0"]) + '\n')
+            raise
 
         # read next set of lines from input file
         for i in range(len(infiles)):
-            line=infiles[i].readline().strip()
+            line = infiles[i].readline().strip()
             if line:
                 snpinfo[i] = line.split()
             else:
@@ -211,6 +248,10 @@ def parse_options():
                         type=int, default=0,
                         help="only perform test when total number of allele-specific "
                         "read counts across individuals > MIN_COUNTS")
+    
+    parser.add_argument("-v", action='store_true', dest='verbose', 
+                        default=False, help="print extra information")
+
 
     parser.add_argument("infile_list", action='store', default=None)
     parser.add_argument("out_file", action='store', default=None)
@@ -282,11 +323,12 @@ def loglikelihood(x, test_snps, is_bnb_only, is_as_only, bnb_sigma, as_sigma,err
         beta = x[0]
         r = x[1]
     loglike = 0
-    ratio = (alpha / (alpha + beta))
 
     #if input values are outside of reasonable range return a very high -loglike
     if alpha <= 0 or beta <= 0 or r <= 0:
         return 10000000000000000000000
+    
+    ratio = (alpha / (alpha + beta))
 
     for i in range(len(test_snps)):
         if(test_snps[i].is_homo_ref()):
@@ -315,14 +357,31 @@ def loglikelihood(x, test_snps, is_bnb_only, is_as_only, bnb_sigma, as_sigma,err
 
 
 def parse_test_snp(snpinfo, options):
-    tot = int(snpinfo[16])/100000
-    geno_hap1 = int(snpinfo[6].strip().split("|")[0])
-    geno_hap2 = int(snpinfo[6].strip().split("|")[1])
-    count = int(snpinfo[15])
+    snp_id = snpinfo[2]
+    if snpinfo[16] == "NA":
+        # SNP is missing data
+        tot = 0
+    else:
+        # rescale these to put totals in reasonable range
+        # better approach might be to divide by minimum total
+        # across individuals
+        tot = int(snpinfo[16])/100000
+
+    if snpinfo[6] == 0:
+        geno_hap1 = int(snpinfo[6].strip().split("|")[0])
+        geno_hap2 = int(snpinfo[6].strip().split("|")[1])
+    else:
+        geno_hap1 = 0
+        geno_hap2 = 0
+    
+    if snpinfo[15] == "NA":
+        count = 0
+    else:
+        count = int(snpinfo[15])
 
     if snpinfo[9].strip() == "NA":
         # SNP is homozygous, so there is no AS info
-        return Test_SNP(geno_hap1, geno_hap2, [], [], [], tot, count)    
+        return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)    
     else:
         # positions of target SNPs (not currently used)
         snplocs=[int(y.strip()) for y in snpinfo[9].split(';')]
@@ -348,7 +407,7 @@ def parse_test_snp(snpinfo, options):
                     AS_target_ref[y] = AS_target_alt[y]
                     AS_target_alt[y] = temp
 
-        return Test_SNP(geno_hap1, geno_hap2, AS_target_ref, 
+        return TestSNP(snp_id, geno_hap1, geno_hap2, AS_target_ref, 
                        AS_target_alt, hetps, tot, count)
         
 main()

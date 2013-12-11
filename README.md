@@ -96,6 +96,8 @@ Running the combined test
         -m <int>   choose a threshold for minimum number of allele specific reads (default 0)
         -e <float> choose a sequencing error rate in the reads (default 0.005)
 
+An example input file named H3K27ac\_example\_input\_file.txt is included in this repo. This can be used to run the combined haplotype test on H3K27ac data from 10 individuals. The input file points to files that contain read count and haplotype information for dsQTLs, which can be downloaded from [here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/dsQTLs/).
+
 
 Output
 ------

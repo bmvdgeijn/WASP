@@ -91,7 +91,7 @@ Running the combined test
         -a perform the allele specific portion of the test only
         -d perform the total read depth portion of the test only
         -s randomly permute the genotypes and allele specific counts
-        -d <float> choose a total read depth overdispersion parameter (default=0.00001)
+        -b <float> choose a total read depth overdispersion parameter (default=0.00001)
         -o <float> choose an allele specific overdispersion parameter (default=0.00001)
         -m <int>   choose a threshold for minimum number of allele specific reads (default 0)
         -e <float> choose a sequencing error rate in the reads (default 0.005)

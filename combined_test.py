@@ -368,11 +368,11 @@ def parse_test_snp(snpinfo, options):
         tot = int(snpinfo[16])/100000
 
     if snpinfo[6] == 0:
-        geno_hap1 = int(snpinfo[6].strip().split("|")[0])
-        geno_hap2 = int(snpinfo[6].strip().split("|")[1])
-    else:
         geno_hap1 = 0
         geno_hap2 = 0
+    else:
+        geno_hap1 = int(snpinfo[6].strip().split("|")[0])
+        geno_hap2 = int(snpinfo[6].strip().split("|")[1])
     
     if snpinfo[15] == "NA":
         count = 0

@@ -1,28 +1,37 @@
-import genome.db
+import genome.db, gzip, argparse, math
 
 def main():
     error=0.01
     args=parse_options()
-    infile=open(args.infile,,"r")
-    outfile=open(args.outfile,,"w")
+    if args.infile[-3:]==".gz":
+        infile=gzip.open(args.infile,"r")
+    else:
+        infile=open(args.infile,"r")
+    if args.outfile[-3:]==".gz":
+        outfile=gzip.open(args.outfile,"w")
+    else:
+        outfile=open(args.outfile,"w")
 
     gdb = genome.db.GenomeDB()
-    ref_track=gdb.open_track("10_IND/all_counts/ref_counts_%s" % ind)
-    alt_track=gdb.open_track("10_IND/all_counts/alt_counts_%s" % ind)
+    ref_track=gdb.open_track(args.ref_track)
+    alt_track=gdb.open_track(args.alt_track)
 
-    snp_line=infile.read_line()
+    snp_line=infile.readline()
     if snp_line:
         outfile.write(snp_line)
     else:
         sys.stderr.write("The input file was empty.\n")
         exit()
 
-    snp_line=infile.read_line()
+    snp_line=infile.readline()
     while snp_line:
-        snpinfo=snpline.strip().split()
-        new_hetps=process_one_snp(snpinfo, ref_track, alt_track,error)
-        outfile.write("\t".join(snpinfo[:10]+";".join(new_hetps)+snpinfo[11:])+"\n")
-        snp_line=infile.read_line()
+        snpinfo=snp_line.strip().split()
+        if snpinfo[9]=="NA":
+            outfile.write(snp_line)
+        else:
+            new_hetps=process_one_snp(snpinfo, ref_track, alt_track,error)
+            outfile.write("\t".join(snpinfo[:10]+[";".join(new_hetps)]+snpinfo[11:])+"\n")
+        snp_line=infile.readline()
     
 
 def process_one_snp(snpinfo, ref_track, alt_track,error):
@@ -36,7 +45,7 @@ def process_one_snp(snpinfo, ref_track, alt_track,error):
         pos=snplocs[i]
         adr=ref_track.get_nparray(chrm, pos, pos)[0]
         ada=alt_track.get_nparray(chrm, pos, pos)[0]
-        update_hetps.append(get_posterior_hetp(hetps[i],adr,ada,error))
+        update_hetps.append(str(get_posterior_hetp(hetps[i],adr,ada,error)))
     return update_hetps
 
 
@@ -56,7 +65,9 @@ def parse_options():
     parser=argparse.ArgumentParser()
     parser.add_argument("infile", action='store', default=None)
     parser.add_argument("outfile", action='store', default=None)
-    parser.add_argument("reffile", action='store', default=None)
-    parser.add_argument("altfile", action='store', default=None)
+    parser.add_argument("ref_track", action='store', default=None)
+    parser.add_argument("alt_track", action='store', default=None)
     
     return parser.parse_args()
+
+main()

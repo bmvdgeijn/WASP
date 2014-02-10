@@ -1,3 +1,43 @@
+#!/bin/env python
+#
+# Copyright 2013 Graham McVicker and Bryce van de Geijn
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#
+#
+"""
+usage: update_total_depth.py input_file_list output_directory
+
+positional arguments:
+  input_file_list       name of the .txt file containing a list of files for input
+  out_directory         directory to output the updated files
+
+
+optional arguments:
+  None
+
+This script is used to update the expected read depths of the input files for the
+Combined Haplotype Test.  GC content biases (potential caused by the PCR step)
+and peakiness of the data (potentially caused by differences in ChIP efficiency
+or the expression of a few highly expressed genes) can vary greatly between
+individuals, sequencing libraries, and lanes.  To correct for this, for each
+individual, we fit quartic splines across regions for GC content and combined (
+across all individuals) read depth.  This results in a fitted expected read depth
+for each region x individual which is then used for the CHT.
+"""
+
+
 import numpy as np
 import sys, pdb, gzip, argparse, genome.db
 from scipy.optimize import *
@@ -5,11 +45,17 @@ from scipy.optimize import *
 def main():
     args=parse_options()
     inlist=[i for i in open(args.infile_list,"r")]
-    #test=open_output_files(inlist,args.out_dir)
+
+    sys.stderr.write("Loading count table\n")
     count_table=load_data(inlist)
+
+    sys.stderr.write("Fitting coefficients\n")
     coef_list=fit_splines(count_table)    
+
     sys.stderr.write("Updating totals\n")
     update_totals(inlist,args.out_dir,count_table,coef_list)
+
+    sys.stderr.write("Finished!\n")
 
 def open_input_files(inlist):
     infiles=[]
@@ -56,9 +102,9 @@ def load_data(inlist):
         chrm=snp_info[0]
         
         
-        starts=[int(x) for x in snp_info[1].split("-")[0].split(";")]
-        ends=[x+100 for x in starts]
-        # ends=[int(x) for x in snp_info[1].split("-")[1].split(";")]
+        starts=[int(x) for x in snp_info[7].split(";")]
+        ends=[int(x) for x in snp_info[8].split(";")]
+        
         gc=0
         at=0
         for i in range(len(starts)):
@@ -190,7 +236,6 @@ def parse_options():
     parser=argparse.ArgumentParser()
     parser.add_argument("infile_list", action='store', default=None)
     parser.add_argument("out_dir", action='store', default=None)
-
     return parser.parse_args()
 
 main()

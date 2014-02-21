@@ -1,6 +1,6 @@
 #!/bin/env python
 #
-# Copyright 2013 Graham McVicker and Bryce van de Geijn
+# Copyright 2013-14 Graham McVicker and Bryce van de Geijn
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,16 +47,21 @@ def main():
     inlist=[i for i in open(args.infile_list,"r")]
 
     sys.stderr.write("Loading count table\n")
+  
     count_table=load_data(inlist)
 
     sys.stderr.write("Fitting coefficients\n")
+    if args.fit_in_file:
+        coefs_list=read_splines(args.fit_in_file)
     coef_list=fit_splines(count_table)    
 
     sys.stderr.write("Updating totals\n")
+    if args.fit_out_file:
+        write_splines(coefs_list,args.fit_out_file)
     update_totals(inlist,args.out_dir,count_table,coef_list)
 
     sys.stderr.write("Finished!\n")
-
+    
 def open_input_files(inlist):
     infiles=[]
     for infile in inlist:
@@ -137,6 +142,21 @@ def load_data(inlist):
         infile.close()
     count_table=np.array(count_table,dtype=np.float64)
     return count_table
+
+def read_splines(fit_in_file):
+    spline_file=open(fit_in_file,"r")
+    coefs=[]
+    for line in spline_file:
+        coefs.append([float(x) for x in line.strip.split()])
+    spline_file.close()
+    return coefs
+
+def write_splines(coefs,fit_out_file):
+    spline_file=open(fit_out_file,"w")
+    for ind in coefs:
+        spline_file.write("\t".join([str(x) for x in ind])+"\n")
+    spline_file.close()
+    return
 
 def fit_splines(count_table):
     coefs=[]
@@ -236,6 +256,13 @@ def parse_options():
     parser=argparse.ArgumentParser()
     parser.add_argument("infile_list", action='store', default=None)
     parser.add_argument("out_dir", action='store', default=None)
+    parser.add_argument("-i", action='store',
+                        dest='fit_in_file', default=None,
+                        help="read coefficients from specified file  "
+    parser.add_argument("-o", action='store',
+                        dest='fit_out_file', default=None,
+                        help="only fit the model and write to specified file "
+
     return parser.parse_args()
 
 main()

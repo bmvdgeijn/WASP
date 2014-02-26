@@ -17,45 +17,54 @@
 #
 #
 """
-usage: import_bam_ref_nonref_counts.py [-h] [--assembly ASSEMBLY] \
-                                        ref_as_count_track \
-                                        alt_as_count_track \
-                                        other_as_count_track \
-                                        read_count_track \
-                                        bam_file1 [bam_file2 [...]]
+usage: import_bam_ref_nonref_counts.py [-h] [--assembly ASSEMBLY]
+                                       [--snp_index_track SNP_INDEX_TRACK]
+                                       [--snp_track SNP_TRACK]
+                                       [--hap_track HAP_TRACK]
+                                       ref_as_count_track alt_as_count_track
+                                       other_as_count_track read_count_track
+                                       bam_filenames [bam_filenames ...]
 
 positional arguments:
-  ref_as_count_track    name of track to store counts of allele-specific reads that match
-                        reference allele
-  alt_as_count_track    name of track to store counts of allele-specific reads that match
-                        alternate (non-reference) allele
-  other                 name of track to store counts of allele-specific reads that match
-                        neither allele
-  read_count_track      name of track to store read counts in (stored at position of left end
-                        of read)
-  bam_file(s)           BAM files containing filtered and sorted mapped reads.
-  input_file            bed-like file to read coordinates of test SNP and
-                        target region from
+  ref_as_count_track    name of track to store counts of reads that match
+                        reference
+  alt_as_count_track    name of track to store counts of reads that match
+                        alternate
+  other_as_count_track  name of track to store counts of reads that match
+                        neither reference or alternate
+  read_count_track      name of track to store read counts in--positions of
+                        LEFT end of read are used
+  bam_filenames         bam file(s) to read mapped reads from
 
 optional arguments:
-  -h, --help            show this help message and exit
-  --assembly ASSEMBLY   genome assembly that reads were mapped to (e.g. hg18)
+  -h, --help            show help message and exit
+  --assembly ASSEMBLY   genome assembly that reads were mapped to (e.g. hg19)
+  --snp_index_track SNP_INDEX_TRACK
+                        name of SNP index track
+                        (default=1000genomes/snp_index)
+  --snp_track SNP_TRACK
+                        name of track containing table of SNPs
+                        (default=1000genomes/)
+  --hap_track HAP_TRACK
+                        name of haplotype track; if supplied when read
+                        overlaps multiple SNPs counts are randomly assigned to
+                        ONE of the overlapping HETEROZYGOUS SNPs; if not
+                        supplied counts are randomly assigned to ONE of
+                        overlapping SNPs (regardless of genotype)
 
+This program reads BAM files and counts the number of reads that match
+the alternate and reference allele at every SNP position stored in the
+/impute2/snps HDF5 track. The read counts are stored in specified
+ref_track, alt_track and other_track HDF5 tracks. Additionally counts
+of all reads are stored in another track (at the left-most position of
+the reads).
 
-This program reads BAM files and counts the number of reads that
-match the alternate and reference allele at every SNP position
-stored in the /impute2/snps HDF5 track. The read counts are stored in
-specified ref_track, alt_track and other_track HDF5 tracks. Additionally counts
-of all reads are stored in another track (at the left-most position 
-of the reads).
+This program does not perform filtering of reads based on mappability.
+It is assumed that this filtering will be done prior to calling this
+script.
 
-Currently this program filters out reads that:
-  1) do not map uniquely according to Roger's 20bp mapping criteria
-  2) reads that overlap known indels
-  3) reads that overlap more than 1 known SNP
-
-Filtering Criterium 1 uses a hardcoded track containing Roger's
-mappability data. 
+Reads that overlap known indels are not included in allele-specific
+counts.
 
 We are currently working on an improved allele-specific mapping method
 so that criteria 1 and 2 can be relaxed can be done at the level of
@@ -77,18 +86,33 @@ import numpy as np
 import pysam
 
 import genome.db
+import genome.coord
+
+
+# codes used by pysam for aligned read CIGAR strings
+BAM_CMATCH     = 0 # M
+BAM_CINS       = 1 # I
+BAM_CDEL       = 2 # D
+BAM_CREF_SKIP  = 3 # N
+BAM_CSOFT_CLIP = 4 # S
+BAM_CHARD_CLIP = 5 # H
+BAM_CPAD       = 6 # P
+BAM_CEQUAL     = 7 # =
+BAM_CDIFF      = 8 # X
+
+BAM_CIGAR_DICT = {0 : "M", 
+                  1 : "I",
+                  2 : "D",
+                  3 : "N",
+                  4 : "S",
+                  5 : "H",
+                  6 : "P",
+                  7 : "=",
+                  8 : "X"}
+
 
 SNP_UNDEF = -1
-SNP_TRACK_NAME = "impute2/snps"
-SNP_INDEX_TRACK_NAME = "impute2/snp_index"
-SNP_REF_MATCH_TRACK_NAME = "impute2/snp_match_ref"
-DEL_TRACK_NAME = "impute2/deletions"
-
-SEQ_TRACK_NAME = "seq"
-
-MAP_TRACK_NAME = "mappability/roger_20bp_mapping_uniqueness"
-
-MAX_VAL = 255
+MAX_COUNT = 255
 
 
 def create_carray(track, chrom):
@@ -116,6 +140,23 @@ def is_indel(snp):
         return True
 
 
+def dump_read(f, read):
+    cigar_str = " ".join(["%s:%d" % (BAM_CIGAR_DICT[c[0]], c[1]) for c in read.cigar])
+
+    f.write("pos: %d\n"
+            "aend: %d\n"
+            "alen (len of aligned portion of read on genome): %d\n"
+            "qstart: %d\n"
+            "qend: %d\n"
+            "qlen (len of aligned qry seq): %d\n"
+            "rlen (read len): %d\n"
+            "tlen (insert size): %d\n"
+            "cigar: %s\n"
+            "seq: %s\n"
+            % (read.pos, read.aend, read.alen, read.qstart, read.qend,
+               read.qlen, read.rlen, read.tlen, cigar_str, read.seq))
+    
+
 
 
 def get_sam_iter(samfile, chrom):
@@ -142,12 +183,104 @@ def get_sam_iter(samfile, chrom):
     return sam_iter
 
 
+
+
+def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab):
+    """Picks out a single SNP from those that the read overlaps.
+    Returns a tuple containing 4 elements: [0] the index of the SNP in
+    the SNP table, [1] the offset into the read sequence, [2] flag
+    indicating whether the read was 'split' (i.e. was a spliced
+    read), [3] flag indicating whether read overlaps known indel. 
+    If there are no overlapping SNPs or the read cannot be processed, 
+    (None, None, is_split, overlap_indel) is returned instead.
+    """
+    read_offsets = []
+    snp_idx = []
+
+    read_start_idx = 0
+    genome_start_idx = read.pos
+
+    n_match_segments = 0
+    is_split = False
+    overlap_indel = False
     
+    for cig in read.cigar:
+        op = cig[0]
+        op_len = cig[1]
 
+        if op == BAM_CMATCH:
+            # this is a block of match/mismatch in read alignment
+            read_end = read_start_idx + op_len
+            genome_end = genome_start_idx + op_len
+            
+            # get offsets of any SNPs that this read overlaps
+            idx = snp_index_array[genome_start_idx:genome_end]
+            is_def = np.where(idx != SNP_UNDEF)[0]
+            read_offsets.extend(read_start_idx + is_def)
+            snp_idx.extend(idx[is_def])
+
+            read_start_idx = read_end
+            genome_start_idx = genome_end
+            
+            n_match_segments += 1
+        elif op == BAM_CREF_SKIP:
+            # spliced read, skip over this region of genome
+            genome_start_idx += op_len
+            is_split = True
+        else:
+            sys.stderr.write("skipping because contains CIGAR code %s "
+                             " which is not currently implemented" % BAM_CIGAR_DICT[op])
+            
+    # are any of the SNPs indels? If so, discard.
+    for i in snp_idx:
+        if is_indel(snp_tab[i]):
+            overlap_indel = True
+            return (None, None, is_split, overlap_indel)
+            
+    n_overlap_snps = len(read_offsets)
+    if n_overlap_snps == 0:
+        # no SNPs overlap this read
+        return (None, None, is_split, overlap_indel)
+
+    if hap_tab:
+        # genotype info is provided by haplotype table
+        # pull out subset of overlapping SNPs that are heterozygous in this individual
+        het_read_offsets = []
+        for (i, read_offset) in snp_idx:
+            haps = hap_tab[i, (ind_idx*2):(ind_idx*2 + 2)]
+            if haps[0] != haps[1]:
+                # this is a het
+                het_read_offsets.append(read_offset)
+                het_snp_idx.append(i)
+
+        n_overlap_hets = len(het_read_offsets)
+
+        if n_overlap_hets == 0:
+            # none of the overlapping SNPs are hets
+            return (None, None, is_split, overlap_indel)
+
+        # choose ONE overlapping het SNP randomly to add counts to
+        # we don't want to count same read multiple times
+        r = np.random.randint(0, n_overlap_hets-1)
+        return (het_snp_idx[r], het_read_offsets[r], is_split, overlap_indel)
+    
+    else:
+        # We don't have haplotype tab, so we don't know which SNPs are
+        # heterozygous in this individual. But we can still tell
+        # whether read sequence matches reference or non-reference
+        # allele. Choose ONE overlapping SNP randomly to add counts to
+        if n_overlap_snps == 1:
+            return (snp_idx[0], read_offsets[0], is_split, overlap_indel)
+        else:
+            r = np.random.randint(0, n_overlap_snps-1)
+            return (snp_idx[r], read_offsets[r], is_split, overlap_indel)
+
+
+
+    
 def add_read_count(read, chrom, ref_array, alt_array, other_array,
-                   read_count_array, snp_index_array, snp_tab, snp_ref_match,
-                   del_array, map_array, filter_counts):
-
+                   read_count_array, snp_index_array, snp_tab, hap_tab, warned_pos):
+    
     # pysam positions start at 0
     start = read.pos+1
     end = read.aend
@@ -160,97 +293,61 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
 
 
     if read.qlen != read.rlen:
-        sys.stderr.write("WARNING skipping read, because handling of "
-                         "partially mapped reads not implemented "
-                         "(maybe due to clipping?)\n")
-        return
-        
-    map_code = map_array[start-1]    
-    if map_code != 1:
-        # skip, not uniquely mappable
-        filter_counts['MAP'] += 1
-        return
-
-    if np.any(del_array[start-1:end]):
-        # read overlaps bases that are deleted in non-reference
-        filter_counts['DELETION'] += 1
+        sys.stderr.write("WARNING skipping read: handling of "
+                         "partially mapped reads not implemented\n")
         return
     
-    idx = snp_index_array[start-1:end]
-        
-    # get offsets within read of any overlapping SNPs
-    read_offsets = np.where(idx != SNP_UNDEF)[0]
-    n_overlapping_snps = read_offsets.size
 
-    if n_overlapping_snps > 1:
-        # read overlaps multiple SNPs--discard
-        #sys.stderr.write("discarding read that overlaps %d SNPs\n" %
-        #                 n_overlapping_snps)
-        filter_counts['MULTI_SNP'] += 1
+    # look for SNPs that overlap mapped read position, and if there 
+    # are more than one, choose one at random
+    snp_idx, read_offset, is_split, overlap_indel = \
+      choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab)
+
+    if overlap_indel:
         return
-    
-        
-    if n_overlapping_snps == 1:
-        # store the allele-specific counts at this SNP        
-        offset = read_offsets[0]
-
-        snp = snp_tab[idx[offset]]
-
-        match_ref = snp_ref_match[idx[offset]]
-        if not match_ref:
-            # SNP was flagged because reference allele
-            # does not match reference sequence
-            filter_counts['SNP_MISMATCH_REF'] += 1
-            return
-
-        if is_indel(snp):
-            # since we already checked for deletion, must be insertion
-            filter_counts['INSERTION'] += 1
-            return
-
-        snp_pos = snp['pos']
-
-        # check against reference sequence
-        # there are a few SNPs that do not match the reference
-        # and we'd like to throw those out
-        # ref_base = chr(seq_vals[snp_pos-1])
-        # if snp['allele1'] != ref_base:
-        #     sys.stderr.write("discarding read that overlaps SNP that "
-        #                      "does not match reference\n")
-        #     return
-
-        base = read.seq[offset]
-
-        if base == snp['allele1']:
-            # matches reference allele
-            if ref_array[snp_pos-1] < MAX_VAL:
-                ref_array[snp_pos-1] += 1
-            else:
-                sys.stderr.write("WARNING ref allele count at position %d "
-                                 "exceeds max %d\n" % (snp_pos, MAX_VAL))
-        elif base == snp['allele2']:
-            # matches alternate allele
-            if alt_array[snp_pos-1] < MAX_VAL:
-                alt_array[snp_pos-1] += 1
-            else:
-                sys.stderr.write("WARNING alt allele count at position %d "
-                                 "exceeds max %d\n" % (snp_pos, MAX_VAL))
-        else:
-            # matches neither
-            if other_array[snp_pos-1] < MAX_VAL:
-                other_array[snp_pos-1] += 1
-            else:
-                sys.stderr.write("WARNING other allele count at position %d "
-                                 "exceeds max %d\n" % (snp_pos, MAX_VAL))
-                
-
-    # Store counts of reads that passed filtering. For this 
-    # we are counting reads that overlap 0 or 1 SNPs
-    if read_count_array[start-1] < MAX_VAL:
+      
+    # store counts of reads at start position
+    if read_count_array[start-1] < MAX_COUNT:
         read_count_array[start-1] += 1
     else:
-        sys.stderr.write("WARNING read count at position %d "
-                         "exceeds max %d\n" % (start-1, MAX_VAL))
+        if not start in warned_pos:
+            sys.stderr.write("WARNING read count at position %d "
+                             "exceeds max %d\n" % (start, MAX_COUNT))
+            warned_pos[start] = True
+        
+      
+    if snp_idx is None:
+        return
+    
+    snp = snp_tab[snp_idx]
+    
+    base = read.seq[read_offset]
+    snp_pos = snp['pos']
+    
+    if base == snp['allele1']:
+        # matches reference allele
+        if ref_array[snp_pos-1] < MAX_COUNT:
+            ref_array[snp_pos-1] += 1
+        elif not snp_pos in warned_pos:
+            sys.stderr.write("WARNING ref allele count at position %d "
+                             "exceeds max %d\n" % (snp_pos, MAX_COUNT))
+            warned_pos[snp_pos] = True
+    elif base == snp['allele2']:
+        # matches alternate allele
+        if alt_array[snp_pos-1] < MAX_COUNT:
+            alt_array[snp_pos-1] += 1
+        elif not snp_pos in warned_pos:
+            sys.stderr.write("WARNING alt allele count at position %d "
+                             "exceeds max %d\n" % (snp_pos, MAX_COUNT))
+            warned_pos[snp_pos] = True
+    else:
+        # matches neither
+        if other_array[snp_pos-1] < MAX_COUNT:
+            other_array[snp_pos-1] += 1
+        elif not snp_pos in warned_pos:
+            sys.stderr.write("WARNING other allele count at position %d "
+                             "exceeds max %d\n" % (snp_pos, MAX_COUNT))
+    
         
     
 
@@ -260,8 +357,25 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--assembly", help="genome assembly that reads "
-                        "were mapped to (e.g. hg18)", default=None)
-    
+                        "were mapped to (e.g. hg19)", default=None)
+
+    parser.add_argument("--snp_index_track",
+                        help="name of SNP index track (default=1000genomes/snp_index)",
+                        default="1000genomes/snp_index")
+
+    parser.add_argument("--snp_track",
+                        help="name of track containing table of SNPs"
+                        " (default=1000genomes/snp_tab)",
+                        default="1000genomes/snp_tab")
+
+    parser.add_argument("--hap_track",
+                        help="name of haplotype track; if supplied when read overlaps "
+                        "multiple SNPs counts are randomly assigned to ONE of the "
+                        "overlapping HETEROZYGOUS SNPs; if not supplied "
+                        "counts are randomly assigned to ONE of overlapping SNPs "
+                        "(regardless of genotype)",
+                        default=None)
+        
     parser.add_argument("ref_as_count_track",
                         help="name of track to store counts of reads "
                         "that match reference")
@@ -279,7 +393,9 @@ def parse_args():
                        "positions of LEFT end of read are used")
     
     parser.add_argument("bam_filenames", action="store", nargs="+",
-                        help="bam file(s) to read data from")
+                        help="BAM file(s) to read mapped reads from. BAMs must be "
+                        "sorted and indexed.")
+    
 
     args = parser.parse_args()
 
@@ -298,48 +414,54 @@ def main():
     alt_count_track = gdb.create_track(args.alt_as_count_track)
     other_count_track = gdb.create_track(args.other_as_count_track)
     read_count_track = gdb.create_track(args.read_count_track)
+    
     output_tracks = [ref_count_track, alt_count_track, 
                      other_count_track, read_count_track]
 
-    snp_track = gdb.open_track(SNP_TRACK_NAME)
-    snp_index_track = gdb.open_track(SNP_INDEX_TRACK_NAME)
-    ref_match_track = gdb.open_track(SNP_REF_MATCH_TRACK_NAME)
-    del_track = gdb.open_track(DEL_TRACK_NAME)
-
-    map_track = gdb.open_track(MAP_TRACK_NAME)
+    snp_track = gdb.open_track(args.snp_track)
+    snp_index_track = gdb.open_track(args.snp_index_track)
+    if args.hap_track:
+        hap_track = gdb.open_track(args.hap_track)
+    else:
+        hap_track = None
 
     chrom_dict = {}
 
     count = 0
-    
-    filter_counts = {'MAP' : 0,
-                     'MULTI_SNP' : 0,
-                     'SNP_MISMATCH_REF' : 0,
-                     'DELETION' : 0,
-                     'INSERTION' : 0}
+
+    # initialize every chromosome in output tracks
+    for chrom in gdb.get_all_chromosomes():
+        for track in output_tracks:
+            create_carray(track, chrom)
+        chrom_dict[chrom.name] = chrom
+
+    count = 0
     
     for chrom in gdb.get_chromosomes(get_x=False):
         sys.stderr.write("%s\n" % chrom.name)
-        # initialize output tracks
-        ref_carray = create_carray(ref_count_track, chrom)
-        alt_carray = create_carray(alt_count_track, chrom)
-        other_carray = create_carray(other_count_track, chrom)
-        read_count_carray = create_carray(read_count_track, chrom)
+
+        warned_pos = {}
+
+        # initialize count arrays for this chromosome to 0
+        ref_carray = get_carray(ref_count_track, chrom)
+        alt_carray = get_carray(alt_count_track, chrom)
+        other_carray = get_carray(other_count_track, chrom)
+        read_count_carray = get_carray(read_count_track, chrom)
         
         ref_array = np.zeros(chrom.length, np.uint8)
         alt_array = np.zeros(chrom.length, np.uint8)
         other_array = np.zeros(chrom.length, np.uint8)
         read_count_array = np.zeros(chrom.length, np.uint8)
 
-        # fetch SNPs and indel info for this chromosome
+        # fetch SNP info for this chromosome
         sys.stderr.write("fetching SNPs\n")
         snp_tab = snp_track.h5f.getNode("/%s" % chrom.name)
         snp_index_array = snp_index_track.get_nparray(chrom)
-        snp_ref_match = ref_match_track.h5f.getNode("/%s" % chrom.name)
-        del_array = del_track.get_nparray(chrom)
-
-        map_array = map_track.get_nparray(chrom)
-
+        if hap_track:
+            hap_tab = hap_track.h5f.getNode("/%s" % chrom.name)
+        else:
+            hap_tab = None
+        
         # loop over all BAM files, pulling out reads
         # for this chromosome
         for bam_filename in args.bam_filenames:
@@ -349,16 +471,14 @@ def main():
 
             for read in get_sam_iter(samfile, chrom):
                 count += 1
-                if count == 10000:
+                if count == 10000:                        
                     sys.stderr.write(".")
                     count = 0
 
                 add_read_count(read, chrom, ref_array, alt_array, 
                                other_array, read_count_array, 
-                               snp_index_array, snp_tab,
-                               snp_ref_match, del_array, 
-                               map_array, filter_counts)
-
+                               snp_index_array, snp_tab, hap_tab,
+                               warned_pos)
 
             # store results for this chromosome        
             ref_carray[:] = ref_array
@@ -369,26 +489,13 @@ def main():
 
             samfile.close()
 
-    sys.stderr.write("FILTERED reads:\n")
-    sys.stderr.write("  non-unique mappability: %d\n" % 
-                     filter_counts['MAP'])
-    sys.stderr.write("  overlap multiple SNPs: %d\n" % 
-                     filter_counts['MULTI_SNP'])
-    sys.stderr.write("  overlap deletion: %d\n" % 
-                     filter_counts['DELETION'])
-    sys.stderr.write("  overlap insertion: %d\n" % 
-                     filter_counts['INSERTION'])
-    sys.stderr.write("  overlap SNP with incorrect ref allele: %d\n" %
-                     filter_counts['SNP_MISMATCH_REF'])
-        
+    # close HDF5 files
     for track in output_tracks:
-        track.close()
-        
+        track.close()        
     snp_track.close()
-    snp_index_track.close()
-    ref_match_track.close()
-    del_track.close()
-    map_track.close()
+    snp_index_track.close()    
+    if hap_track:
+        hap_track.close()
 
     
 main()

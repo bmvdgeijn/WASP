@@ -19,12 +19,14 @@
 """
 usage: extract_haplotype_read_counts.py [-h] [--assembly ASSEMBLY]
                                         [--target_region_size TARGET_REGION_SIZE]
+                                        [--sample_file SAMPLE_FILE]
+                                        [--homozygous_as_counts {zero,rand_hap,rand_allele}]
                                         track_prefix pop individual input_file
 
 positional arguments:
   track_prefix          prefix of tracks to extract reads from (e.g.
                         10_IND/PolII/read_counts/PolII_18505)
-  pop                   population prefix for genotype tracks (e.g. YRI or CEU)
+  pop                   population prefix for genotype tracks (YRI or CEU)
   individual            individual to extract read counts for (e.g. 18505)
   input_file            bed-like file to read coordinates of test SNP and
                         target region from
@@ -35,6 +37,16 @@ optional arguments:
   --target_region_size TARGET_REGION_SIZE
                         override target region size that is specified by input
                         file
+  --sample_file SAMPLE_FILE
+                        path to file containing ordered list of genotyped
+                        individuals
+  --homozygous_as_counts {zero,rand_hap,rand_allele}
+                        how to report AS counts at linked het SNPs when test
+                        SNP genotype is homozygous or unknown. zero (default):
+                        set allele-specific counts to 0; rand_hap: randomly
+                        choose one of the haplotypes to be 'reference';
+                        rand_allele: choose random allele at each SNP to be
+                        reference
 
 This script is used to generate input files for the combined haplotype
 test script.  It depends on a number of datafiles, which may make it

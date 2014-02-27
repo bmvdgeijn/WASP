@@ -45,6 +45,9 @@ optional arguments:
   --snp_track SNP_TRACK
                         name of track containing table of SNPs
                         (default=1000genomes/)
+  --data_type {uint8,uint16}
+                        data type of stored counts; uint8 takes up less disk
+                        space but has a maximum value of 255 (default=uint8)
   --hap_track HAP_TRACK
                         name of haplotype track; if supplied when read
                         overlaps multiple SNPs counts are randomly assigned to
@@ -112,12 +115,18 @@ BAM_CIGAR_DICT = {0 : "M",
 
 
 SNP_UNDEF = -1
-MAX_COUNT = 255
+MAX_UINT8_COUNT = 255
+MAX_UINT16_COUNT = 65535
 
 
-def create_carray(track, chrom):
-    atom = tables.UInt8Atom(dflt=0)
-    
+def create_carray(track, chrom, data_type):
+    if data_type == "uint8":
+        atom = tables.UInt8Atom(dflt=0)
+    elif data_type == "uint16":
+        atom = tables.UInt16Atom(dflt=0)
+    else:
+        raise NotImplementedError("unsupported datatype %s" % data_type)
+        
     zlib_filter = tables.Filters(complevel=1, complib="zlib")
     
     # create CArray for this chromosome
@@ -279,7 +288,8 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab):
 
     
 def add_read_count(read, chrom, ref_array, alt_array, other_array,
-                   read_count_array, snp_index_array, snp_tab, hap_tab, warned_pos):
+                   read_count_array, snp_index_array, snp_tab, hap_tab, 
+                   warned_pos, max_count):
     
     # pysam positions start at 0
     start = read.pos+1
@@ -307,12 +317,12 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
         return
       
     # store counts of reads at start position
-    if read_count_array[start-1] < MAX_COUNT:
+    if read_count_array[start-1] < max_count:
         read_count_array[start-1] += 1
     else:
         if not start in warned_pos:
             sys.stderr.write("WARNING read count at position %d "
-                             "exceeds max %d\n" % (start, MAX_COUNT))
+                             "exceeds max %d\n" % (start, max_count))
             warned_pos[start] = True
         
       
@@ -326,27 +336,27 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
     
     if base == snp['allele1']:
         # matches reference allele
-        if ref_array[snp_pos-1] < MAX_COUNT:
+        if ref_array[snp_pos-1] < max_count:
             ref_array[snp_pos-1] += 1
         elif not snp_pos in warned_pos:
             sys.stderr.write("WARNING ref allele count at position %d "
-                             "exceeds max %d\n" % (snp_pos, MAX_COUNT))
+                             "exceeds max %d\n" % (snp_pos, max_count))
             warned_pos[snp_pos] = True
     elif base == snp['allele2']:
         # matches alternate allele
-        if alt_array[snp_pos-1] < MAX_COUNT:
+        if alt_array[snp_pos-1] < max_count:
             alt_array[snp_pos-1] += 1
         elif not snp_pos in warned_pos:
             sys.stderr.write("WARNING alt allele count at position %d "
-                             "exceeds max %d\n" % (snp_pos, MAX_COUNT))
+                             "exceeds max %d\n" % (snp_pos, max_count))
             warned_pos[snp_pos] = True
     else:
         # matches neither
-        if other_array[snp_pos-1] < MAX_COUNT:
+        if other_array[snp_pos-1] < max_count:
             other_array[snp_pos-1] += 1
         elif not snp_pos in warned_pos:
             sys.stderr.write("WARNING other allele count at position %d "
-                             "exceeds max %d\n" % (snp_pos, MAX_COUNT))
+                             "exceeds max %d\n" % (snp_pos, max_count))
     
         
     
@@ -360,7 +370,8 @@ def parse_args():
                         "were mapped to (e.g. hg19)", default=None)
 
     parser.add_argument("--snp_index_track",
-                        help="name of SNP index track (default=1000genomes/snp_index)",
+                        help="name of SNP index track "
+                        "(default=1000genomes/snp_index)",
                         default="1000genomes/snp_index")
 
     parser.add_argument("--snp_track",
@@ -368,12 +379,18 @@ def parse_args():
                         " (default=1000genomes/snp_tab)",
                         default="1000genomes/snp_tab")
 
+    parser.add_argument("--data_type",
+                        help="data type of stored counts; uint8 takes "
+                        "up less disk space but has a maximum value of 255 "
+                        "(default=uint8)", choices=("uint8", "uint16"), 
+                        default="uint8")
+                        
     parser.add_argument("--hap_track",
-                        help="name of haplotype track; if supplied when read overlaps "
-                        "multiple SNPs counts are randomly assigned to ONE of the "
-                        "overlapping HETEROZYGOUS SNPs; if not supplied "
-                        "counts are randomly assigned to ONE of overlapping SNPs "
-                        "(regardless of genotype)",
+                        help="name of haplotype track; if supplied when "
+                        "read overlaps multiple SNPs counts are randomly "
+                        "assigned to ONE of the overlapping HETEROZYGOUS "
+                        "SNPs; if not supplied counts are randomly assigned "
+                        "to ONE of overlapping SNPs (regardless of genotype)",
                         default=None)
         
     parser.add_argument("ref_as_count_track",
@@ -393,8 +410,8 @@ def parse_args():
                        "positions of LEFT end of read are used")
     
     parser.add_argument("bam_filenames", action="store", nargs="+",
-                        help="BAM file(s) to read mapped reads from. BAMs must be "
-                        "sorted and indexed.")
+                        help="BAM file(s) to read mapped reads from. "
+                        "BAMs must be sorted and indexed.")
     
 
     args = parser.parse_args()
@@ -432,10 +449,17 @@ def main():
     # initialize every chromosome in output tracks
     for chrom in gdb.get_all_chromosomes():
         for track in output_tracks:
-            create_carray(track, chrom)
+            create_carray(track, chrom, args.data_type)
         chrom_dict[chrom.name] = chrom
 
     count = 0
+
+    if args.data_type == "uint8":
+        max_count = MAX_UINT8_COUNT
+    elif args.data_type == "uint16":
+        max_count = MAX_UINT16_COUNT
+    else:
+        raise NotImplementedError("unsupported datatype %s" % args.data_type)
     
     for chrom in gdb.get_chromosomes(get_x=False):
         sys.stderr.write("%s\n" % chrom.name)
@@ -478,7 +502,7 @@ def main():
                 add_read_count(read, chrom, ref_array, alt_array, 
                                other_array, read_count_array, 
                                snp_index_array, snp_tab, hap_tab,
-                               warned_pos)
+                               warned_pos, max_count)
 
             # store results for this chromosome        
             ref_carray[:] = ref_array

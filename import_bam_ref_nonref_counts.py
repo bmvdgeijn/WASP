@@ -465,9 +465,6 @@ def main():
     for chrom in gdb.get_chromosomes(get_x=False):
         sys.stderr.write("%s\n" % chrom.name)
 
-        if chrom.name != "chr22":
-            continue
-
         warned_pos = {}
 
         # initialize count arrays for this chromosome to 0

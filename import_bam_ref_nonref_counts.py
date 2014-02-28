@@ -90,6 +90,7 @@ import pysam
 
 import genome.db
 import genome.coord
+import genome.trackstat as trackstat
 
 
 # codes used by pysam for aligned read CIGAR strings
@@ -464,6 +465,9 @@ def main():
     for chrom in gdb.get_chromosomes(get_x=False):
         sys.stderr.write("%s\n" % chrom.name)
 
+        if chrom.name != "chr22":
+            continue
+
         warned_pos = {}
 
         # initialize count arrays for this chromosome to 0
@@ -513,8 +517,11 @@ def main():
 
             samfile.close()
 
-    # close HDF5 files
+    # set track statistics and close HDF5 files
+    sys.stderr.write("setting track statistics\n")
     for track in output_tracks:
+        sys.stderr.write("%s\n" % track.name)
+        trackstat.set_stats(gdb, track)
         track.close()        
     snp_track.close()
     snp_index_track.close()    

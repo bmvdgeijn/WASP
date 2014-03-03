@@ -76,7 +76,6 @@ import gzip
 import genome.db
 import genome.coord
 
-
 SNP_UNDEF = -1
 HAP_UNDEF = -1
 
@@ -449,7 +448,7 @@ def get_region_read_counts(dt, region_list):
 
     for region in region_list:
         counts = dt.read_count_track.get_nparray(region.chrom, region.start, region.end)
-        total_count == np.sum(counts)
+        total_count += np.sum(counts)
 
     return total_count
 

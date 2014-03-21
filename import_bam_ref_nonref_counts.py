@@ -501,10 +501,18 @@ def lookup_individual_index(samples_file, ind_name, population=None):
         
         words = line.rstrip().split()        
         name = words[0].replace("NA", "")
-        pop = words[1].lower()
-        group = words[2].lower()
+
+        if len(words) > 1:
+            pop = words[1].lower()
+        else:
+            pop = ""
+
+        if len(words) > 2:
+            group = words[2].lower()
+        else:
+            group = ""
         
-        # only consider a single population or group
+        # if specified, only consider a single population or group
         if p and pop != p and group != p:
             continue
         
@@ -515,7 +523,8 @@ def lookup_individual_index(samples_file, ind_name, population=None):
         idx += 1
     
     
-    raise ValueError("individual %s (with population=%s) is not in samples file %s" %
+    raise ValueError("individual %s (with population=%s) "
+                     "is not in samples file %s" %
                      (ind_name, population, samples_file))
 
 

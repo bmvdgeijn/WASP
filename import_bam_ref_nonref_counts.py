@@ -20,7 +20,11 @@
 usage: import_bam_ref_nonref_counts.py [-h] [--assembly ASSEMBLY]
                                        [--snp_index_track SNP_INDEX_TRACK]
                                        [--snp_track SNP_TRACK]
+                                       [--data_type {uint8,uint16}]
                                        [--hap_track HAP_TRACK]
+                                       [--samples_file SAMPLES_FILE]
+                                       [--individual INDIVIDUAL]
+                                       [--population POPULATION]
                                        ref_as_count_track alt_as_count_track
                                        other_as_count_track read_count_track
                                        bam_filenames [bam_filenames ...]
@@ -34,17 +38,18 @@ positional arguments:
                         neither reference or alternate
   read_count_track      name of track to store read counts in--positions of
                         LEFT end of read are used
-  bam_filenames         bam file(s) to read mapped reads from
+  bam_filenames         BAM file(s) to read mapped reads from. BAMs must be
+                        sorted and indexed.
 
 optional arguments:
-  -h, --help            show help message and exit
+  -h, --help            show this help message and exit
   --assembly ASSEMBLY   genome assembly that reads were mapped to (e.g. hg19)
   --snp_index_track SNP_INDEX_TRACK
                         name of SNP index track
                         (default=1000genomes/snp_index)
   --snp_track SNP_TRACK
                         name of track containing table of SNPs
-                        (default=1000genomes/)
+                        (default=1000genomes/snp_tab)
   --data_type {uint8,uint16}
                         data type of stored counts; uint8 takes up less disk
                         space but has a maximum value of 255 (default=uint8)
@@ -54,6 +59,24 @@ optional arguments:
                         ONE of the overlapping HETEROZYGOUS SNPs; if not
                         supplied counts are randomly assigned to ONE of
                         overlapping SNPs (regardless of genotype)
+  --samples_file SAMPLES_FILE
+                        path to file containing a list of individual
+                        identifiers in the same order that the individuals
+                        appear in the haplotype table. The file is assumed to
+                        be in the same format as the sample file used by
+                        IMPUTE2. This file contains 4 columns: 'sample'
+                        'population' 'group' 'sex'. This must be provided if
+                        hap_track is is specified. The sex column is not
+                        currently used and can be omitted
+  --individual INDIVIDUAL
+                        identifier for individual, used to determine which
+                        SNPs are heterozygous (e.g. 18505). Must be provided
+                        if hap_track is specified and must match one of the
+                        individuals in the provided samples_file
+  --population POPULATION
+                        indicate that haplotype table contains only
+                        individuals from this population or group (e.g. YRI or
+                        EUR)
 
 This program reads BAM files and counts the number of reads that match
 the alternate and reference allele at every SNP position stored in the
@@ -195,7 +218,7 @@ def get_sam_iter(samfile, chrom):
 
 
 
-def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab):
+def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
     """Picks out a single SNP from those that the read overlaps.
     Returns a tuple containing 4 elements: [0] the index of the SNP in
     the SNP table, [1] the offset into the read sequence, [2] flag
@@ -254,10 +277,19 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab):
 
     if hap_tab:
         # genotype info is provided by haplotype table
-        # pull out subset of overlapping SNPs that are heterozygous in this individual
+        # pull out subset of overlapping SNPs that are heterozygous 
+        # in this individual
         het_read_offsets = []
-        for (i, read_offset) in snp_idx:
+        het_snp_idx = []
+        for (i, read_offset) in zip(snp_idx, read_offsets):
             haps = hap_tab[i, (ind_idx*2):(ind_idx*2 + 2)]
+
+            if ind_idx*2 > hap_tab.shape[1]:
+                raise ValueError("index of individual (%d) is >= number of "
+                                 "individuals in haplotype_tab (%d). probably "
+                                 "need to specify --population or use a different "
+                                 "--samples_tab" % (ind_idx, hap_tab.shape[1]/2))
+            
             if haps[0] != haps[1]:
                 # this is a het
                 het_read_offsets.append(read_offset)
@@ -269,7 +301,11 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab):
             # none of the overlapping SNPs are hets
             return (None, None, is_split, overlap_indel)
 
-        # choose ONE overlapping het SNP randomly to add counts to
+        if n_overlap_hets == 1:
+            # only one overlapping SNP is a het
+            return (het_snp_idx[0], het_read_offsets[0], is_split, overlap_indel)
+        
+        # choose ONE overlapping HETEROZYGOUS SNP randomly to add counts to
         # we don't want to count same read multiple times
         r = np.random.randint(0, n_overlap_hets-1)
         return (het_snp_idx[r], het_read_offsets[r], is_split, overlap_indel)
@@ -290,7 +326,7 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab):
     
 def add_read_count(read, chrom, ref_array, alt_array, other_array,
                    read_count_array, snp_index_array, snp_tab, hap_tab, 
-                   warned_pos, max_count):
+                   warned_pos, max_count, ind_idx):
     
     # pysam positions start at 0
     start = read.pos+1
@@ -312,7 +348,7 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
     # look for SNPs that overlap mapped read position, and if there 
     # are more than one, choose one at random
     snp_idx, read_offset, is_split, overlap_indel = \
-      choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab)
+      choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx)
 
     if overlap_indel:
         return
@@ -393,7 +429,29 @@ def parse_args():
                         "SNPs; if not supplied counts are randomly assigned "
                         "to ONE of overlapping SNPs (regardless of genotype)",
                         default=None)
-        
+
+    parser.add_argument("--samples_file",
+                        help="path to file containing a list of individual "
+                        "identifiers in the same order that the individuals appear "
+                        "in the haplotype table. The file is assumed to be in the "
+                        "same format as the sample file used by IMPUTE2. This file "
+                        "contains 4 columns: 'sample' 'population' 'group' 'sex'. "
+                        "This must be provided if hap_track is is specified. "
+                        "The sex column is not currently used and can be omitted",
+                        default=None)
+
+    parser.add_argument("--individual",
+                        help="identifier for individual, used to determine which "
+                        "SNPs are heterozygous (e.g. 18505). Must be "
+                        "provided if hap_track is specified and must match "
+                        "one of the individuals in the provided samples_file",
+                        default=None)
+
+    parser.add_argument("--population",
+                        help="indicate that haplotype table contains only "
+                        "individuals from this population or group "
+                        "(e.g. YRI or EUR)", default=None)
+             
     parser.add_argument("ref_as_count_track",
                         help="name of track to store counts of reads "
                         "that match reference")
@@ -412,16 +470,57 @@ def parse_args():
     
     parser.add_argument("bam_filenames", action="store", nargs="+",
                         help="BAM file(s) to read mapped reads from. "
-                        "BAMs must be sorted and indexed.")
-    
+                        "BAMs must be sorted and indexed.")    
 
     args = parser.parse_args()
+
+    if args.hap_track and (args.individual is None or args.samples_file is None):
+            parser.error("--indidivual and --samples_file arguments "
+                         "must be provided when --hap_track is specified")
 
     return args
     
 
 
+
+def lookup_individual_index(samples_file, ind_name, population=None):
+    """Gets the index of individual that is used
+    to lookup information in the genotype and haplotype tables"""
+    f = open(samples_file)
+
+    if population:
+        p = population.lower()
+    else:
+        p = None
+    
+    idx = 0
+    for line in f:
+        if line.startswith("samples"):
+            # header line
+            continue
         
+        words = line.rstrip().split()        
+        name = words[0].replace("NA", "")
+        pop = words[1].lower()
+        group = words[2].lower()
+        
+        # only consider a single population or group
+        if p and pop != p and group != p:
+            continue
+        
+        if name == ind_name:
+            f.close()
+            return idx
+    
+        idx += 1
+    
+    
+    raise ValueError("individual %s (with population=%s) is not in samples file %s" %
+                     (ind_name, population, samples_file))
+
+
+
+
 def main():
     args = parse_args()
     
@@ -440,13 +539,17 @@ def main():
     snp_index_track = gdb.open_track(args.snp_index_track)
     if args.hap_track:
         hap_track = gdb.open_track(args.hap_track)
+        ind_idx = lookup_individual_index(args.samples_file,
+                                          args.individual, args.population)
     else:
         hap_track = None
+        ind_idx = None
 
     chrom_dict = {}
 
     count = 0
-
+    
+    
     # initialize every chromosome in output tracks
     for chrom in gdb.get_all_chromosomes():
         for track in output_tracks:
@@ -503,7 +606,7 @@ def main():
                 add_read_count(read, chrom, ref_array, alt_array, 
                                other_array, read_count_array, 
                                snp_index_array, snp_tab, hap_tab,
-                               warned_pos, max_count)
+                               warned_pos, max_count, ind_idx)
 
             # store results for this chromosome        
             ref_carray[:] = ref_array

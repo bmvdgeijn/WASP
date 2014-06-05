@@ -1,7 +1,7 @@
 CHT -  Combined Haplotype Test
 ======================
 
-This repository contains source code for running the Combined Haplotype Test. 
+This directory contains source code for the Combined Haplotype Test portion of the WASP pipeline.
 
 Introduction
 ----------
@@ -19,7 +19,7 @@ attributed to binomial sampling or genotype) with three dispersion parameters. T
 of these parameters are global (i.e. fixed across test regions), while one is 
 estimated for each region.
 
-The test is described in detail in the the supplementary material for 
+The test is described the supplementary material for 
 [our paper](http://dx.doi.org/10.1126/science.1242429): McVicker G\*, van de Geijn B\*, 
 Degner JF, Cain CE, Banovich NE, Raj A, Lewellen N, Myrthil M, Gilad Y, Pritchard JK. 
 "Identification of genetic variants that affect histone modifications in human cells" 
@@ -33,6 +33,9 @@ simplify the code and to remove several dependencies. In principle these correct
 applied to the input files prior to running the test. For example a script could update the 
 heterozygote probabilities and read count totals using information about read counts and GC 
 content etc.
+
+We are currently (6/5/2014) making several improvements to the test and will release an updated 
+version soon.
 
 
 Dependencies
@@ -119,17 +122,17 @@ Choosing dispersion parameters
 
 One of the dispersion parameters is estimated for each region using maximum likelhood. 
 The other two parameters are fixed across regions and must be specified on the command 
-line. In principle it should be possible to write code to estimate these parameters from 
-the data, however we have not had time to implement this. In practice we run the code using 
-several combinations of dispersion parameters, and choose the values that appear to give 
-well-calibrated (uniformly distributed) p-values when the test is run on permuted genotypes
-(i.e. p-values that follow the expectation line in a QQ-plot). One of the command line options
-(-s) runs the test on permuted genotypes. 
+line. The new version of the software will estimate these parameters from 
+the data, however this is not implemented in the current version. To use the current
+version of the code it is necessary to run it using several combinations of dispersion 
+parameters, and choose the values that give well-calibrated (uniformly distributed) 
+p-values when the test is run on permuted genotypes (i.e. p-values that follow the expectation 
+line in a QQ-plot). One of the command line options (-s) runs the test on permuted genotypes. 
 
 
 Contact
 ------
 
 For questions about the combined haplotype test, please contact Graham McVicker 
-(mcvicker@jimmy.harvard.edu) or Bryce van de Geijn (bmvdgeijn@uchicago.edu).
+(gpm@stanford.edu) or Bryce van de Geijn (bmvdgeijn@uchicago.edu).
 

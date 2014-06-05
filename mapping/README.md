@@ -1,6 +1,10 @@
 Pipeline for mappability filtering
 ==================================
 
+This directory contains scripts that can be used to eliminate mapping bias from mapped allele-specific
+reads.  First, reads are mapped normally using a mapper chosen by the user (must output BAM or 
+SAM format).  Then mapped reads that overlap single nucleotide polymorphisms (SNPs) are identified. For each read that overlaps a SNP, its genotype is swapped with that of the other allele and the read is re-mapped. Re-mapped reads that fail to map to exactly the same location in the genome are discarded.
+
 Step 1: 
 -------
 

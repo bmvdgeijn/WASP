@@ -29,6 +29,9 @@ import numpy as np
 from random import shuffle
 from random import randint
 
+import pdb
+#global log_table
+#log_table=[float("-inf")]+[log(x) for x in range(1,1000000)]
 
 class TestSNP:
     def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt, 
@@ -72,7 +75,7 @@ def open_input_files(in_filename):
         filename = line.rstrip()
         if not filename or not os.path.exists(filename) or not os.path.isfile(filename):
             sys.stderr.write("input file '%s' does not exist or is not a regular file\n" 
-                             % infile)
+                             % line)
             exit(2)
         if filename.endswith(".gz"):
             f = gzip.open(filename)
@@ -90,12 +93,16 @@ def open_input_files(in_filename):
         exit(2)
 
     return infiles
-
-    
-    
     
 def main():
     options = parse_options()
+    
+    if options.pc_file:
+        pc_matrix=load_covariates(options.pc_file)
+        num_pcs=options.num_pcs
+    else:
+        pc_matrix=[]
+        num_pcs=0
 
     if options.out_file.endswith(".gz"):
         outfile = gzip.open(options.out_file, "wb")
@@ -103,6 +110,29 @@ def main():
         outfile = open(options.out_file, 'w')
 
     infiles = open_input_files(options.infile_list)
+    
+    if (options.bnb_disp):
+        disp_file=open(options.bnb_disp)
+        line=disp_file.readline()
+        bnb_sigmas=[]
+        while line:
+            bnb_sigmas.append(float(line.strip()))
+            line=disp_file.readline()
+        disp_file.close()
+    else:
+        bnb_sigmas=[0.001]*len(infiles)
+
+    if (options.as_disp):
+        disp_file=open(options.as_disp)
+        line=disp_file.readline()
+        as_sigmas=[]
+        while line:
+            as_sigmas.append(float(line.strip()))
+            line=disp_file.readline()
+        disp_file.close()
+    else:
+        as_sigmas=[0.001]*len(infiles)
+
     
     # add first row of each input file to snpinfo list
     snpinfo = []
@@ -124,7 +154,7 @@ def main():
             totcounts = sum([np.sum(x.AS_target_ref) + np.sum(x.AS_target_alt) 
                              for x in test_snps])
 
-            if totcounts <= options.min_counts:
+            if totcounts < options.min_counts:
                 
                 if options.verbose:
                     sys.stderr.write("-----\nskipping SNP %s because "
@@ -156,33 +186,71 @@ def main():
                     test_snps[i].geno_hap1 = geno1temp[i]
                     test_snps[i].geno_hap2 = geno2temp[i]
             t1=time.time()
+
+            starts=[0.5,100]
+            # regress against the covariates and get residuals
+            #fit_cov(test_snps,cov_table)
+
             # maximize likelihood with alpha = beta (no difference between genotypes)
-            best1par = fmin(loglikelihood,(20,10), args=(test_snps, options.is_bnb_only,
-                                                         options.is_as_only,
-                                                         options.bnb_sigma,
-                                                         options.as_sigma, 
-                                                         options.read_error_rate),
-                            disp=options.verbose)
+            starting_par = fmin(ll_one,starts, args=(test_snps, True, #options.is_bnb_only,
+                                                options.is_as_only,
+                                                bnb_sigmas,
+                                                as_sigmas, 
+                                                options.read_error_rate,
+                                                [],
+                                                pc_matrix),
+                                disp=options.verbose,maxiter=500000,maxfun=500000)
+
+            pc_coefs=[]
+            for pc in range(num_pcs):
+                new_coef=fmin(ll_pc,[0], args=(starting_par,test_snps, True, #options.is_bnb_only,
+                                                options.is_as_only,
+                                                bnb_sigmas,#options.bnb_sigma,
+                                                as_sigmas, 
+                                                options.read_error_rate,
+                                                pc_coefs,
+                                                pc_matrix),
+                            disp=options.verbose,maxiter=500000,maxfun=500000)
+                pc_coefs = np.concatenate([pc_coefs,new_coef])
+            sys.stderr.write(str(pc_coefs)+"\n")
+            best1par = fmin(ll_one,starts, args=(test_snps, options.is_bnb_only,
+                                                 options.is_as_only,
+                                                 bnb_sigmas,#options.bnb_sigma,
+                                                 as_sigmas, 
+                                                 options.read_error_rate,
+                                                 pc_coefs,
+                                                 pc_matrix),
+                            disp=options.verbose,maxiter=500000,maxfun=500000)
 
             if options.verbose:
                 sys.stderr.write("null model optimization took %.3fs\n" % (time.time()-t1))
                 
-            loglike1par = loglikelihood(best1par, test_snps, options.is_bnb_only,
-                                        options.is_as_only, options.bnb_sigma,
-                                        options.as_sigma, options.read_error_rate)
+            loglike1par = ll_one(best1par, test_snps, options.is_bnb_only,
+                                 options.is_as_only, bnb_sigmas,
+                                 as_sigmas, options.read_error_rate,
+                                 pc_coefs, pc_matrix)
+
+            #start=[best1par[0],best1par[0],best1par[1]] 
+            start=[best1par[0],best1par[0],best1par[1]]
             t1=time.time()
             # maximize likelihood with alpha and beta as separate parameters
-            best2par = fmin(loglikelihood, (best1par[0], best1par[0], best1par[1]),
-                            args=(test_snps, options.is_bnb_only,options.is_as_only,
-                                  options.bnb_sigma,options.as_sigma,options.read_error_rate),
-                            disp=options.verbose)
+            best2par = fmin(ll_two, start, args=(test_snps,
+                                                 options.is_bnb_only,
+                                                 options.is_as_only,
+                                                 bnb_sigmas,
+                                                 as_sigmas,
+                                                 options.read_error_rate,
+                                                 pc_coefs,
+                                                 pc_matrix),
+                            disp=options.verbose,maxiter=500000,maxfun=500000)
             
             if options.verbose:
                 sys.stderr.write("alternative model optimization took %.3fs\n" % (time.time()-t1))
             
-            loglike2par = loglikelihood(best2par, test_snps, options.is_bnb_only,
-                                        options.is_as_only, options.bnb_sigma,
-                                        options.as_sigma, options.read_error_rate)
+            loglike2par = ll_two(best2par, test_snps, options.is_bnb_only,
+                                 options.is_as_only, bnb_sigmas,
+                                 as_sigmas, options.read_error_rate,
+                                 pc_coefs, pc_matrix)
 
             # compute likelihood ratio test statistic:
             chisq = 2*(loglike1par-loglike2par)
@@ -193,13 +261,14 @@ def main():
                                      str(best2par[1]), str(best2par[2]), 
                                      str(totcounts)]) +'\n')
             outfile.flush()
-        
+
         except Exception as e:
             # an error occured, write to output file, but put 0s for all params and
             sys.stderr.write("An error occurred, writing line with 0s for SNP:\n%s\n" % str(e))
             
             outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], 
                                     "0", "0", "0", "0", "0"]) + '\n')
+            #continue
             raise
 
         # read next set of lines from input file
@@ -225,14 +294,19 @@ def parse_options():
                         help="only perform the association (Beta Negative Binomial) part "
                         "of the test")
     
+    parser.add_argument("--pc-file", action='store', 
+                        dest='pc_file', 
+                        help="file containing PC covariates to include in the model"
+                        ,default=None)
+
+    parser.add_argument("-b", action='store', dest='bnb_disp', 
+                        help="file containing depth (Beta Negative Binomial) dispersion parameters", default=None)
+
+
     parser.add_argument("-o", action='store', 
-                        dest='as_sigma', type=float, 
-                        help="value for allele-specific (Beta Binomial) dispersion "
-                        "parameter", default=0.00001)
-    
-    parser.add_argument("-b", action='store', dest='bnb_sigma', 
-                        help="value for global Beta Negative Binomial dispersion parameter",
-                        type=float, default=0.00001)
+                        dest='as_disp', 
+                        help="file containing allele-specific (Beta Binomial) dispersion "
+                        "parameters", default=None)
 
     parser.add_argument("-s", action='store_true', 
                         dest='shuffle', default=False,
@@ -248,6 +322,10 @@ def parse_options():
                         type=int, default=0,
                         help="only perform test when total number of allele-specific "
                         "read counts across individuals > MIN_COUNTS")
+
+    parser.add_argument("--num-pcs", action='store', dest='num_pcs', 
+                        type=int, default=0,
+                        help="designates the number of PCs to use as covariates")
     
     parser.add_argument("-v", action='store_true', dest='verbose', 
                         default=False, help="print extra information")
@@ -289,18 +367,40 @@ def AS_betabinom_loglike(logps, sigma, AS1, AS2, hetp, error):
 
 def BNB_loglike(k,mean,n,sigma):
     #Put variables in beta-NB form (n,a,b)
-    logps = [math.log(n) - math.log(n + mean),
-             math.log(mean) - math.log(n + mean)]
-    
+    #sys.stderr.write(str(sigma)+"\n")
+    try:
+        mean=max(mean,0.00001)
+        logps = [math.log(n) - math.log(n + mean),
+                 math.log(mean) - math.log(n + mean)]
+    except:
+        raise
+        n_val=n
+        pdb.set_trace()
+
+    #sys.stderr.write(str(sigma)+"\n")
     a = math.exp(logps[0] + math.log(1/sigma**2 - 1))
     b = math.exp(logps[1] + math.log(1/sigma**2 - 1))
 
     loglike = 0
     
     #Rising Pochhammer = gamma(k+n)/gamma(n)
-    for j in range(k):
-        loglike += math.log(j+n)
-
+    #t1=time.time()
+    #for j in range(k):
+    #    loglike += math.log(j+n)
+    #t2=time.time()
+    if k>0:
+        loglike=scipy.special.gammaln(k+n)-scipy.special.gammaln(n)
+    else:
+        loglike=0
+    #t3=time.time()
+    
+    #if t2-t1 > .5:
+    #    sys.stderr.write("k: %f n: %f\n" % (t2-t1,t3-t2))
+    #if abs(loglike-loglike2)>.001:
+    #    sys.stderr.write("k: %i n: %f\n" % (k,n))
+    #    sys.stderr.write("Diff is "+str(loglike-loglike2))
+    #    exit()
+    
     #Add log(beta(a+n,b+k))
     loglike += betaln(a+n,b+k)
     
@@ -309,19 +409,53 @@ def BNB_loglike(k,mean,n,sigma):
 
     return loglike
 
+#def ll_pc(x, test_snps, is_bnb_only, is_as_only, bnb_sigma, as_sigma,error, pcs):
+#def fit_cov(test_snps, cov_table):
+#    if len(cov_table)==0:
+#        return
+#    counts=[snp.counts for snp in test_snps]
+#    lambdas=[snp.totals for snp in test_snps]
+#    sys.stderr.write(str(counts)+"\n")
+#    sys.stderr.write(str(lambdas)+"\n")
+#    ys=[(counts[i]-lambdas[i])/lambdas[i] for i in range(len(counts))]
+#    sys.stderr.write(str(ys)+"\n")
+#    sys=np.log(ys)
+#    fit=np.linalg.lstsq(ys,cov_table)
+#    fitted_values=(ys-residuals+lambdas)*lambdas
+#    
+#    for i in range(len(fitted_values)):
+#        test_snps[i].totals=fitted_values[i]
 
-def loglikelihood(x, test_snps, is_bnb_only, is_as_only, bnb_sigma, as_sigma,error): 
-    if len(x) == 3:
-        # model with separate alpha and beta params
-        alpha = x[0]
-        beta = x[1]
-         # per-region dispersion param, r:
-        r = x[2]
+def ll_one(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas, as_sigmas,error,pc_coefs,pc_matrix):
+    alpha = x[0]
+    beta = x[0]
+    r = x[1]
+    return loglikelihood(alpha,beta,r, test_snps, is_bnb_only, is_as_only, bnb_sigmas, as_sigmas,error,pc_coefs,pc_matrix)
+
+def ll_pc(x, params, test_snps, is_bnb_only, is_as_only, bnb_sigmas, as_sigmas,error,other_pc_coefs,pc_matrix):
+    alpha = params[0]
+    beta = params[0]
+    r = params[1]
+    pc_coefs=np.concatenate([other_pc_coefs,x])
+    return loglikelihood(alpha,beta,r, test_snps, is_bnb_only, is_as_only, bnb_sigmas, as_sigmas,error,pc_coefs,pc_matrix)
+
+def ll_two(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas, as_sigmas,error,pc_coefs,pc_matrix):
+    alpha = x[0]
+    beta = x[1]
+    r = x[2]
+    #if len(x)>3:
+    #    pc_fits=x[3:]
+    #else:
+    #    pc_fits=[]
+    return loglikelihood(alpha,beta,r, test_snps, is_bnb_only, is_as_only, bnb_sigmas, as_sigmas,error,pc_coefs,pc_matrix)
+
+def calc_pc_factor(pc_fits,pcs,i):
+    if len(pc_fits)>0:
+        return 1+sum(pc_fits*pcs[i,:len(pc_fits)])
     else:
-        # model with single param for alpha = beta
-        alpha = x[0]
-        beta = x[0]
-        r = x[1]
+        return 1
+
+def loglikelihood(alpha,beta,r, test_snps, is_bnb_only, is_as_only, bnb_sigmas, as_sigmas,error,pc_coefs,pc_matrix): 
     loglike = 0
 
     #if input values are outside of reasonable range return a very high -loglike
@@ -331,29 +465,32 @@ def loglikelihood(x, test_snps, is_bnb_only, is_as_only, bnb_sigma, as_sigma,err
     ratio = (alpha / (alpha + beta))
 
     for i in range(len(test_snps)):
+        #if i in (17,36,49,51):
+        #    continue
         if(test_snps[i].is_homo_ref()):
-            m = 2*alpha*test_snps[i].totals
+            m = 2*alpha*test_snps[i].totals *calc_pc_factor(pc_coefs,pc_matrix,i)
         elif(test_snps[i].is_homo_alt()):
-            m = 2*beta*test_snps[i].totals
+            m = 2*beta*test_snps[i].totals *calc_pc_factor(pc_coefs,pc_matrix,i)
         else:
-            m = (alpha+beta)*test_snps[i].totals
+            m = (alpha+beta)*test_snps[i].totals *calc_pc_factor(pc_coefs,pc_matrix,i)
+        if m<0:
+            m=0.000001
         if not is_bnb_only:
             for j in range(len(test_snps[i].AS_target_ref)):            
                 if test_snps[i].hetps[j]>.9:
-                    hetp = test_snps[i].hetps[j]
+                    hetp = min(.99,test_snps[i].hetps[j])
                     logps = [math.log(alpha) - math.log(alpha+beta),
                              math.log(beta) - math.log(alpha+beta)]
-                    loglike += AS_betabinom_loglike(logps, as_sigma, 
+                    loglike += AS_betabinom_loglike(logps, as_sigmas[i], 
                                                     test_snps[i].AS_target_ref[j],
                                                     test_snps[i].AS_target_alt[j],
                                                     hetp, error)
         if not is_as_only:
-            l = BNB_loglike(test_snps[i].counts, m, r, bnb_sigma)
+            #sys.stderr.write(str(bnb_sigmas)+"\n")
+            #sys.stderr.write(str(bnb_sigmas[i])+"\n")
+            l = BNB_loglike(test_snps[i].counts, m, r, bnb_sigmas[i])
             loglike += l
     return -loglike
-
-
-
 
 
 def parse_test_snp(snpinfo, options):
@@ -365,9 +502,10 @@ def parse_test_snp(snpinfo, options):
         # rescale these to put totals in reasonable range
         # better approach might be to divide by minimum total
         # across individuals
-        tot = int(snpinfo[16])/100000
+        #if tot>10000:
+        tot = float(snpinfo[16]) #/1000000
 
-    if snpinfo[6] == 0:
+    if snpinfo[6] == "NA":
         geno_hap1 = 0
         geno_hap2 = 0
     else:
@@ -379,7 +517,10 @@ def parse_test_snp(snpinfo, options):
     else:
         count = int(snpinfo[15])
 
-    if snpinfo[9].strip() == "NA":
+    #if snpinfo[9].strip() == "NA":
+        # SNP is homozygous, so there is no AS info
+    #    return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)    
+    if snpinfo[9].strip() == "NA" or geno_hap1 == geno_hap2:
         # SNP is homozygous, so there is no AS info
         return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)    
     else:
@@ -409,5 +550,17 @@ def parse_test_snp(snpinfo, options):
 
         return TestSNP(snp_id, geno_hap1, geno_hap2, AS_target_ref, 
                        AS_target_alt, hetps, tot, count)
+
+def load_covariates(cov_file):
+    infile=open(cov_file)
+    cov_table=[]
+    while True:
+        line=infile.readline()
+        if line:
+            cov_table.append([float(x) for x in line.strip().split()])
+        else:
+            break
+    
+    return np.array(cov_table,dtype=np.float64)
         
 main()

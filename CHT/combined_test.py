@@ -187,12 +187,13 @@ def main():
                     test_snps[i].geno_hap2 = geno2temp[i]
             t1=time.time()
 
-            # Temporary way to get around really large total values causing really small estimates for alpha and beta
-            tots=[test_snps[i].totals for i in range(len(test_snps))]
-            if max(tots)>100000:
-                mean_tot=float(sum(tots))/len(tots)
+            # If you didn't update expected totals and want to use reads per million
+            #if options.rpm:
+            #    for i in range(len(test_snps)):
+            totals=[test_snps[i].totals for i in range(len(test_snps))]
+            if min(totals)>1000000:
                 for i in range(len(test_snps)):
-                    test_snps[i].totals=test_snps[i].totals/mean_tot
+                    test_snps[i].totals=test_snps[i].totals/1000000.0
 
             starts=[0.5,100]
             # regress against the covariates and get residuals
@@ -219,7 +220,7 @@ def main():
                                                 pc_matrix),
                             disp=options.verbose,maxiter=500000,maxfun=500000)
                 pc_coefs = np.concatenate([pc_coefs,new_coef])
-            sys.stderr.write(str(pc_coefs)+"\n")
+
             best1par = fmin(ll_one,starts, args=(test_snps, options.is_bnb_only,
                                                  options.is_as_only,
                                                  bnb_sigmas,#options.bnb_sigma,
@@ -333,6 +334,10 @@ def parse_options():
     parser.add_argument("--num-pcs", action='store', dest='num_pcs', 
                         type=int, default=0,
                         help="designates the number of PCs to use as covariates")
+
+    parser.add_argument("--rpm", action='store_true', dest='rpm', 
+                        default=False,
+                        help="divide expected totals by 1,000,000 so alpha and beta will be reads per million")
     
     parser.add_argument("-v", action='store_true', dest='verbose', 
                         default=False, help="print extra information")

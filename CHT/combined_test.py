@@ -187,6 +187,13 @@ def main():
                     test_snps[i].geno_hap2 = geno2temp[i]
             t1=time.time()
 
+            # Temporary way to get around really large total values causing really small estimates for alpha and beta
+            tots=[test_snps[i].totals for i in range(len(test_snps))]
+            if max(tots)>100000:
+                mean_tot=float(sum(tots))/len(tots)
+                for i in range(len(test_snps)):
+                    test_snps[i].totals=test_snps[i].totals/mean_tot
+
             starts=[0.5,100]
             # regress against the covariates and get residuals
             #fit_cov(test_snps,cov_table)

@@ -1,4 +1,4 @@
-import sys, pysam, gzip, pdb, argparse
+import sys, pysam, gzip, pdb, argparse, array
 #from pympler import asizeof
 
 #### Class to hold the data for a single SNP
@@ -17,7 +17,12 @@ class SNP:
                 self.max_len=len(self.alleles[i])
         if self.max_len>1:
             self.ptype="indel"
-    
+
+        haplo_chars=snp_split[5:]
+        haplos=array.array('B',[0])*len(haplo_chars)
+        
+        
+
     def add_allele(self,new_alleles):
         for new_allele in new_alleles:
             if new_allele=="-":
@@ -292,8 +297,8 @@ class Bam_scanner:
             if seg_len>self.max_window:
                 sys.stderr.write("Segment distance (from read pair and junction separation) is too large. A read has been thrown out. Consider increasing the max window size.\n")
                 return([])
-            if cigar[0]==0:
-                for i in range(cigar[1]):  #if it is a match alignment to the reference genome
+            if cigar[0] in (0,4): #if CIGAR indicates a match alignment to the reference genome or a soft clipping
+                for i in range(cigar[1]):  
                     if len(self.indel_table[indx])==0:
                         snp=self.snp_table[indx]
                         if snp!=0:

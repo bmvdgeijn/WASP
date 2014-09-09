@@ -23,12 +23,15 @@ remap_read=remap_bam.next()
 
 while not end_of_file:    
     chrm=remap_read.qname.strip().split(":")[1]
-    pos=int(remap_read.qname.strip().split(":")[2])
+    if remap_read.is_reverse:
+        pos=int(remap_read.qname.strip().split(":")[3])
+    else:
+        pos=int(remap_read.qname.strip().split(":")[2])
     read_num=int(remap_read.qname.strip().split(":")[0])
     if remap_read.tid != -1 and remap_read.pos==pos and remap_bam.getrname(remap_read.tid)==chrm:
         dels=0   #Throw out the remapped read if it remapped with a deletion...for now
         for cig in remap_read.cigar:
-            if cig[0]!=0 and cig[0]!=3:
+            if not cig[0] in (0,3,4):
                 dels+=1
         if dels==0:
             correct_maps.append(read_num)
@@ -41,7 +44,7 @@ while not end_of_file:
 correct_maps.sort()
 
 #pdb.set_trace()
-sys.stderr.write(str(len(correct_maps))+"\n")
+sys.stderr.write(str(len(correct_maps))+" reads remapped to the correct position\n")
 
 # Pull out original aligned reads if all of the alternatives mapped correctly
 

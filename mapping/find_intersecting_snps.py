@@ -271,9 +271,10 @@ class Bam_scanner:
                         for seq1 in seq1s:
                             for seq2 in seq2s:
                                 if not first:
-                                    loc_line="%i:%s:%i:%i" % (self.remap_num,self.chr_name,read.pos,num_seqs-1)
+                                    left_pos=min(read.pos,pair_read.pos)
+                                    right_pos=max(read.pos,pair_read.pos)
+                                    loc_line="%i:%s:%i:%i:%i" % (self.remap_num,self.chr_name,left_pos,right_pos,num_seqs-1)
                                     self.fastqs[0].write("@%s\n%s\n+%s\n%s\n"%(loc_line,seq1,loc_line,read.qual))
-                                    loc_line="%i:%s:%i:%i" % (self.remap_num,self.chr_name,pair_read.pos,num_seqs-1)
                                     self.fastqs[1].write("@%s\n%s\n+%s\n%s\n"%(loc_line,self.reverse_complement(seq2),loc_line,pair_read.qual))
                                 first=False
                         self.remap_num+=1

@@ -61,8 +61,8 @@ positional command line arguments "track_prefix", "pop":
   <PREFIX>_AS_other_count - number of reads that match neither ref nor alt allele at each SNP
   <PREFIX>_read_start_count - number of aligned reads that start at each position
 
-  <PREFIX>_impute2/snps - table with info about each SNP including alleles, and position
-  <PREFIX>impute2/snp_index - mapping from genomic position to index in snps table
+  impute2/snps - table with info about each SNP including alleles, and position
+  impute2/snp_index - mapping from genomic position to index in snps table
   impute2/<POP>_geno_probs - genotype probabilites for each individual
   impute2/<POP>_haplotypes - phasing information for alleles
   

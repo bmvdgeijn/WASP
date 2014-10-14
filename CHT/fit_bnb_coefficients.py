@@ -29,7 +29,7 @@ import numpy as np
 from random import shuffle
 from random import randint
 
-#import pdb
+import pdb
 
 class TestSNP:
     def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt, 
@@ -96,8 +96,24 @@ def open_input_files(in_filename):
 
 def parse_options():
     parser=argparse.ArgumentParser()
+    
     parser.add_argument("infile_list", action='store', default=None)
     parser.add_argument("outfile", action='store', default=None)
+    parser.add_argument("--min-as-counts", action='store', dest='min_as_counts',
+                        type=int, default=0,
+                        help="only perform test when total number of allele-specific "
+                        "read counts across individuals > MIN_COUNTS")
+
+    parser.add_argument("--min-counts", action='store', dest='min_counts',
+                        type=int, default=0,
+                        help="only perform test when total number of "
+                        "read counts across individuals > MIN_COUNTS")
+    
+    parser.add_argument("--skip", action='store', dest='skip',
+                        type=int, default=0,
+                        help="skip n test region between each one used for fitting")
+
+
     return parser.parse_args()
 
 def main():
@@ -110,123 +126,158 @@ def main():
         f.readline()
         snpinfo.append(f.readline().strip().split())
 
-    row_count = 0
+    row_count=0
     finished=False
     count_matrix=[]
     expected_matrix=[]
-        
-    while not finished: 
+    skip_num=0
+    while not finished:
+        if skip_num<options.skip:
+            skip_num+=1
+            for i in range(len(infiles)):
+                line=infiles[i].readline().strip()
+                if line:
+                    snpinfo[i] = line.split()
+                else:
+                    # out of lines from at least one file, assume we are finished
+                    finished = True
+            continue
+        skip_num=0
         count_line=[]
         expected_line=[]
         # parse test SNP and associated info from input file row
+        num_as=0
         for i in range(len(infiles)):
             new_snp=parse_test_snp(snpinfo[i], options)
+            if new_snp.is_het():
+                num_as += np.sum(new_snp.AS_target_ref) + np.sum(new_snp.AS_target_alt)
+
             count_line.append(new_snp.counts)
             expected_line.append(new_snp.totals)
-            try:
-                line=infiles[i].readline().strip()
-            except:
-                finished=True
-                break
+            
+            line=infiles[i].readline().strip()
             if line:
                 snpinfo[i] = line.split()
             else:
                 # out of lines from at least one file, assume we are finished
                 finished = True
-                continue
-        if sum(count_line)>3000:
+            
+        if sum(count_line)>=options.min_counts and num_as >= options.min_as_counts:
             count_matrix.append(count_line)
             expected_matrix.append(expected_line)
     
     count_matrix=np.array(count_matrix,dtype=int)
     expected_matrix=np.array(expected_matrix,dtype=np.float64)
 
-    gw_fit_starts=[0.005,.01,.015,.02,.07,.09]
-    old_ll=10000000000000000000000000000000
+    sys.stderr.write(str(count_matrix[:10,])+"\n")
+    sys.stderr.write(str(expected_matrix[:10,])+"\n")
+    sys.stderr.write(str(expected_matrix.shape))
+    sys.stderr.write(str(count_matrix.shape))
+    
+    old_ll=np.float64(1000000000000000000000000)
     best_start=-1
-    if False:
-        for i in range(len(gw_fit_starts)):
-            gw_fits=[gw_fit_starts[i]]*count_matrix.shape[1]
-            gene_fits=[1]*count_matrix.shape[0]
-            gene_fits,fit_ll=get_gene_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits)
-            gw_gits,fit_ll=get_gw_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits)
+    gene_fit_starts=(0.01,0.005) #(6,8,10,12,14) #(0.0001,0.0002,0.0005,.001,0.002,0.005)
+    if True:
+        for i in range(len(gene_fit_starts)):
+            gene_fits=[np.float64(gene_fit_starts[i])]*count_matrix.shape[0]
+            mean_fits=[np.float64(1)]*count_matrix.shape[0]
+            gw_fits=[np.float64(100)]*count_matrix.shape[1]
+            
+            gw_fits,fit_ll=get_gw_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits,mean_fits)
+            gene_fits,mean_fits,fit_ll=get_gene_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits,mean_fits)
+            
             if fit_ll<old_ll:
                 old_ll=fit_ll
-                best_start=i
+                best_start=gw_fits
     
-    gw_fits=[gw_fit_starts[3]]*count_matrix.shape[1]
-    gene_fits=[100]*count_matrix.shape[0]
- 
+        gw_fits=best_start
+    
+    else:
+        gw_fits=[np.float64(best_start)]*count_matrix.shape[1]
+        gene_fits=[np.float64(100)]*count_matrix.shape[0]
+
     iteration=1
     while True:
-        gene_fits,fit_ll=get_gene_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits,iteration)
+        gene_fits,mean_fits,fit_ll=get_gene_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits,mean_fits)
 
-        gw_fits,fit_ll=get_gw_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits)
+        gw_fits,fit_ll=get_gw_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits,mean_fits)
         sys.stderr.write("%f\n"%fit_ll)
         outfile=open(options.outfile,"w")
         for i in gw_fits:
-            outfile.write("%f\n" % i[0])
+            outfile.write("%f\n" % i)
         outfile.close()
         iteration+=1
 
-        if old_ll-fit_ll<.001:
+        if old_ll-fit_ll<.0001:
             break
         old_ll=fit_ll
 
-def get_gene_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits,iteration):
+def get_gene_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits,mean_fits,iteration=0):
     fit_ll=0
     for gene_indx in range(count_matrix.shape[0]):
-        ### fit new gene dispersion parameters
-        if iteration<=2:
-            starts=[gene_fits[gene_indx],1,1000]
-        else:
-            starts=[gene_fits[gene_indx]]
-        best_fit=-1
-        best_like=100000000
-        for par_start in starts:
-            new_fit= fmin(gene_like,par_start, 
-                                   args=(count_matrix[gene_indx,:],
+        mean_fits[gene_indx] = fmin(mean_like,mean_fits[gene_indx], 
+                                    args=(count_matrix[gene_indx,:],
                                          expected_matrix[gene_indx,:],
-                                         gw_fits),
-                                   disp=False,maxiter=5000,maxfun=5000,ftol=0.0001,xtol=0.0001)
-            new_like=gene_like(new_fit,count_matrix[gene_indx,:],expected_matrix[gene_indx,:],gw_fits)
-            if new_like<best_like:
-                best_like=new_like
-                gene_fits[gene_indx]=new_fit
-        if gene_indx % 20 == 1:
-            like=gene_like(gene_fits[gene_indx],count_matrix[gene_indx,:],expected_matrix[gene_indx,:],gw_fits)
-            sys.stderr.write("%f %f\n"%(gene_fits[gene_indx],like))
-        fit_ll+=gene_like(gene_fits[gene_indx],count_matrix[gene_indx,:],expected_matrix[gene_indx,:],gw_fits)
-    sys.stderr.write("\n")
-    return gene_fits, fit_ll
+                                         gw_fits,gene_fits[gene_indx]),
+                                    disp=False,maxfun=5000,xtol=1e-6)[0]
+        #gene_fits[gene_indx] = fminbound(gene_like,.0000001,1, 
+        #starts=[np.float64(gene_fits[gene_indx]),np.float64(0.1),np.float64(0.001)]
+        starts=[np.float64(gene_fits[gene_indx]),np.float64(0.05),np.float64(0.001)]
+        best_par=np.float64(gene_fits[gene_indx])
+        best_like=like=gene_like(gene_fits[gene_indx],count_matrix[gene_indx,:],expected_matrix[gene_indx,:],gw_fits,mean_fits[gene_indx])
+        for start in starts:
+            cur_par = fmin(gene_like,[start], 
+                                        args=(count_matrix[gene_indx,:],
+                                              expected_matrix[gene_indx,:],
+                                              gw_fits,mean_fits[gene_indx]),
+                                        disp=False,maxfun=5000,xtol=1e-6)[0]
+            cur_like=like=gene_like(cur_par,count_matrix[gene_indx,:],expected_matrix[gene_indx,:],gw_fits,mean_fits[gene_indx])
+            if cur_like<best_like:
+                best_par=cur_par
+        gene_fits[gene_indx]=best_par
 
-def get_gw_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits):
+        if gene_indx % 20 == 1:
+            like=gene_like(gene_fits[gene_indx],count_matrix[gene_indx,:],expected_matrix[gene_indx,:],gw_fits,mean_fits[gene_indx])
+            sys.stderr.write("%f %f %f\n"%(gene_fits[gene_indx],mean_fits[gene_indx],like))
+        fit_ll+=gene_like(gene_fits[gene_indx],count_matrix[gene_indx,:],expected_matrix[gene_indx,:],gw_fits,mean_fits[gene_indx])
+    sys.stderr.write("\n")
+    return gene_fits, mean_fits, fit_ll
+
+def get_gw_overdisp(count_matrix,expected_matrix,gw_fits,gene_fits,mean_fits):
     fit_ll=0
     for indx in range(count_matrix.shape[1]):
-        gw_fits[indx]= fmin(gw_like,gw_fits[indx], 
+        gw_fits[indx]= fmin(gw_like,[gw_fits[indx]], 
                               args=(count_matrix[:,indx],
                                     expected_matrix[:,indx],
-                                    gene_fits),
-                              disp=False,maxiter=50000,maxfun=50000,ftol=0.0001,xtol=0.0001)
-        like=gw_like(gw_fits[indx],count_matrix[:,indx],expected_matrix[:,indx],gene_fits)
+                                    gene_fits,mean_fits),
+                              disp=False,maxfun=50000,xtol=1e-6)[0]
+        like=gw_like(gw_fits[indx],count_matrix[:,indx],expected_matrix[:,indx],gene_fits,mean_fits)
         fit_ll+=like
     return gw_fits,fit_ll
 
-
-def gene_like(gene_fit,counts,expecteds,gw_fits):
+def mean_like(mean_fit,counts,expecteds,gw_fits,gene_fit):
+    if mean_fit<0:
+        return 1e8
     loglike=0
-    if gene_fit<=0:
-        return 100000
     for i in range(len(counts)):
-        loglike+=BNB_loglike(counts[i],expecteds[i],gene_fit,gw_fits[i])
+        loglike+=BNB_loglike(counts[i],expecteds[i]*mean_fit,gw_fits[i],gene_fit)
     return -loglike
 
-def gw_like(gw_fit,counts,expecteds,gene_fits):
+def gene_like(gene_fit,counts,expecteds,gw_fits,mean_fit):
+    if gene_fit<0:
+        return 1e8
     loglike=0
-    if gw_fit<=0.0001:
-        return 100000
     for i in range(len(counts)):
-        loglike+=BNB_loglike(counts[i],expecteds[i],gene_fits[i],gw_fit)
+        loglike+=BNB_loglike(counts[i],expecteds[i]*mean_fit,gw_fits[i],gene_fit)
+    return -loglike
+
+
+def gw_like(gw_fit,counts,expecteds,gene_fits,mean_fits):
+    if gw_fit >1000000 or gw_fit < 1:
+        return 1e8
+    loglike=0
+    for i in range(len(counts)):
+        loglike+=BNB_loglike(counts[i],expecteds[i]*mean_fits[i],gw_fit,gene_fits[i])
     return -loglike
 
 
@@ -234,27 +285,75 @@ def addlogs(loga, logb):
     """Helper function: perform numerically-stable addition in log space"""
     return max(loga, logb) + math.log(1 + math.exp(-abs(loga - logb)))
 
+def lbeta_asymp(a,b):
+    if b > a:
+        a,b = b,a
+    
+    if a<1e6:
+        return betaln(a,b)
+
+    l=gammaln(b)
+
+    l -= b*math.log(a)
+    l += b*(1-b)/(2*a)
+    l += b*(1-b)*(1-2*b)/(12*a*a)
+    l += -((b*(1-b))**2)/(12*a**3)
+    
+    return l
+
 def BNB_loglike(k,mean,n,sigma):
+    #n=min(n,10000)
     #Put variables in beta-NB form (n,a,b)
+    mean=max(mean,0.00001)
+    p=np.float64(n)/(n+mean)
     logps = [math.log(n) - math.log(n + mean),
              math.log(mean) - math.log(n + mean)]
-    
-    a = math.exp(logps[0] + math.log(1/sigma**2 - 1))
-    b = math.exp(logps[1] + math.log(1/sigma**2 - 1))
 
+
+    #logps=[logps[1],logps[0]]
+
+    #    sys.stderr.write(str(sigma)+"\n")
+    # a = math.exp(logps[0] + math.log(1/sigma**2 - 1))+1
+    # b = math.exp(logps[1] + math.log(1/sigma**2 - 1))
+    
+#    sigma=-2*math.log(sigma) #math.log(1/sigma**2-1)#(p*(1-p))/sigma-1 #sigma+1/sigma*p*(1-p)
+
+    if sigma < 0.00001: #> 18: #20:
+        loglike=-betaln(n,k+1)-math.log(n+k)+n*logps[0]+k*logps[1]
+        return loglike
+
+    sigma=(1/sigma)**2 #+sigma*n
+    sigma=sigma #+math.sqrt(sigma)/(p*(1-p))**2
+
+    #sigma=sigma + math.sqrt(sigma)*n
+
+    #sigma=sigma+sigma**.5/((p)*(1-p))**2
+    
+
+    
+
+    #a = math.exp(logps[0]) * sigma + 1 #math.log(1/sigma**2 - 1))+1
+    #b = math.exp(logps[1]) * sigma #math.log(1/sigma**2 - 1))
+
+    a = p * sigma + 1 #math.log(1/sigma**2 - 1))+1
+    b = (1-p) * sigma #math.log(1/sigma**2 - 1))
+    
     loglike = 0
     
     #Rising Pochhammer = gamma(k+n)/gamma(n)
+    #for j in range(k):
+    #    loglike += math.log(j+n)
     if k>0:
-        loglike=-betaln(n,k)-math.log(k)
+        loglike=-lbeta_asymp(n,k)-math.log(k)
+        #loglike=scipy.special.gammaln(k+n)-scipy.special.gammaln(n)
     else:
         loglike=0
     
     #Add log(beta(a+n,b+k))
-    loglike += betaln(a+n,b+k)
+    loglike += lbeta_asymp(a+n,b+k)
     
     #Subtract log(beta(a,b))
-    loglike -= betaln(a,b)
+    loglike -= lbeta_asymp(a,b)
 
     return loglike
 
@@ -268,7 +367,7 @@ def parse_test_snp(snpinfo, options):
         # better approach might be to divide by minimum total
         # across individuals
         #if tot>10000:
-        tot = float(snpinfo[16]) #/1000000
+        tot = np.float64(snpinfo[16]) #/1000000
 
     if snpinfo[6] == "NA":
         geno_hap1 = 0
@@ -296,10 +395,10 @@ def parse_test_snp(snpinfo, options):
         AS_target_alt = [int(y) for y in snpinfo[13].split(';')]
 
         # heterozygote probabilities
-        hetps = [float(y.strip()) for y in snpinfo[10].split(';')]
+        hetps = [np.float64(y.strip()) for y in snpinfo[10].split(';')]
 
         # linkage probabilities, not currently used
-        linkageps = [float(y.strip()) for y in snpinfo[11].split(';')]
+        linkageps = [np.float64(y.strip()) for y in snpinfo[11].split(';')]
 
         return TestSNP(snp_id, geno_hap1, geno_hap2, AS_target_ref, 
                        AS_target_alt, hetps, tot, count)

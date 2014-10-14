@@ -116,7 +116,7 @@ def main():
         line=disp_file.readline()
         bnb_sigmas=[]
         while line:
-            bnb_sigmas.append(float(line.strip()))
+            bnb_sigmas.append(np.float64(line.strip()))
             line=disp_file.readline()
         disp_file.close()
     else:
@@ -127,7 +127,7 @@ def main():
         line=disp_file.readline()
         as_sigmas=[]
         while line:
-            as_sigmas.append(float(line.strip()))
+            as_sigmas.append(np.float64(line.strip()))
             line=disp_file.readline()
         disp_file.close()
     else:
@@ -176,6 +176,7 @@ def main():
 
             
             row_count+=1
+            old_genos=[test_snps[y].geno_hap1 + test_snps[y].geno_hap2 for y in range(len(test_snps))]
             if options.shuffle:
                 # permute genotypes
                 perm = range(len(test_snps))
@@ -187,31 +188,33 @@ def main():
                     test_snps[i].geno_hap2 = geno2temp[i]
             t1=time.time()
 
-            # If you didn't update expected totals and want to use reads per million
-            #if options.rpm:
-            #    for i in range(len(test_snps)):
-            totals=[test_snps[i].totals for i in range(len(test_snps))]
-            if min(totals)>1000000:
-                for i in range(len(test_snps)):
-                    test_snps[i].totals=test_snps[i].totals/1000000.0
+            starting_gene=[np.float64(x) for x in [0.1,0.001]] #np.float64(-4),np.float(2),np.float(10)]
+            maxlike=10000000000
+            for start in starting_gene:
+                
+                starts=[np.float64(0.5),np.float64(start)]
+                # regress against the covariates and get residuals
+                #fit_cov(test_snps,cov_table)
 
-            starts=[0.5,100]
-            # regress against the covariates and get residuals
-            #fit_cov(test_snps,cov_table)
-
-            # maximize likelihood with alpha = beta (no difference between genotypes)
-            starting_par = fmin(ll_one,starts, args=(test_snps, True, #options.is_bnb_only,
+                # maximize likelihood with alpha = beta (no difference between genotypes)
+                new_par = fmin(ll_one,starts, args=(test_snps, True, #options.is_bnb_only,
                                                 options.is_as_only,
                                                 bnb_sigmas,
                                                 as_sigmas, 
                                                 options.read_error_rate,
                                                 [],
                                                 pc_matrix),
-                                disp=options.verbose,maxiter=500000,maxfun=500000)
-
+                                disp=options.verbose,maxiter=50000,maxfun=50000)
+                new_loglike = ll_one(new_par, test_snps, options.is_bnb_only,
+                                 options.is_as_only, bnb_sigmas,
+                                 as_sigmas, options.read_error_rate,
+                                 [], pc_matrix)
+                if new_loglike<maxlike:
+                    starting_par = new_par
+                
             pc_coefs=[]
             for pc in range(num_pcs):
-                new_coef=fmin(ll_pc,[0], args=(starting_par,test_snps, True, #options.is_bnb_only,
+                new_coef=fmin(ll_pc,[np.float64(0)], args=(starting_par,test_snps, True, #options.is_bnb_only,
                                                 options.is_as_only,
                                                 bnb_sigmas,#options.bnb_sigma,
                                                 as_sigmas, 
@@ -221,14 +224,14 @@ def main():
                             disp=options.verbose,maxiter=500000,maxfun=500000)
                 pc_coefs = np.concatenate([pc_coefs,new_coef])
 
-            best1par = fmin(ll_one,starts, args=(test_snps, options.is_bnb_only,
+            best1par = fmin(ll_one,starting_par, args=(test_snps, options.is_bnb_only,
                                                  options.is_as_only,
                                                  bnb_sigmas,#options.bnb_sigma,
                                                  as_sigmas, 
                                                  options.read_error_rate,
                                                  pc_coefs,
                                                  pc_matrix),
-                            disp=options.verbose,maxiter=500000,maxfun=500000)
+                            disp=options.verbose,maxiter=50000,maxfun=50000,ftol=1e-6, xtol=1e-6)
 
             if options.verbose:
                 sys.stderr.write("null model optimization took %.3fs\n" % (time.time()-t1))
@@ -250,7 +253,7 @@ def main():
                                                  options.read_error_rate,
                                                  pc_coefs,
                                                  pc_matrix),
-                            disp=options.verbose,maxiter=500000,maxfun=500000)
+                            disp=options.verbose,maxiter=50000,maxfun=50000,ftol=1e-6,xtol=1e-6)
             
             if options.verbose:
                 sys.stderr.write("alternative model optimization took %.3fs\n" % (time.time()-t1))
@@ -262,12 +265,27 @@ def main():
 
             # compute likelihood ratio test statistic:
             chisq = 2*(loglike1par-loglike2par)
+            
 
+            loglike1par_up = ll_one([best1par[0],best2par[2]], test_snps, options.is_bnb_only,
+                                    options.is_as_only, bnb_sigmas,
+                                    as_sigmas, options.read_error_rate,
+                                    pc_coefs, pc_matrix)
+
+            if True: #2*abs(loglike2par-loglike1par) > 10:
+                sys.stderr.write("%f %f %f %f %f %f %f %f %f\n" % (best1par[0],best2par[0],best2par[1],best1par[1],best2par[2],loglike1par,loglike1par_up,loglike2par,(loglike1par-loglike2par)*2))
+                sys.stderr.write(", ".join([str(test_snps[i].counts) for i in range(len(test_snps))])+"\n")
+                sys.stderr.write(", ".join([str(test_snps[i].totals) for i in range(len(test_snps))])+"\n")
+                sys.stderr.write(", ".join([str(test_snps[i].geno_hap1 + test_snps[i].geno_hap2) for i in range(len(test_snps))])+"\n")
+                sys.stderr.write(", ".join([str(old_genos[i]) for i in range(len(test_snps))])+"\n")
+                
+
+            all_counts=sum([test_snps[i].counts for i in range(len(test_snps))])
             # write result to output file
             outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], 
                                      str(chisq), str(best2par[0]),
                                      str(best2par[1]), str(best2par[2]), 
-                                     str(totcounts)]) +'\n')
+                                     str(totcounts),str(all_counts)]) + '\n')
             outfile.flush()
 
         except Exception as e:
@@ -334,10 +352,6 @@ def parse_options():
     parser.add_argument("--num-pcs", action='store', dest='num_pcs', 
                         type=int, default=0,
                         help="designates the number of PCs to use as covariates")
-
-    parser.add_argument("--rpm", action='store_true', dest='rpm', 
-                        default=False,
-                        help="divide expected totals by 1,000,000 so alpha and beta will be reads per million")
     
     parser.add_argument("-v", action='store_true', dest='verbose', 
                         default=False, help="print extra information")
@@ -376,8 +390,23 @@ def AS_betabinom_loglike(logps, sigma, AS1, AS2, hetp, error):
     
     return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1,e2))
 
+def betaln_asym(a,b):
+    if b > a:
+        a,b = b,a
 
-def BNB_loglike(k,mean,n,sigma):
+    if a < 1e6:
+        return betaln(a,b)
+
+    l=gammaln(b)
+
+    l -= b*math.log(a)
+    l += b*(1-b)/(2*a)
+    l += b*(1-b)*(1-2*b)/(12*a*a)
+    l += -((b*(1-b))**2)/(12*a**3)
+
+    return l
+
+def BNB_loglike(k,mean,sigma,n):
     #Put variables in beta-NB form (n,a,b)
     #sys.stderr.write(str(sigma)+"\n")
     try:
@@ -389,35 +418,29 @@ def BNB_loglike(k,mean,n,sigma):
         n_val=n
         pdb.set_trace()
 
-    #sys.stderr.write(str(sigma)+"\n")
-    a = math.exp(logps[0] + math.log(1/sigma**2 - 1))
-    b = math.exp(logps[1] + math.log(1/sigma**2 - 1))
+    p=np.float64(n/(n+mean))
 
-    loglike = 0
-    
+    if sigma < 0.00001: #> 18: #20:
+        loglike=-betaln(n,k+1)-math.log(n+k)+n*logps[0]+k*logps[1]
+        return loglike
+
+    sigma=(1/sigma)**2 #+sigma*n
+    sigma=sigma #+math.sqrt(sigma)/(p*(1-p))**2
+
+    a = p*sigma+1
+    b = (1-p)*sigma
+
     #Rising Pochhammer = gamma(k+n)/gamma(n)
-    #t1=time.time()
-    #for j in range(k):
-    #    loglike += math.log(j+n)
-    #t2=time.time()
     if k>0:
-        loglike=scipy.special.gammaln(k+n)-scipy.special.gammaln(n)
+        loglike=-betaln_asym(n,k)-math.log(k)
     else:
         loglike=0
-    #t3=time.time()
-    
-    #if t2-t1 > .5:
-    #    sys.stderr.write("k: %f n: %f\n" % (t2-t1,t3-t2))
-    #if abs(loglike-loglike2)>.001:
-    #    sys.stderr.write("k: %i n: %f\n" % (k,n))
-    #    sys.stderr.write("Diff is "+str(loglike-loglike2))
-    #    exit()
-    
+
     #Add log(beta(a+n,b+k))
-    loglike += betaln(a+n,b+k)
+    loglike += betaln_asym(a+n,b+k)
     
     #Subtract log(beta(a,b))
-    loglike -= betaln(a,b)
+    loglike -= betaln_asym(a,b)
 
     return loglike
 
@@ -471,9 +494,11 @@ def loglikelihood(alpha,beta,r, test_snps, is_bnb_only, is_as_only, bnb_sigmas, 
     loglike = 0
 
     #if input values are outside of reasonable range return a very high -loglike
-    if alpha <= 0 or beta <= 0 or r <= 0:
-        return 10000000000000000000000
-    
+    if alpha <= 0 or beta <= 0 or r<=0 or r>1:
+        return 10000000
+    #r=math.exp(r)/(1+math.exp(r)) #keep r between 0 and 1
+    #r=(r+0.01)/(1.01)
+    #r=math.exp(r)
     ratio = (alpha / (alpha + beta))
 
     for i in range(len(test_snps)):
@@ -546,10 +571,10 @@ def parse_test_snp(snpinfo, options):
         AS_target_alt = [int(y) for y in snpinfo[13].split(';')]
 
         # heterozygote probabilities
-        hetps = [float(y.strip()) for y in snpinfo[10].split(';')]
+        hetps = [np.float64(y.strip()) for y in snpinfo[10].split(';')]
 
         # linkage probabilities, not currently used
-        linkageps = [float(y.strip()) for y in snpinfo[11].split(';')]
+        linkageps = [np.float64(y.strip()) for y in snpinfo[11].split(';')]
 
         if options.shuffle:
             # permute allele-specific read counts by flipping them randomly at
@@ -569,7 +594,7 @@ def load_covariates(cov_file):
     while True:
         line=infile.readline()
         if line:
-            cov_table.append([float(x) for x in line.strip().split()])
+            cov_table.append([np.float64(x) for x in line.strip().split()])
         else:
             break
     

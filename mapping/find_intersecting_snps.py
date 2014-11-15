@@ -289,6 +289,7 @@ class Bam_scanner:
     def check_for_snps(self,read,start_dist):
         indx=read.pos % self.max_window
         p=0
+        num_snps=0
         seg_len=start_dist
         seqs=[read.seq]
         if start_dist>0:
@@ -303,6 +304,9 @@ class Bam_scanner:
                     if len(self.indel_table[indx])==0:
                         snp=self.snp_table[indx]
                         if snp!=0:
+                            num_snps+=1
+                            if num_snps>10: #If there are more than 10 snps overlapping, throw out the read to prevent memory blow-up
+                                return([])
                             init_seqs=list(seqs)
                             for seq in init_seqs:
                                 matches=0

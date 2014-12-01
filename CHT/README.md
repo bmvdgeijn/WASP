@@ -22,15 +22,6 @@ estimated for each region.
 The test is described in  
 [our paper](http://biorxiv.org/content/early/2014/11/07/011221): van de Geijn B\*, McVicker G\*, Gilad Y, Pritchard JK. "WASP: allele-specific software for robust discovery of molecular quantitative trait loci"
 
-Some components of the test that are described in the paper are not included in the 
-current version of the test. This version does not: (1) update the heterozygote probabilities
-based on observed reads across all datatypes; or (2) correct variation due to GC content and 
-fraction of reads in peak regions in each individual. These parts of the test were removed to 
-simplify the code and to remove several dependencies. In principle these corrections could be 
-applied to the input files prior to running the test. For example a script could update the 
-heterozygote probabilities and read count totals using information about read counts and GC 
-content etc.
-
 
 Dependencies
 ----------
@@ -110,11 +101,20 @@ The script writes a tab delimited text file with the following columns:
 7. number of AS reads - number  of of allele specific reads in tested region
 
 
+Updating total read depths and heterozygous probabilities
+-----
+
+Prior to running the CHT, we recommend updating the heterozygote probabilities for the target SNPs using all of the available reads for each individual. This is done using the script ``update_het_probs.py``.
+
+We also recommend correcting read depths based on the fraction of reads that fall within peaks for each sample and the GC content of each region. This is done using the script ``update_total_depth.py``.
+
 
 Choosing dispersion parameters
 ------
 
-There are three dispersion parameters. One dispersion parameter is estimated separately for each region when the CHT is run. The other two parameters are estimated across all regions, and can be considered hyperparameters. They are estimated before running the CHT using the scripts `fit_as_coefficients.py` and `fit_bnb_coefficients.py`. We suggest running the CHT on permuted data and visualizing the results with a quantile-quantile plot to ensure that the test is working properly. If the permutations do not follow the null distribution, this may indicate that the dispersion parameters have not been accurately estimated. In this case, the user may manually set the overdispersion parameters or adjust the p-values according to the permuted distribution. One of the command line options (`-s`) runs the test on permuted genotypes. 
+The CHT includes three parameters that model the dispersion of the read count data. One dispersion parameter is estimated separately for each region when the CHT is run. The other two parameters are estimated across all regions, and can be considered hyperparameters. They are estimated before running the CHT using the scripts `fit_as_coefficients.py` and `fit_bnb_coefficients.py`. 
+
+We suggest running the CHT on permuted data and visualizing the results with a quantile-quantile plot to ensure that the test is working properly. If the permutations do not follow the null distribution, this may indicate that the dispersion parameters have not been accurately estimated. In this case, you may manually set the overdispersion parameters or adjust the p-values according to the permuted distribution. One of the command line options (`-s`) runs the test on permuted genotypes. 
 
 
 Contact

@@ -1,7 +1,7 @@
 CHT -  Combined Haplotype Test
 ======================
 
-This directory contains source code for the Combined Haplotype Test portion of the WASP pipeline.
+This directory contains source code for the Combined Haplotype Test (CHT) portion of the WASP pipeline.
 
 Introduction
 ----------
@@ -19,23 +19,8 @@ attributed to binomial sampling or genotype) with three dispersion parameters. T
 of these parameters are global (i.e. fixed across test regions), while one is 
 estimated for each region.
 
-The test is described the supplementary material for 
-[our paper](http://dx.doi.org/10.1126/science.1242429): McVicker G\*, van de Geijn B\*, 
-Degner JF, Cain CE, Banovich NE, Raj A, Lewellen N, Myrthil M, Gilad Y, Pritchard JK. 
-"Identification of genetic variants that affect histone modifications in human cells" 
-Science. 2013
-
-Some components of the test that are described in the paper are not included in the 
-current version of the test. This version does not: (1) update the heterozygote probabilities
-based on observed reads across all datatypes; or (2) correct variation due to GC content and 
-fraction of reads in peak regions in each individual. These parts of the test were removed to 
-simplify the code and to remove several dependencies. In principle these corrections could be 
-applied to the input files prior to running the test. For example a script could update the 
-heterozygote probabilities and read count totals using information about read counts and GC 
-content etc.
-
-We are currently (6/5/2014) making several improvements to the test and will release an updated 
-version soon.
+The test is described in  
+[our paper](http://biorxiv.org/content/early/2014/11/07/011221): van de Geijn B\*, McVicker G\*, Gilad Y, Pritchard JK. "WASP: allele-specific software for robust discovery of molecular quantitative trait loci"
 
 
 Dependencies
@@ -73,11 +58,7 @@ The columns in the input file are as follows (example values are given in [*brac
 16. REGION.READ.COUNT - number of reads in region [*72*]
 17. GENOMEWIDE.READ.COUNT - total number of mapped, filtered reads for this individual [*26219310*]
 
-Note: We have written a set of scripts to generate these files,
-however these have many file and source code dependencies that may
-make them difficult for other people to use. That said, if you are
-interested in obtaining the scripts, please contact us, and we can
-make them available.
+Note: We have written a set of scripts to generate these files, however they have several file and source code dependencies that may make them difficult to use. We have included the scripts ``import_bam_ref_nonref_counts.py``, ``extract_haplotype_read_counts.py`` and ``workflow/submit_import_10_IND_ref_nonref_counts.sh`` as examples of our workflow  and we are currently working to provide scripts with fewer dependencies.
 
 Some of the input files that we used for our paper can be downloaded from 
 [here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/). 
@@ -116,18 +97,20 @@ The script writes a tab delimited text file with the following columns:
 7. number of AS reads - number  of of allele specific reads in tested region
 
 
+Updating total read depths and heterozygous probabilities
+-----
+
+Prior to running the CHT, we recommend updating the heterozygote probabilities for the target SNPs using all of the available reads for each individual. This is done using the script ``update_het_probs.py``.
+
+We also recommend correcting read depths based on the fraction of reads that fall within peaks for each sample and the GC content of each region. This is done using the script ``update_total_depth.py``.
+
 
 Choosing dispersion parameters
 ------
 
-One of the dispersion parameters is estimated for each region using maximum likelhood. 
-The other two parameters are fixed across regions and must be specified on the command 
-line. The new version of the software will estimate these parameters from 
-the data, however this is not implemented in the current version. To use the current
-version of the code it is necessary to run it using several combinations of dispersion 
-parameters, and choose the values that give well-calibrated (uniformly distributed) 
-p-values when the test is run on permuted genotypes (i.e. p-values that follow the expectation 
-line in a QQ-plot). One of the command line options (-s) runs the test on permuted genotypes. 
+The CHT includes three parameters that model the dispersion of the read count data. One dispersion parameter is estimated separately for each region when the CHT is run. The other two parameters are estimated across all regions, and can be considered hyperparameters. They are estimated before running the CHT using the scripts `fit_as_coefficients.py` and `fit_bnb_coefficients.py`. 
+
+We suggest running the CHT on permuted data and visualizing the results with a quantile-quantile plot to ensure that the test is working properly. If the permutations do not follow the null distribution, this may indicate that the dispersion parameters have not been accurately estimated. In this case, you may manually set the overdispersion parameters or adjust the p-values according to the permuted distribution. One of the command line options (`-s`) runs the test on permuted genotypes. 
 
 
 Contact

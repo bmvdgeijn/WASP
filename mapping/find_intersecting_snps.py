@@ -50,21 +50,39 @@ class SNP:
 #### Class to keep track of all the information read in from the bamfile/snpfile        
 class Bam_scanner:
     # Constructor: opens files, creates initial table
-    def __init__(self,is_paired_end,max_window,file_name,keep_file_name,remap_name,remap_num_name,fastq_names,snp_dir):
+    def __init__(self,
+                 is_paired_end,
+                 max_window,
+                 file_name,
+                 keep_file_name,
+                 remap_name,
+                 remap_num_name,
+                 fastq_names,
+                 snp_dir,
+                 chrm=None):
+
         self.is_paired_end=is_paired_end
         
         ### Read in all input files and create output files
         self.snp_dir=snp_dir
-        self.bamfile=pysam.Samfile(file_name,"rb")
-        self.keep_bam=pysam.Samfile(keep_file_name,"wb",template=self.bamfile)
-        self.remap_bam=pysam.Samfile(remap_name,"wb",template=self.bamfile)
+        self.chrm=chrm
+
+        if chrm != None:
+            self.bamfile=pysam.Samfile(file_name,"rb").fetch("chr" + str(self.chrm))
+        else:   
+            self.bamfile=pysam.Samfile(file_name,"rb")
+
+        self.keep_bam=pysam.Samfile(keep_file_name,"wb",template=pysam.Samfile(file_name,"rb"))
+        self.remap_bam=pysam.Samfile(remap_name,"wb",template=pysam.Samfile(file_name,"rb"))
         self.remap_num_file=gzip.open(remap_num_name,"w")
         self.fastqs=[gzip.open(fqn,"w") for fqn in fastq_names]
+
         try:
             self.cur_read=self.bamfile.next()
         except:
             sys.stderr.write("No lines available for input")
             return()
+        
         self.end_of_file=False
 
         self.remap_num=1
@@ -83,10 +101,16 @@ class Bam_scanner:
         
         self.pos=self.cur_read.pos
         self.chr_num=self.cur_read.tid
-        self.chr_name=self.bamfile.getrname(self.cur_read.tid)
+        
+        if self.chrm == None:
+            self.chr_name=self.bamfile.getrname(self.cur_read.tid)
+        else:
+            self.chr_name= "chr" + str(self.chrm)
+        
         self.max_window=max_window
                 
         self.num_reads=0
+
         ### Initialize the read tracking tables
         self.read_table=[[] for x in range(self.max_window)]
         
@@ -401,35 +425,63 @@ class Bam_scanner:
         return reverse
 
 def main():
+
+    # Setup options
     parser=argparse.ArgumentParser()
     parser.add_argument("-p", action='store_true', dest='is_paired_end', default=False)
     parser.add_argument("-m", action='store', dest='max_window', type=int, default=100000)
+    parser.add_argument("-c", dest='chrm', type=int, action='store')
     parser.add_argument("infile", action='store')
     parser.add_argument("snp_dir", action='store')
     
+    # Define variables
     options=parser.parse_args()
     infile=options.infile
+    chrm=options.chrm
     snp_dir=options.snp_dir
     name_split=infile.split(".")
     
+    # Setup outfile prefix 
     if len(name_split)>1:
         pref=".".join(name_split[:-1])
     else:
         pref=name_split[0]
 
-    pysam.sort(infile,pref+".sort")
+    if chrm != None:
+        pref+= ".chr" + str(chrm)
 
-    sort_file_name=pref+".sort.bam"
+    # If necssary sort input BAM 
+    if 'sort' not in infile:
+        pysam.sort(infile,pref+".sort")
+        sort_file_name=pref+".sort.bam"
+    else:
+        sort_file_name = infile
+
+    # Create output files
     keep_file_name=pref+".keep.bam"
     remap_name=pref+".to.remap.bam"
     remap_num_name=pref+".to.remap.num.gz"
+
 
     if options.is_paired_end:
         fastq_names=[pref+".remap.fq1.gz",pref+".remap.fq2.gz"]
     else:
         fastq_names=[pref+".remap.fq.gz"]
 
-    bam_data=Bam_scanner(options.is_paired_end,options.max_window,sort_file_name,keep_file_name,remap_name,remap_num_name,fastq_names,snp_dir)
+    # print sort_file_name, chrm, pref
+    # sys.exit()
+
+    # Setup Bam data
+    bam_data=Bam_scanner(options.is_paired_end, 
+                         options.max_window,
+                         sort_file_name,
+                         keep_file_name,
+                         remap_name,
+                         remap_num_name,
+                         fastq_names,
+                         snp_dir,
+                         chrm)
+
     bam_data.fill_table()
     #i=0
     while not bam_data.end_of_file:
@@ -447,4 +499,23 @@ def main():
     sys.stderr.write("Finished!\n")
 
 main()
+
+
+"""
+cd /home/ncra/wasp_test
+
+python ~/source/WASP/mapping/find_intersecting_snps.py \
+-c chr3 \
+Sample_TZSW174.q10.sort.bam \
+/home/ncra/RNAseq/allele_specific/wasp/SNPs/genes_with_snps
+"""
+
+
+
+
+
+
+
+
+
 

@@ -50,7 +50,8 @@ class SNP:
 #### Class to keep track of all the information read in from the bamfile/snpfile        
 class Bam_scanner:
     # Constructor: opens files, creates initial table
-    def __init__(self,is_paired_end,max_window,file_name,keep_file_name,remap_name,remap_num_name,fastq_names,snp_dir):
+    def __init__(self, is_paired_end, max_window, file_name, keep_file_name,
+                 remap_name, remap_num_name, fastq_names, snp_dir):
         self.is_paired_end=is_paired_end
         
         ### Read in all input files and create output files
@@ -409,9 +410,15 @@ class Bam_scanner:
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument("-p", action='store_true', dest='is_paired_end', default=False)
-    parser.add_argument("-m", action='store', dest='max_window', type=int, default=100000)
-    parser.add_argument("infile", action='store')
+    parser.add_argument("-p", action='store_true', dest='is_paired_end', 
+                        default=False)
+    parser.add_argument("-s", action='store_true', dest='sorted', 
+                        help=("Indicates that infile is already coordinate "
+                              "sorted."))
+    parser.add_argument("-m", action='store', dest='max_window', type=int, 
+                        default=100000)
+    parser.add_argument("infile", action='store', help=("Coordinate sorted bam "
+                        "file."))
     parser.add_argument("snp_dir", action='store')
     
     options=parser.parse_args()
@@ -423,10 +430,12 @@ def main():
         pref=".".join(name_split[:-1])
     else:
         pref=name_split[0]
-
-    pysam.sort(infile,pref+".sort")
-
-    sort_file_name=pref+".sort.bam"
+   
+    if not options.sorted:
+        pysam.sort(infile,pref+".sort")
+        sort_file_name=pref+".sort.bam"
+    else:
+        sort_file_name=infile
     keep_file_name=pref+".keep.bam"
     remap_name=pref+".to.remap.bam"
     remap_num_name=pref+".to.remap.num.gz"
@@ -436,7 +445,11 @@ def main():
     else:
         fastq_names=[pref+".remap.fq.gz"]
 
-    bam_data=Bam_scanner(options.is_paired_end,options.max_window,sort_file_name,keep_file_name,remap_name,remap_num_name,fastq_names,snp_dir)
+    bam_data=Bam_scanner(options.is_paired_end, options.max_window,
+                         sort_file_name, keep_file_name, remap_name,
+                         remap_num_name, fastq_names, snp_dir)
+    # I'm not sure why fill_table() is called here since it's also in the init
+    # for Bam_scanner. Is it running twice?
     bam_data.fill_table()
     #i=0
     while not bam_data.end_of_file:

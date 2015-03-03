@@ -411,15 +411,25 @@ class Bam_scanner:
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("-p", action='store_true', dest='is_paired_end', 
-                        default=False)
-    parser.add_argument("-s", action='store_true', dest='sorted', 
-                        help=("Indicates that infile is already coordinate "
-                              "sorted."))
+                        default=False, help=('Indicates that reads are '
+                                             'paired-end (default is single).'))
+    mdefault = 100000
+    mhelp = ('Changes the maximum window to search for SNPs.  The default is '
+             '{:,} base pairs.  Reads or read pairs that span more than this '
+             'distance (usually due to splice junctions) will be thrown out. '
+             'Increasing this window allows for longer junctions, but may '
+             'increase run time and memory requirements.'.format(mdefault))
     parser.add_argument("-m", action='store', dest='max_window', type=int, 
-                        default=100000)
+                        default=mdefault, help=mhelp)
     parser.add_argument("infile", action='store', help=("Coordinate sorted bam "
                         "file."))
-    parser.add_argument("snp_dir", action='store')
+    snp_dir_help = ('Directory containing the SNPs segregating within the '
+                    'sample in question (which need to be checked for '
+                    'mappability issues).  This directory should contain '
+                    'sorted files of SNPs separated by chromosome and named: '
+                    'chr<#>.snps.txt.gz. These files should contain 3 columns: '
+                    'position RefAllele AltAllele')
+    parser.add_argument("snp_dir", action='store', help=snp_dir_help)
     
     options=parser.parse_args()
     infile=options.infile
@@ -431,11 +441,6 @@ def main():
     else:
         pref=name_split[0]
    
-    if not options.sorted:
-        pysam.sort(infile,pref+".sort")
-        sort_file_name=pref+".sort.bam"
-    else:
-        sort_file_name=infile
     keep_file_name=pref+".keep.bam"
     remap_name=pref+".to.remap.bam"
     remap_num_name=pref+".to.remap.num.gz"
@@ -446,8 +451,8 @@ def main():
         fastq_names=[pref+".remap.fq.gz"]
 
     bam_data=Bam_scanner(options.is_paired_end, options.max_window,
-                         sort_file_name, keep_file_name, remap_name,
-                         remap_num_name, fastq_names, snp_dir)
+                         infile, keep_file_name, remap_name, remap_num_name,
+                         fastq_names, snp_dir)
     # I'm not sure why fill_table() is called here since it's also in the init
     # for Bam_scanner. Is it running twice?
     bam_data.fill_table()

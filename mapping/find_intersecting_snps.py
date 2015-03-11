@@ -133,62 +133,55 @@ class Bam_scanner:
             self.pos=self.cur_read.pos
             self.init_snp_table()
             #self.num_reads+=1000
-<<<<<<< HEAD
-        while self.cur_read.tid == self.chr_num and self.cur_read.pos<(self.pos+self.max_window):
-            self.num_reads+=1
-=======
 
-        # Counters / flags for down sampling logic
-
-
+        print self.cur_read.pos, self.pos + self.max_window, self.num_reads
         while self.cur_read.pos < self.pos + self.max_window:
             
             #print self.cur_read.pos, self.pos, self.num_reads
 
             self.num_reads += 1
 
-            # #print self.cur_read.pos, type(self.cur_read.pos), self.cur_read.pos != c_pos
+            #print self.cur_read.pos, type(self.cur_read.pos), self.cur_read.pos != c_pos
             
-            # # if self.cur_read.pos > 565591:
-            # #     break
-            # ### DOWNSAMPLING LOGIC --------------------
+            # if self.cur_read.pos > 565591:
+            #     break
+            ### DOWNSAMPLING LOGIC --------------------
 
-            # # if self.cur_read.pos % 50000 == 0:
-            # #     print c_pos
-            # # # if c_pos_count % 5001 == 1:
-            # # #     print c_pos, self.cur_read.pos, c_pos_count
+            # if self.cur_read.pos % 50000 == 0:
+            #     print c_pos
+            # # if c_pos_count % 5001 == 1:
+            # #     print c_pos, self.cur_read.pos, c_pos_count
 
-            # # Add counter and position flag
-            # if self.c_pos != self.cur_read.pos is True:
-            #     self.c_pos = copy.copy(self.cur_read.pos)
-            #     c_pos_count = 1
-            #     print 'here'
-            #     continue
+            # Add counter and position flag
+            if self.c_pos != self.cur_read.pos is True:
+                self.c_pos = copy.copy(self.cur_read.pos)
+                c_pos_count = 1
+                print 'here'
+                continue
 
-            # # Skip reads until current read postion does not equal 'c_pos'
-            # if self.c_pos_count >= 5000 and self.c_pos == self.cur_read.pos: # hard coded for now
+            # Skip reads until current read postion does not equal 'c_pos'
+            if self.c_pos_count >= 5000 and self.c_pos == self.cur_read.pos: # hard coded for now
                 
 
-            #     if self.c_pos_count % 5000 == 0:
-            #         sys.stderr.write('Down sampling: {0} {1} {2} {3}\n'.format(self.c_pos, self.cur_read.pos,
-            #             self.c_pos_count, self.num_reads))
+                if self.c_pos_count % 5000 == 0:
+                    sys.stderr.write('Down sampling: {0} {1} {2} {3}\n'.format(self.c_pos, self.cur_read.pos,
+                        self.c_pos_count, self.num_reads))
                 
-            #     self.c_pos_count += 1
-            #     self.c_pos = copy.copy(self.cur_read.pos)
+                self.c_pos_count += 1
+                self.c_pos = copy.copy(self.cur_read.pos)
 
-            #     continue
+                continue
         
             
-            # self.c_pos_count += 1
-            # self.c_pos = copy.copy(self.cur_read.pos)
+            self.c_pos_count += 1
+            self.c_pos = copy.copy(self.cur_read.pos)
 
-            # # if self.cur_read.pos % 500000 == 0:
-            # #     sys.stderr.write('At Pos: {0} {1} {2}\n'.format(c_pos, c_pos_count, self.num_reads))
+            # if self.cur_read.pos % 500000 == 0:
+            #     sys.stderr.write('At Pos: {0} {1} {2}\n'.format(c_pos, c_pos_count, self.num_reads))
 
             
             ### Downsampling logic complete ------------------
 
->>>>>>> 85f9404a3c810def56222094d7eafb581c805a24
             self.read_table[self.cur_read.pos % self.max_window].append(self.cur_read)
             
             try:
@@ -198,7 +191,7 @@ class Bam_scanner:
                 self.end_of_file=True
                 return()
 
-<<<<<<< HEAD
+
         if self.cur_read.tid != self.chr_num:
             self.empty_table()
             self.chr_num=self.cur_read.tid
@@ -210,21 +203,6 @@ class Bam_scanner:
             self.pos=self.cur_read.pos
             self.switch_chr()
             self.fill_table()
-=======
-            if self.cur_read.tid != self.chr_num:
-                self.empty_table()
-                self.chr_num=self.cur_read.tid
-            
-                try:
-                    self.chr_name=self.bamfile.getrname(self.chr_num)
-                except:
-                    sys.stderr.write("Problem with tid: "+str(self.chr_num))
-                    self.skip_chr()
-            
-                self.pos=self.cur_read.pos
-                self.switch_chr()
-                self.fill_table()
->>>>>>> 85f9404a3c810def56222094d7eafb581c805a24
 
     # Switches to looking for SNPs on the next chromosome
     def switch_chr(self):
@@ -414,14 +392,10 @@ class Bam_scanner:
                             init_seqs=list(seqs)
                             for seq in init_seqs:
                                 matches=0
-<<<<<<< HEAD
-                                #if seq[p] not in snp.alleles:
-                                #    sys.stderr.write(str(start_dist)+" "+seq[p]+"  "+str(snp.alleles)+"\n")
-=======
+
                                 if seq[p] not in snp.alleles:
                                     pass
-                                    #sys.stderr.write(str(start_dist)+" "+seq[p]+"  "+str(snp.alleles)+"\n")
->>>>>>> 85f9404a3c810def56222094d7eafb581c805a24
+
                                 for geno in snp.alleles:
                                     if seq[p]==geno:
                                         matches+=1

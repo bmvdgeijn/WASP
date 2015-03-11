@@ -1,4 +1,4 @@
-import sys, pysam, gzip, pdb, argparse, array
+import sys, pysam, gzip, pdb, argparse, array, copy
 #from pympler import asizeof
 
 #### Class to hold the data for a single SNP
@@ -50,21 +50,41 @@ class SNP:
 #### Class to keep track of all the information read in from the bamfile/snpfile        
 class Bam_scanner:
     # Constructor: opens files, creates initial table
-    def __init__(self,is_paired_end,max_window,file_name,keep_file_name,remap_name,remap_num_name,fastq_names,snp_dir):
+    def __init__(self,
+                 is_paired_end,
+                 max_window,
+                 file_name,
+                 keep_file_name,
+                 remap_name,
+                 remap_num_name,
+                 fastq_names,
+                 snp_dir,
+                 c_pos=0,
+                 c_pos_count=0,
+                 chrm=None):
+
         self.is_paired_end=is_paired_end
         
         ### Read in all input files and create output files
         self.snp_dir=snp_dir
-        self.bamfile=pysam.Samfile(file_name,"rb")
-        self.keep_bam=pysam.Samfile(keep_file_name,"wb",template=self.bamfile)
-        self.remap_bam=pysam.Samfile(remap_name,"wb",template=self.bamfile)
+        self.chrm=chrm
+
+        if chrm != None:
+            self.bamfile=pysam.Samfile(file_name,"rb").fetch("chr" + str(self.chrm))
+        else:   
+            self.bamfile=pysam.Samfile(file_name,"rb")
+
+        self.keep_bam=pysam.Samfile(keep_file_name,"wb",template=pysam.Samfile(file_name,"rb"))
+        self.remap_bam=pysam.Samfile(remap_name,"wb",template=pysam.Samfile(file_name,"rb"))
         self.remap_num_file=gzip.open(remap_num_name,"w")
         self.fastqs=[gzip.open(fqn,"w") for fqn in fastq_names]
+
         try:
             self.cur_read=self.bamfile.next()
         except:
             sys.stderr.write("No lines available for input")
             return()
+        
         self.end_of_file=False
 
         self.remap_num=1
@@ -76,12 +96,20 @@ class Bam_scanner:
         self.remap=0
         self.tot=0
         self.printstats = True
+
+        self.c_pos = 0
+        self.c_pos_count = 0
         
         self.num_reads=0
         
         self.pos=self.cur_read.pos
         self.chr_num=self.cur_read.tid
-        self.chr_name=self.bamfile.getrname(self.cur_read.tid)
+        
+        if self.chrm == None:
+            self.chr_name=self.bamfile.getrname(self.cur_read.tid)
+        else:
+            self.chr_name= "chr" + str(self.chrm)
+        
         self.max_window=max_window
                 
         self.num_reads=0
@@ -94,19 +122,75 @@ class Bam_scanner:
         
         ### fill all tables
         self.fill_table()
-        
+    
 
     # fills the table of reads starting from the current position and extending for the next <max_window> base pairs
     def fill_table(self):
         if self.end_of_file:
             return()
+        
         if self.num_reads==0:
             self.pos=self.cur_read.pos
             self.init_snp_table()
             #self.num_reads+=1000
+<<<<<<< HEAD
         while self.cur_read.tid == self.chr_num and self.cur_read.pos<(self.pos+self.max_window):
             self.num_reads+=1
+=======
+
+        # Counters / flags for down sampling logic
+
+
+        while self.cur_read.pos < self.pos + self.max_window:
+            
+            #print self.cur_read.pos, self.pos, self.num_reads
+
+            self.num_reads += 1
+
+            # #print self.cur_read.pos, type(self.cur_read.pos), self.cur_read.pos != c_pos
+            
+            # # if self.cur_read.pos > 565591:
+            # #     break
+            # ### DOWNSAMPLING LOGIC --------------------
+
+            # # if self.cur_read.pos % 50000 == 0:
+            # #     print c_pos
+            # # # if c_pos_count % 5001 == 1:
+            # # #     print c_pos, self.cur_read.pos, c_pos_count
+
+            # # Add counter and position flag
+            # if self.c_pos != self.cur_read.pos is True:
+            #     self.c_pos = copy.copy(self.cur_read.pos)
+            #     c_pos_count = 1
+            #     print 'here'
+            #     continue
+
+            # # Skip reads until current read postion does not equal 'c_pos'
+            # if self.c_pos_count >= 5000 and self.c_pos == self.cur_read.pos: # hard coded for now
+                
+
+            #     if self.c_pos_count % 5000 == 0:
+            #         sys.stderr.write('Down sampling: {0} {1} {2} {3}\n'.format(self.c_pos, self.cur_read.pos,
+            #             self.c_pos_count, self.num_reads))
+                
+            #     self.c_pos_count += 1
+            #     self.c_pos = copy.copy(self.cur_read.pos)
+
+            #     continue
+        
+            
+            # self.c_pos_count += 1
+            # self.c_pos = copy.copy(self.cur_read.pos)
+
+            # # if self.cur_read.pos % 500000 == 0:
+            # #     sys.stderr.write('At Pos: {0} {1} {2}\n'.format(c_pos, c_pos_count, self.num_reads))
+
+            
+            ### Downsampling logic complete ------------------
+
+>>>>>>> 85f9404a3c810def56222094d7eafb581c805a24
             self.read_table[self.cur_read.pos % self.max_window].append(self.cur_read)
+            
             try:
                 self.cur_read=self.bamfile.next()
             except:
@@ -114,6 +198,7 @@ class Bam_scanner:
                 self.end_of_file=True
                 return()
 
+<<<<<<< HEAD
         if self.cur_read.tid != self.chr_num:
             self.empty_table()
             self.chr_num=self.cur_read.tid
@@ -125,6 +210,21 @@ class Bam_scanner:
             self.pos=self.cur_read.pos
             self.switch_chr()
             self.fill_table()
+=======
+            if self.cur_read.tid != self.chr_num:
+                self.empty_table()
+                self.chr_num=self.cur_read.tid
+            
+                try:
+                    self.chr_name=self.bamfile.getrname(self.chr_num)
+                except:
+                    sys.stderr.write("Problem with tid: "+str(self.chr_num))
+                    self.skip_chr()
+            
+                self.pos=self.cur_read.pos
+                self.switch_chr()
+                self.fill_table()
+>>>>>>> 85f9404a3c810def56222094d7eafb581c805a24
 
     # Switches to looking for SNPs on the next chromosome
     def switch_chr(self):
@@ -314,8 +414,14 @@ class Bam_scanner:
                             init_seqs=list(seqs)
                             for seq in init_seqs:
                                 matches=0
+<<<<<<< HEAD
                                 #if seq[p] not in snp.alleles:
                                 #    sys.stderr.write(str(start_dist)+" "+seq[p]+"  "+str(snp.alleles)+"\n")
+=======
+                                if seq[p] not in snp.alleles:
+                                    pass
+                                    #sys.stderr.write(str(start_dist)+" "+seq[p]+"  "+str(snp.alleles)+"\n")
+>>>>>>> 85f9404a3c810def56222094d7eafb581c805a24
                                 for geno in snp.alleles:
                                     if seq[p]==geno:
                                         matches+=1
@@ -408,35 +514,63 @@ class Bam_scanner:
         return reverse
 
 def main():
+
+    # Setup options
     parser=argparse.ArgumentParser()
     parser.add_argument("-p", action='store_true', dest='is_paired_end', default=False)
     parser.add_argument("-m", action='store', dest='max_window', type=int, default=100000)
+    parser.add_argument("-c", dest='chrm', type=int, action='store')
     parser.add_argument("infile", action='store')
     parser.add_argument("snp_dir", action='store')
     
+    # Define variables
     options=parser.parse_args()
     infile=options.infile
+    chrm=options.chrm
     snp_dir=options.snp_dir
     name_split=infile.split(".")
     
+    # Setup outfile prefix 
     if len(name_split)>1:
         pref=".".join(name_split[:-1])
     else:
         pref=name_split[0]
 
-    pysam.sort(infile,pref+".sort")
+    if chrm != None:
+        pref+= ".chr" + str(chrm)
 
-    sort_file_name=pref+".sort.bam"
+    # If necssary sort input BAM 
+    if 'sort' not in infile:
+        pysam.sort(infile,pref+".sort")
+        sort_file_name=pref+".sort.bam"
+    else:
+        sort_file_name = infile
+
+    # Create output files
     keep_file_name=pref+".keep.bam"
     remap_name=pref+".to.remap.bam"
     remap_num_name=pref+".to.remap.num.gz"
+
 
     if options.is_paired_end:
         fastq_names=[pref+".remap.fq1.gz",pref+".remap.fq2.gz"]
     else:
         fastq_names=[pref+".remap.fq.gz"]
 
-    bam_data=Bam_scanner(options.is_paired_end,options.max_window,sort_file_name,keep_file_name,remap_name,remap_num_name,fastq_names,snp_dir)
+    # print sort_file_name, chrm, pref
+    # sys.exit()
+
+    # Setup Bam data
+    bam_data=Bam_scanner(options.is_paired_end, 
+                         options.max_window,
+                         sort_file_name,
+                         keep_file_name,
+                         remap_name,
+                         remap_num_name,
+                         fastq_names,
+                         snp_dir,
+                         chrm)
+
     bam_data.fill_table()
     #i=0
     while not bam_data.end_of_file:
@@ -449,9 +583,26 @@ def main():
             bam_data.empty_slot_paired()
         else:
             bam_data.empty_slot_single()
+        print 'filling table'
         bam_data.fill_table()
     
     sys.stderr.write("Finished!\n")
 
 main()
+
+
+"""
+cd /home/ncra/wasp_test
+
+bsub -L /bin/bash -eo test "python ~/source/WASP/mapping/find_intersecting_snps.py -c 1 Sample_TZSW174.q10.sort.bam /home/ncra/RNAseq/allele_specific/wasp/SNPs/genes_with_snps"
+"""
+
+
+
+
+
+
+
+
+
 

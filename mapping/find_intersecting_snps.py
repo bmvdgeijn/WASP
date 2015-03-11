@@ -59,15 +59,17 @@ class Bam_scanner:
                  remap_num_name,
                  fastq_names,
                  snp_dir,
+                 max_depth,
+                 chrm=None,
                  c_pos=0,
-                 c_pos_count=0,
-                 chrm=None):
+                 c_pos_count=0):
 
         self.is_paired_end=is_paired_end
         
         ### Read in all input files and create output files
         self.snp_dir=snp_dir
         self.chrm=chrm
+        self.max_depth=max_depth
 
         if chrm != None:
             self.bamfile=pysam.Samfile(file_name,"rb").fetch("chr" + str(self.chrm))
@@ -126,6 +128,7 @@ class Bam_scanner:
 
     # fills the table of reads starting from the current position and extending for the next <max_window> base pairs
     def fill_table(self):
+
         if self.end_of_file:
             return()
         
@@ -134,54 +137,22 @@ class Bam_scanner:
             self.init_snp_table()
             #self.num_reads+=1000
 
-        print self.cur_read.pos, self.pos + self.max_window, self.num_reads
-        while self.cur_read.pos < self.pos + self.max_window:
+        local_read_count = 0
+        while self.cur_read.tid == self.chr_num and self.cur_read.pos<(self.pos+self.max_window):
             
-            #print self.cur_read.pos, self.pos, self.num_reads
-
-            self.num_reads += 1
-
-            #print self.cur_read.pos, type(self.cur_read.pos), self.cur_read.pos != c_pos
-            
-            # if self.cur_read.pos > 565591:
-            #     break
-            ### DOWNSAMPLING LOGIC --------------------
-
-            # if self.cur_read.pos % 50000 == 0:
-            #     print c_pos
-            # # if c_pos_count % 5001 == 1:
-            # #     print c_pos, self.cur_read.pos, c_pos_count
-
-            # Add counter and position flag
-            if self.c_pos != self.cur_read.pos is True:
-                self.c_pos = copy.copy(self.cur_read.pos)
-                c_pos_count = 1
-                print 'here'
+            ## Track local read count 
+            local_read_count += 1
+            if local_read_count > self.max_depth:
+                print 'skipping reads:', self.chr_num, self.cur_read.tid
+                try:
+                    self.cur_read=self.bamfile.next()
+                except:
+                    self.empty_table()
+                    self.end_of_file=True
+                    return()
                 continue
 
-            # Skip reads until current read postion does not equal 'c_pos'
-            if self.c_pos_count >= 5000 and self.c_pos == self.cur_read.pos: # hard coded for now
-                
-
-                if self.c_pos_count % 5000 == 0:
-                    sys.stderr.write('Down sampling: {0} {1} {2} {3}\n'.format(self.c_pos, self.cur_read.pos,
-                        self.c_pos_count, self.num_reads))
-                
-                self.c_pos_count += 1
-                self.c_pos = copy.copy(self.cur_read.pos)
-
-                continue
-        
-            
-            self.c_pos_count += 1
-            self.c_pos = copy.copy(self.cur_read.pos)
-
-            # if self.cur_read.pos % 500000 == 0:
-            #     sys.stderr.write('At Pos: {0} {1} {2}\n'.format(c_pos, c_pos_count, self.num_reads))
-
-            
-            ### Downsampling logic complete ------------------
-
+            self.num_reads+=1
             self.read_table[self.cur_read.pos % self.max_window].append(self.cur_read)
             
             try:
@@ -191,15 +162,17 @@ class Bam_scanner:
                 self.end_of_file=True
                 return()
 
-
         if self.cur_read.tid != self.chr_num:
+        
             self.empty_table()
             self.chr_num=self.cur_read.tid
+        
             try:
                 self.chr_name=self.bamfile.getrname(self.chr_num)
             except:
                 sys.stderr.write("Problem with tid: "+str(self.chr_num)+"\n")
                 self.skip_chr()
+            
             self.pos=self.cur_read.pos
             self.switch_chr()
             self.fill_table()
@@ -207,11 +180,13 @@ class Bam_scanner:
     # Switches to looking for SNPs on the next chromosome
     def switch_chr(self):
         chr_match=False
+        
         while not chr_match and not self.end_of_file:
+            
             try:
                 self.snpfile = gzip.open("%s/%s.snps.txt.gz"%(self.snp_dir,self.chr_name))
                 sys.stderr.write("Starting on chromosome "+self.chr_name+"\n")
-                chr_match=True
+                chr_match=True    
             except:
                 sys.stderr.write("SNP file for chromosome "+self.chr_name+" is not found. Skipping these reads.\n")
                 self.skip_chr()
@@ -494,6 +469,7 @@ def main():
     parser.add_argument("-p", action='store_true', dest='is_paired_end', default=False)
     parser.add_argument("-m", action='store', dest='max_window', type=int, default=100000)
     parser.add_argument("-c", dest='chrm', type=int, action='store')
+    parser.add_argument("-d", dest='max_depth', type=int, action='store', default=250000)
     parser.add_argument("infile", action='store')
     parser.add_argument("snp_dir", action='store')
     
@@ -502,6 +478,7 @@ def main():
     infile=options.infile
     chrm=options.chrm
     snp_dir=options.snp_dir
+    max_depth=options.max_depth
     name_split=infile.split(".")
     
     # Setup outfile prefix 
@@ -543,6 +520,7 @@ def main():
                          remap_num_name,
                          fastq_names,
                          snp_dir,
+                         max_depth,
                          chrm)
 
     bam_data.fill_table()
@@ -553,11 +531,15 @@ def main():
             #sys.stderr.write(str(asizeof.asizeof(bam_data))+"\t"+str(asizeof.asizeof(bam_data.snp_table))+"\t"+str(asizeof.asizeof(bam_data.read_table))+"\t"+str(bam_data.num_reads)+"\t"+str(bam_data.num_snps)+"\n")
             #sys.stderr.write(str(asizeof.asizeof(bam_data))+"\t"+str(bam_data.num_reads)+"\t"+str(bam_data.num_snps)+"\t"+str(len(bam_data.indel_dict))+"\n")
             #i=0
+        # if bam_data.num_reads > options.max_depth: 
+        #     print bam_data.num_reads
+
         if options.is_paired_end:
             bam_data.empty_slot_paired()
+        
         else:
             bam_data.empty_slot_single()
-        print 'filling table'
+        #print 'filling table'
         bam_data.fill_table()
     
     sys.stderr.write("Finished!\n")

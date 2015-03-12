@@ -68,6 +68,9 @@ class Bam_scanner:
         
         ### Read in all input files and create output files
         self.snp_dir=snp_dir
+        
+        ### Added class variables to store chromosome ID and 
+        ### max depth value
         self.chrm=chrm
         self.max_depth=max_depth
 
@@ -98,15 +101,13 @@ class Bam_scanner:
         self.remap=0
         self.tot=0
         self.printstats = True
-
-        self.c_pos = 0
-        self.c_pos_count = 0
         
         self.num_reads=0
         
         self.pos=self.cur_read.pos
         self.chr_num=self.cur_read.tid
-        
+
+        ### Logic to set chromosome value.        
         if self.chrm == None:
             self.chr_name=self.bamfile.getrname(self.cur_read.tid)
         else:
@@ -137,10 +138,13 @@ class Bam_scanner:
             self.init_snp_table()
             #self.num_reads+=1000
 
+        # Track the number of reads in read table
         local_read_count = 0
         while self.cur_read.tid == self.chr_num and self.cur_read.pos<(self.pos+self.max_window):
             
-            ## Track local read count 
+            ### If total number of reads in read table ard greater 
+            ### than the max depth value no more reads are added 
+            ### until reads are flushed from the table.
             local_read_count += 1
             if local_read_count > self.max_depth:
                 print 'skipping reads:', self.chr_num, self.cur_read.tid
@@ -367,10 +371,8 @@ class Bam_scanner:
                             init_seqs=list(seqs)
                             for seq in init_seqs:
                                 matches=0
-
-                                if seq[p] not in snp.alleles:
-                                    pass
-
+                                # if seq[p] not in snp.alleles:
+                                #     sys.stderr.write(str(start_dist))
                                 for geno in snp.alleles:
                                     if seq[p]==geno:
                                         matches+=1
@@ -466,10 +468,14 @@ def main():
 
     # Setup options
     parser=argparse.ArgumentParser()
+    
+    # Define flags
     parser.add_argument("-p", action='store_true', dest='is_paired_end', default=False)
     parser.add_argument("-m", action='store', dest='max_window', type=int, default=100000)
-    parser.add_argument("-c", dest='chrm', type=int, action='store')
+    parser.add_argument("-c", dest='chrm', type=int, action='store', default=None)
     parser.add_argument("-d", dest='max_depth', type=int, action='store', default=250000)
+    
+    # Define positional arguments
     parser.add_argument("infile", action='store')
     parser.add_argument("snp_dir", action='store')
     
@@ -478,7 +484,6 @@ def main():
     infile=options.infile
     chrm=options.chrm
     snp_dir=options.snp_dir
-    max_depth=options.max_depth
     name_split=infile.split(".")
     
     # Setup outfile prefix 
@@ -490,7 +495,7 @@ def main():
     if chrm != None:
         pref+= ".chr" + str(chrm)
 
-    # If necssary sort input BAM 
+    # Check if input is sorted. 
     if 'sort' not in infile:
         pysam.sort(infile,pref+".sort")
         sort_file_name=pref+".sort.bam"
@@ -508,9 +513,6 @@ def main():
     else:
         fastq_names=[pref+".remap.fq.gz"]
 
-    # print sort_file_name, chrm, pref
-    # sys.exit()
-
     # Setup Bam data
     bam_data=Bam_scanner(options.is_paired_end, 
                          options.max_window,
@@ -520,7 +522,7 @@ def main():
                          remap_num_name,
                          fastq_names,
                          snp_dir,
-                         max_depth,
+                         options.max_depth,
                          chrm)
 
     bam_data.fill_table()
@@ -531,27 +533,18 @@ def main():
             #sys.stderr.write(str(asizeof.asizeof(bam_data))+"\t"+str(asizeof.asizeof(bam_data.snp_table))+"\t"+str(asizeof.asizeof(bam_data.read_table))+"\t"+str(bam_data.num_reads)+"\t"+str(bam_data.num_snps)+"\n")
             #sys.stderr.write(str(asizeof.asizeof(bam_data))+"\t"+str(bam_data.num_reads)+"\t"+str(bam_data.num_snps)+"\t"+str(len(bam_data.indel_dict))+"\n")
             #i=0
-        # if bam_data.num_reads > options.max_depth: 
-        #     print bam_data.num_reads
 
         if options.is_paired_end:
             bam_data.empty_slot_paired()
         
         else:
             bam_data.empty_slot_single()
-        #print 'filling table'
+
         bam_data.fill_table()
     
     sys.stderr.write("Finished!\n")
 
 main()
-
-
-"""
-cd /home/ncra/wasp_test
-
-bsub -L /bin/bash -eo test "python ~/source/WASP/mapping/find_intersecting_snps.py -c 1 Sample_TZSW174.q10.sort.bam /home/ncra/RNAseq/allele_specific/wasp/SNPs/genes_with_snps"
-"""
 
 
 

@@ -9,17 +9,14 @@ LIB         = -lz -lm -lhdf5
 INCLUDE   = -I$(HDF_INSTALL)/include
 LIBSHDF   = $(EXTLIB)
 
-objects=vcf.o util.o memutil.o err.o
+objects=vcf.o util.o memutil.o err.o chrom.o
 
 default: all 
 
-all: h5test vcf_to_h5genoprob $(objects)
+all: vcf_to_h5genoprob $(objects)
 
 $(objects): %.o: %.c %.h
 	$(CC) -c $(CFLAGS) $< -o $@
-
-h5test: h5test.c
-	$(CC) $(CFLAGS) -o $@ h5test.c $(INCLUDE) $(LIBSHDF) $(LIB)
 
 
 vcf_to_h5genoprob: vcf_to_h5genoprob.o $(objects)

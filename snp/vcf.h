@@ -43,7 +43,8 @@ typedef struct {
 
 void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info);
 
-int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, double *geno_probs);
+int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, float *geno_probs,
+		  char *haplotypes);
 
 
 #endif

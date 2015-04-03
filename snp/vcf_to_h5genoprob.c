@@ -21,6 +21,11 @@
 #define ROW_CHUNK 10
 #define COL_CHUNK 1000
 
+#define GENO_PROB_DATATYPE H5T_NATIVE_FLOAT
+
+/* 8-bit little-endian integer */
+#define HAPLOTYPE_DATATYPE H5T_STD_I8LE
+
 
 typedef struct {
   /* chromInfo.txt.gz file that chromosomes are read from */
@@ -28,6 +33,7 @@ typedef struct {
 
   /* HDF5 file that genotype probabilities are written to */
   char *geno_prob_file;
+  char *haplotype_file;
   char **vcf_files;
 
   int n_vcf_files;
@@ -42,6 +48,8 @@ typedef struct {
   hid_t mem_dataspace;   /* dataspace describing memory layout */
   hid_t dataset;        /* dataset */
 
+  hid_t datatype; /* float, int8, etc */
+
   hsize_t n_col; /* number of columns */
   hsize_t n_row; /* number of rows */
   hsize_t file_dims[2]; /* file dataset dimensions */
@@ -55,7 +63,8 @@ typedef struct {
 
 void usage(char **argv) {
   fprintf(stderr, "usage: %s --chrom <chromInfo.txt.gz> "
-	  "--geno_prob <geno_probs_output_file.h5> "
+	  "[--geno_prob <geno_probs_output_file.h5>] "
+	  "[--haplotype <haplotype_output_file.h5>] "
 	  "<chr1.vcf> [<chr2.vcf> ...]\n", argv[0]);
   exit(-1);
 }
@@ -65,34 +74,27 @@ void parse_args(Arguments *args, int argc, char **argv) {
   int c, i;
   
    static struct option loptions[] = {
-     {"chrom", required_argument, 0, 'c'},
+     {"chrom",     required_argument, 0, 'c'},
      {"geno_prob", required_argument, 0, 'p'},
+     {"haplotype", required_argument, 0, 'h'},
      {0,0,0,0}
    };
-
    args->chrom_file = NULL;
    args->geno_prob_file = NULL;
-
+   args->haplotype_file = NULL;
    
    while(1) {
-     c = getopt_long(argc, argv, "c:p:", loptions, NULL);
+     c = getopt_long(argc, argv, "c:p:h:", loptions, NULL);
      
      if(c == -1) {
        break;
-     }
-     
+     }     
      switch (c) {
-       case 'c':
-	 args->chrom_file = util_str_dup(optarg);
-	 break;
-       case 'p':
-	 args->geno_prob_file = util_str_dup(optarg);
-	 break;
-       default:
-	 usage(argv);
-	 break;
+       case 'c': args->chrom_file = util_str_dup(optarg); break;
+       case 'p': args->geno_prob_file = util_str_dup(optarg); break;
+       case 'h': args->haplotype_file = util_str_dup(optarg); break;
+       default: usage(argv); break;
      }
-    
    }
       
    if(optind < argc) {
@@ -102,14 +104,13 @@ void parse_args(Arguments *args, int argc, char **argv) {
      fprintf(stderr, "must specify at least one VCF file\n");
      usage(argv);
    }
-
    if(!args->chrom_file) {
      fprintf(stderr, "--chrom argument is missing\n");
      usage(argv);
    }
-
-   if(!args->geno_prob_file) {
-     fprintf(stderr, "--geno_prob argument is missing\n");
+   if(!args->geno_prob_file && !args->haplotype_file) {
+     fprintf(stderr, "at least one of --geno_prob and --haplotype "
+	     "should missing\n");
      usage(argv);
    }   
 }
@@ -120,7 +121,8 @@ void parse_args(Arguments *args, int argc, char **argv) {
  * Returns appropriate chromosome for filename by looking for match
  * with chromosome name in filename. Returns NULL if no match found.
  */
-Chromosome *guess_chrom(char *filename, Chromosome *chroms, int n_chrom) {
+Chromosome *guess_chrom(char *filename, Chromosome *chroms,
+			int n_chrom) {
   int i, j, longest_match, n1, n2;
   Chromosome *match_chrom;
 
@@ -170,12 +172,14 @@ hid_t create_h5file(const char *filename) {
 
 void init_h5matrix(H5MatrixInfo *info,
 		   hsize_t n_row, hsize_t n_col,
+		   hid_t datatype,
 		   const char *name) {
   int rank = 2;
   herr_t status;
 
   info->n_row = n_row;
   info->n_col = n_col;
+  info->datatype = datatype;
   
   /* define a matrix dataspace which can hold genotype probs, etc... */
   info->file_dims[0] = n_row;
@@ -215,11 +219,12 @@ void init_h5matrix(H5MatrixInfo *info,
   /* use zlib compression level 6 */
   status = H5Pset_deflate(info->dataset_prop, 6);
   if(status < 0) {
-    my_err("%s:%d: failed to set compression filter", __FILE__, __LINE__);
+    my_err("%s:%d: failed to set compression filter",
+	   __FILE__, __LINE__);
   }
   
   /* create new dataset */
-  info->dataset = H5Dcreate(info->h5file, name, H5T_NATIVE_FLOAT,
+  info->dataset = H5Dcreate(info->h5file, name, info->datatype,
 			    info->file_dataspace,
 			    info->dataset_prop);
   if(info->dataset < 0) {
@@ -229,17 +234,21 @@ void init_h5matrix(H5MatrixInfo *info,
 
 
 
-void write_h5matrix_row(H5MatrixInfo *info, hsize_t row_num, double *row_data) {
+void write_h5matrix_row(H5MatrixInfo *info, hsize_t row_num,
+			void *row_data) {
   hsize_t offset[2];
   hsize_t count[1];
   herr_t status;
   
-  /* select a hyperslab that corresponds to a single row (all columns) */
+  /* select a hyperslab that corresponds to a 
+   * single row (all columns) 
+   */
   offset[0] = row_num;
   offset[1] = 0;
   count[0] = 1;
   count[1] = info->n_col;
-  status = H5Sselect_hyperslab(info->file_dataspace, H5S_SELECT_SET, offset,
+  status = H5Sselect_hyperslab(info->file_dataspace,
+			       H5S_SELECT_SET, offset,
 			       NULL, count, NULL);
       
   if(status < 0) {
@@ -248,12 +257,13 @@ void write_h5matrix_row(H5MatrixInfo *info, hsize_t row_num, double *row_data) {
   }
 
   /* write a row of data */
-  status = H5Dwrite(info->dataset, H5T_NATIVE_FLOAT, info->mem_dataspace,
+  status = H5Dwrite(info->dataset, info->datatype,
+		    info->mem_dataspace,
 		    info->file_dataspace, H5P_DEFAULT, row_data);
   
   if(status < 0) {
-    my_err("%s:%d: failed to write data for row %ld", __FILE__, __LINE__,
-	   row_num);
+    my_err("%s:%d: failed to write data for row %ld",
+	   __FILE__, __LINE__, row_num);
   }
 }
 
@@ -273,10 +283,12 @@ int main(int argc, char **argv) {
   Arguments args;
   Chromosome *all_chroms, *chrom;
   int n_chrom;
-  H5MatrixInfo gprob_info;
-  hsize_t n_col, n_row, row;
+  H5MatrixInfo gprob_info, haplotype_info;
+  hsize_t n_geno_prob_col, n_haplotype_col;
+  hsize_t n_row, row;
   gzFile gzf;
-  double *geno_probs;
+  float *geno_probs;
+  char *haplotypes;
   size_t n_lines;
   int i;
 
@@ -285,8 +297,13 @@ int main(int argc, char **argv) {
   /* read chromosomes */
   all_chroms = chrom_read_file(args.chrom_file, &n_chrom);
   
-  /* create new HDF5 file */
-  gprob_info.h5file = create_h5file(args.geno_prob_file);
+  /* create new HDF5 file(s) */
+  if(args.geno_prob_file) {
+    gprob_info.h5file = create_h5file(args.geno_prob_file);
+  }
+  if(args.haplotype_file) {
+    haplotype_info.h5file = create_h5file(args.haplotype_file);
+  }
     
   for(i = 0; i < args.n_vcf_files; i++) {
     chrom = guess_chrom(args.vcf_files[i], all_chroms, n_chrom);
@@ -294,7 +311,8 @@ int main(int argc, char **argv) {
       my_err("%s:%d: could not guess chromosome from filename '%s'\n",
 	     __FILE__, __LINE__, args.vcf_files[i]);
     }
-    fprintf(stderr, "chromosome: %s, length: %ldbp\n", chrom->name, chrom->len);
+    fprintf(stderr, "chromosome: %s, length: %ldbp\n",
+	    chrom->name, chrom->len);
     
     fprintf(stderr, "reading from VCF file %s\n", args.vcf_files[i]);
     gzf = util_must_gzopen(args.vcf_files[i], "rb");
@@ -308,19 +326,38 @@ int main(int argc, char **argv) {
     
     n_row = n_lines - vcf.n_header_lines;
     
-    n_col = vcf.n_samples * 3;
-    geno_probs = my_malloc(n_col * sizeof(double));
+    n_geno_prob_col = vcf.n_samples * 3;
+    n_haplotype_col = vcf.n_samples * 2;
 
-    init_h5matrix(&gprob_info, n_row, n_col, chrom->name);
+    if(args.geno_prob_file) {
+      geno_probs = my_malloc(n_geno_prob_col * sizeof(float)); 
+      init_h5matrix(&gprob_info, n_row, n_geno_prob_col,
+		    GENO_PROB_DATATYPE, chrom->name);
+    } else {
+      geno_probs = NULL;
+    }
+    if(args.haplotype_file) {
+      haplotypes = my_malloc(n_haplotype_col * sizeof(char));
+      init_h5matrix(&haplotype_info, n_row, n_haplotype_col,
+		    HAPLOTYPE_DATATYPE, chrom->name);
+    } else {
+      haplotypes = NULL;
+    }
     
     row = 0;
-    while(vcf_read_line(gzf, &vcf, geno_probs) != -1) {
+    while(vcf_read_line(gzf, &vcf, geno_probs, haplotypes) != -1) {
       
        /* fprintf(stderr, "chrom: %s, id: %s, pos: %ld, ref: %s, alt: %s " */
        /* 	      "qual: %s, filter: %s, info: %s format: %s\n", */
        /* 	      vcf.chrom, vcf.id, vcf.pos, vcf.ref_allele, vcf.alt_allele, */
        /* 	      vcf.qual, vcf.filter, vcf.info, vcf.format); */
-      write_h5matrix_row(&gprob_info, row, geno_probs);
+
+      if(geno_probs) {
+	write_h5matrix_row(&gprob_info, row, geno_probs);
+      }
+      if(haplotypes) {
+	write_h5matrix_row(&haplotype_info, row, haplotypes);
+      }
       
       row++;
       if((row % 1000) == 0) {
@@ -330,17 +367,28 @@ int main(int argc, char **argv) {
     fprintf(stderr, "\n");
 
     if(row != n_row) {
-      my_warn("%s:%d: expected %ld data rows, but only read %ld\n", __FILE__,
-	      __LINE__, n_row, row);
+      my_warn("%s:%d: expected %ld data rows, but only read %ld\n",
+	      __FILE__, __LINE__, n_row, row);
     }
-    
-    my_free(geno_probs);
-    close_h5matrix(&gprob_info);
+
+    if(geno_probs) {
+      my_free(geno_probs);
+      close_h5matrix(&gprob_info);
+    }
+    if(haplotypes) {
+      my_free(haplotypes);
+      close_h5matrix(&haplotype_info);
+    }
     gzclose(gzf);
   }
   
   chrom_array_free(all_chroms, n_chrom);
-  H5Fclose(gprob_info.h5file);
+  if(args.geno_prob_file) {
+    H5Fclose(gprob_info.h5file);
+  }
+  if(args.haplotype_file) {
+    H5Fclose(haplotype_info.h5file);
+  }
 
   
   return 0;

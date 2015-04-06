@@ -4,7 +4,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <hdf5.h>
-
+#include <stdint.h>
 
 #include "vcf.h"
 #include "util.h"
@@ -20,12 +20,13 @@
  */
 #define ROW_CHUNK 10
 #define COL_CHUNK 1000
+#define VEC_CHUNK 100000
 
 #define GENO_PROB_DATATYPE H5T_NATIVE_FLOAT
+#define HAPLOTYPE_DATATYPE H5T_NATIVE_SHORT
+#define SNP_INDEX_DATATYPE H5T_NATIVE_LONG
 
-/* 8-bit little-endian integer */
-#define HAPLOTYPE_DATATYPE H5T_STD_I8LE
-
+#define SNP_INDEX_NONE -1
 
 typedef struct {
   /* chromInfo.txt.gz file that chromosomes are read from */
@@ -34,8 +35,9 @@ typedef struct {
   /* HDF5 file that genotype probabilities are written to */
   char *geno_prob_file;
   char *haplotype_file;
+  char *snp_index_file;
   char **vcf_files;
-
+  
   int n_vcf_files;
 } Arguments;
 
@@ -61,11 +63,25 @@ typedef struct {
 } H5MatrixInfo;
 
 
+typedef struct {
+  hid_t h5file;  /* HDF5 file handle */
+  hid_t dataset_prop; /* dataset properties list */
+  hid_t file_dataspace; /* dataspace describing file layout */
+  hid_t dataset;        /* dataset */
+
+  hid_t datatype; /* float, int8, etc */
+
+  hsize_t len; /* number of columns */
+  hsize_t chunk; /* chunk size */
+} H5VectorInfo;
+
+
 void usage(char **argv) {
-  fprintf(stderr, "usage: %s --chrom <chromInfo.txt.gz> "
-	  "[--geno_prob <geno_probs_output_file.h5>] "
-	  "[--haplotype <haplotype_output_file.h5>] "
-	  "<chr1.vcf> [<chr2.vcf> ...]\n", argv[0]);
+  fprintf(stderr, "usage: %s --chrom <chromInfo.txt.gz>\n"
+	  "  [--geno_prob <geno_probs.h5>]\n"
+	  "  [--haplotype <haplotypes.h5>]\n"
+	  "  [--snp_index <snp_index.h5>]\n"
+	  "  <chr1.vcf> [<chr2.vcf> ...]\n", argv[0]);
   exit(-1);
 }
 
@@ -77,14 +93,16 @@ void parse_args(Arguments *args, int argc, char **argv) {
      {"chrom",     required_argument, 0, 'c'},
      {"geno_prob", required_argument, 0, 'p'},
      {"haplotype", required_argument, 0, 'h'},
+     {"snp_index", required_argument, 0, 'i'},
      {0,0,0,0}
    };
    args->chrom_file = NULL;
    args->geno_prob_file = NULL;
    args->haplotype_file = NULL;
+   args->snp_index_file = NULL;
    
    while(1) {
-     c = getopt_long(argc, argv, "c:p:h:", loptions, NULL);
+     c = getopt_long(argc, argv, "c:p:h:i:", loptions, NULL);
      
      if(c == -1) {
        break;
@@ -93,6 +111,7 @@ void parse_args(Arguments *args, int argc, char **argv) {
        case 'c': args->chrom_file = util_str_dup(optarg); break;
        case 'p': args->geno_prob_file = util_str_dup(optarg); break;
        case 'h': args->haplotype_file = util_str_dup(optarg); break;
+       case 'i': args->snp_index_file = util_str_dup(optarg); break;
        default: usage(argv); break;
      }
    }
@@ -108,11 +127,12 @@ void parse_args(Arguments *args, int argc, char **argv) {
      fprintf(stderr, "--chrom argument is missing\n");
      usage(argv);
    }
-   if(!args->geno_prob_file && !args->haplotype_file) {
-     fprintf(stderr, "at least one of --geno_prob and --haplotype "
-	     "should missing\n");
+   if(!args->geno_prob_file && !args->haplotype_file &&
+      !args->snp_index_file) {
+     fprintf(stderr, "at least one of --geno_prob, --haplotype, "
+	     "--snp_index should be specified\n");
      usage(argv);
-   }   
+   }
 }
 
 
@@ -168,6 +188,56 @@ hid_t create_h5file(const char *filename) {
   return h5file;
 }
 
+
+void init_h5vector(H5VectorInfo *info, hsize_t len, hid_t datatype,
+		   const char *name) {
+  int rank = 1;
+  herr_t status;
+  hsize_t dim[1];
+  hsize_t chunk[1];
+
+  info->len = len;
+  info->datatype = datatype;
+
+  dim[0] = len;
+  chunk[0] = VEC_CHUNK;
+    
+  /* define a matrix dataspace which can hold genotype probs, etc... */
+
+  info->file_dataspace = H5Screate_simple(rank, dim, NULL);
+  if(info->file_dataspace < 0) {
+    my_err("%s:%d: failed to create file dataspace", __FILE__,
+	   __LINE__);
+  }
+    
+  /* create property list for dataset */
+  info->dataset_prop = H5Pcreate(H5P_DATASET_CREATE);
+  if(info->dataset_prop < 0) {
+    my_err("%s:%d: failed to create dataset property list",
+	   __FILE__, __LINE__);
+  }
+  
+  /* set chunking properties of dataset */
+  status = H5Pset_chunk(info->dataset_prop, rank, chunk);
+  if(status < 0) {
+    my_err("%s:%d: failed to set chunksize", __FILE__, __LINE__);
+  }
+  /* use zlib compression level 6 */
+  status = H5Pset_deflate(info->dataset_prop, 6);
+  if(status < 0) {
+    my_err("%s:%d: failed to set compression filter",
+	   __FILE__, __LINE__);
+  }
+  
+  /* create new dataset */
+  info->dataset = H5Dcreate(info->h5file, name, info->datatype,
+			    info->file_dataspace,
+			    info->dataset_prop);
+  if(info->dataset < 0) {
+    my_err("%s:%d failed to create dataset\n", __FILE__, __LINE__);
+  }
+  
+}
 
 
 void init_h5matrix(H5MatrixInfo *info,
@@ -268,12 +338,29 @@ void write_h5matrix_row(H5MatrixInfo *info, hsize_t row_num,
 }
 
 
+void write_snp_index(H5VectorInfo *info, long *data) {
+  herr_t status;
+  
+  status = H5Dwrite(info->dataset, info->datatype, H5S_ALL,
+		    info->file_dataspace, H5P_DEFAULT, data);
+
+  if(status < 0) {
+    my_err("%s:%rd: failed to write data", __FILE__, __LINE__);
+  }
+}
+
+
 
 
 void close_h5matrix(H5MatrixInfo *info) {
     H5Sclose(info->file_dataspace);
     H5Sclose(info->mem_dataspace);
     H5Dclose(info->dataset);
+}
+
+void close_h5vector(H5VectorInfo *info) {
+  H5Sclose(info->file_dataspace);
+  H5Dclose(info->dataset);
 }
 
 
@@ -284,13 +371,15 @@ int main(int argc, char **argv) {
   Chromosome *all_chroms, *chrom;
   int n_chrom;
   H5MatrixInfo gprob_info, haplotype_info;
+  H5VectorInfo snp_index_info;
   hsize_t n_geno_prob_col, n_haplotype_col;
   hsize_t n_row, row;
   gzFile gzf;
   float *geno_probs;
   char *haplotypes;
+  long *snp_index;
   size_t n_lines;
-  int i;
+  long i, j;
 
   parse_args(&args, argc, argv);
 
@@ -303,6 +392,9 @@ int main(int argc, char **argv) {
   }
   if(args.haplotype_file) {
     haplotype_info.h5file = create_h5file(args.haplotype_file);
+  }
+  if(args.snp_index_file) {
+    snp_index_info.h5file = create_h5file(args.snp_index_file);
   }
     
   for(i = 0; i < args.n_vcf_files; i++) {
@@ -343,6 +435,19 @@ int main(int argc, char **argv) {
     } else {
       haplotypes = NULL;
     }
+    if(args.snp_index_file) {
+      /* SNP index vector is same length as chromosome,
+       * initialize to SNP_INDEX_NONE (-1)
+       */
+      snp_index = my_malloc(chrom->len * sizeof(long));
+      for(j = 0; j < chrom->len; j++) {
+	snp_index[j] = SNP_INDEX_NONE;
+      }
+      init_h5vector(&snp_index_info, chrom->len,
+		    SNP_INDEX_DATATYPE, chrom->name);
+    } else {
+      snp_index = NULL;
+    }
     
     row = 0;
     while(vcf_read_line(gzf, &vcf, geno_probs, haplotypes) != -1) {
@@ -351,13 +456,22 @@ int main(int argc, char **argv) {
        /* 	      "qual: %s, filter: %s, info: %s format: %s\n", */
        /* 	      vcf.chrom, vcf.id, vcf.pos, vcf.ref_allele, vcf.alt_allele, */
        /* 	      vcf.qual, vcf.filter, vcf.info, vcf.format); */
-
       if(geno_probs) {
 	write_h5matrix_row(&gprob_info, row, geno_probs);
       }
       if(haplotypes) {
 	write_h5matrix_row(&haplotype_info, row, haplotypes);
       }
+
+      /*  set snp_index element at this chromosome position
+       * to point to row in matrices / SNP table 
+       */
+      if(vcf.pos > chrom->len || vcf.pos < 1) {
+	my_err("%s:%d: SNP position (%ld) is outside of "
+	       "chromomosome %s range:1-%ld", __FILE__, __LINE__,
+	       vcf.pos, chrom->len);
+      }
+      snp_index[vcf.pos-1] = row;
       
       row++;
       if((row % 1000) == 0) {
@@ -371,6 +485,12 @@ int main(int argc, char **argv) {
 	      __FILE__, __LINE__, n_row, row);
     }
 
+    /* write snp_index data */
+    if(snp_index) {
+      write_snp_index(&snp_index_info, snp_index);
+    }
+        
+    /* clean up memory etc. for this chromosome */
     if(geno_probs) {
       my_free(geno_probs);
       close_h5matrix(&gprob_info);
@@ -379,15 +499,24 @@ int main(int argc, char **argv) {
       my_free(haplotypes);
       close_h5matrix(&haplotype_info);
     }
+    if(snp_index) {
+      my_free(snp_index);
+      close_h5vector(&snp_index_info);
+    }
     gzclose(gzf);
   }
   
   chrom_array_free(all_chroms, n_chrom);
+
+  /* close HDF5 files */
   if(args.geno_prob_file) {
     H5Fclose(gprob_info.h5file);
   }
   if(args.haplotype_file) {
     H5Fclose(haplotype_info.h5file);
+  }
+  if(args.snp_index_file) {
+    H5Fclose(snp_index_info.h5file);
   }
 
   

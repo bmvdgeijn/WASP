@@ -13,16 +13,15 @@ objects=vcf.o util.o memutil.o err.o chrom.o
 
 default: all 
 
-all: vcf_to_h5genoprob $(objects)
+all: vcf2h5 $(objects)
 
 $(objects): %.o: %.c %.h
 	$(CC) -c $(CFLAGS) $< -o $@
 
 
-vcf_to_h5genoprob: vcf_to_h5genoprob.o $(objects)
-	$(CC) $(CFLAGS) -o $@ $(objects) vcf_to_h5genoprob.c $(INCLUDE) $(LIBSHDF) $(LIB)
-
+vcf2h5: vcf2h5.o $(objects)
+	$(CC) $(CFLAGS) -o $@ $(objects) vcf2h5.c $(INCLUDE) $(LIBSHDF) $(LIB)
 
 
 clean:
-	rm $(objects) h5test vcf_to_h5genoprob
+	rm $(objects) vcf2h5

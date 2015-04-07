@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "vcf.h"
+#include "snptab.h"
 #include "util.h"
 #include "memutil.h"
 #include "chrom.h"
@@ -36,6 +37,7 @@ typedef struct {
   char *geno_prob_file;
   char *haplotype_file;
   char *snp_index_file;
+  char *snp_tab_file;
   char **vcf_files;
   
   int n_vcf_files;
@@ -81,6 +83,7 @@ void usage(char **argv) {
 	  "  [--geno_prob <geno_probs.h5>]\n"
 	  "  [--haplotype <haplotypes.h5>]\n"
 	  "  [--snp_index <snp_index.h5>]\n"
+	  "  [--snp_tab <snp_tab.h5>]\n"
 	  "  <chr1.vcf> [<chr2.vcf> ...]\n", argv[0]);
   exit(-1);
 }
@@ -94,24 +97,28 @@ void parse_args(Arguments *args, int argc, char **argv) {
      {"geno_prob", required_argument, 0, 'p'},
      {"haplotype", required_argument, 0, 'h'},
      {"snp_index", required_argument, 0, 'i'},
+     {"snp_tab", required_argument, 0, 't'},
      {0,0,0,0}
    };
    args->chrom_file = NULL;
    args->geno_prob_file = NULL;
    args->haplotype_file = NULL;
    args->snp_index_file = NULL;
-   
+   args->snp_tab_file = NULL;
+
    while(1) {
-     c = getopt_long(argc, argv, "c:p:h:i:", loptions, NULL);
+     c = getopt_long(argc, argv, "c:p:h:i:t:", loptions, NULL);
      
      if(c == -1) {
        break;
      }     
      switch (c) {
+       /** TODO: fix this very small mem leak: filenames never freed */
        case 'c': args->chrom_file = util_str_dup(optarg); break;
        case 'p': args->geno_prob_file = util_str_dup(optarg); break;
        case 'h': args->haplotype_file = util_str_dup(optarg); break;
        case 'i': args->snp_index_file = util_str_dup(optarg); break;
+       case 't': args->snp_tab_file = util_str_dup(optarg); break;
        default: usage(argv); break;
      }
    }
@@ -128,7 +135,7 @@ void parse_args(Arguments *args, int argc, char **argv) {
      usage(argv);
    }
    if(!args->geno_prob_file && !args->haplotype_file &&
-      !args->snp_index_file) {
+      !args->snp_index_file && !args->snp_tab_file) {
      fprintf(stderr, "at least one of --geno_prob, --haplotype, "
 	     "--snp_index should be specified\n");
      usage(argv);
@@ -372,8 +379,10 @@ int main(int argc, char **argv) {
   int n_chrom;
   H5MatrixInfo gprob_info, haplotype_info;
   H5VectorInfo snp_index_info;
+  SNPTab *snp_tab;
   hsize_t n_geno_prob_col, n_haplotype_col;
   hsize_t n_row, row;
+  hid_t snp_tab_h5file;
   gzFile gzf;
   float *geno_probs;
   char *haplotypes;
@@ -389,12 +398,20 @@ int main(int argc, char **argv) {
   /* create new HDF5 file(s) */
   if(args.geno_prob_file) {
     gprob_info.h5file = create_h5file(args.geno_prob_file);
+    fprintf(stderr, "writing genotype probabilities to: %s\n",
+	    args.geno_prob_file);
   }
   if(args.haplotype_file) {
     haplotype_info.h5file = create_h5file(args.haplotype_file);
+    fprintf(stderr, "writing haplotypes to: %s\n", args.haplotype_file);
   }
   if(args.snp_index_file) {
     snp_index_info.h5file = create_h5file(args.snp_index_file);
+    fprintf(stderr, "writing SNP index to: %s\n", args.snp_index_file);
+  }
+  if(args.snp_tab_file) {
+    snp_tab_h5file = create_h5file(args.snp_tab_file);
+    fprintf(stderr, "writing SNP table to: %s\n", args.snp_tab_file);
   }
     
   for(i = 0; i < args.n_vcf_files; i++) {
@@ -411,10 +428,13 @@ int main(int argc, char **argv) {
     
     fprintf(stderr, "counting lines in file\n");
     n_lines = util_gzcount_lines(gzf);
-    fprintf(stderr, "there are %d lines\n", n_lines);
-    
+    fprintf(stderr, "  total lines: %ld\n", n_lines);
+
+    fprintf(stderr, "reading VCF header\n");
     vcf_read_header(gzf, &vcf);
-    fprintf(stderr, "num header lines: %ld\n", vcf.n_header_lines);
+    fprintf(stderr, "  VCF header lines: %ld\n", vcf.n_header_lines);
+    fprintf(stderr, "  VCF samples: %ld\n", vcf.n_samples);
+
     
     n_row = n_lines - vcf.n_header_lines;
     
@@ -448,8 +468,16 @@ int main(int argc, char **argv) {
     } else {
       snp_index = NULL;
     }
+    if(args.snp_tab_file) {
+      snp_tab = snp_tab_new(snp_tab_h5file, chrom->name);
+    } else {
+      snp_tab = NULL;
+    }    
     
     row = 0;
+
+    fprintf(stderr, "parsing VCF and writing to HDF5 files\n");
+    
     while(vcf_read_line(gzf, &vcf, geno_probs, haplotypes) != -1) {
       
        /* fprintf(stderr, "chrom: %s, id: %s, pos: %ld, ref: %s, alt: %s " */
@@ -471,7 +499,15 @@ int main(int argc, char **argv) {
 	       "chromomosome %s range:1-%ld", __FILE__, __LINE__,
 	       vcf.pos, chrom->len);
       }
-      snp_index[vcf.pos-1] = row;
+
+      if(snp_index) {
+	snp_index[vcf.pos-1] = row;
+      }
+
+      /* append row to SNP table */
+      if(snp_tab) {
+	snp_tab_append_vcf_row(snp_tab, &vcf);
+      }
       
       row++;
       if((row % 1000) == 0) {
@@ -503,6 +539,9 @@ int main(int argc, char **argv) {
       my_free(snp_index);
       close_h5vector(&snp_index_info);
     }
+    if(snp_tab) {
+      snp_tab_free(snp_tab);
+    }
     gzclose(gzf);
   }
   
@@ -518,7 +557,12 @@ int main(int argc, char **argv) {
   if(args.snp_index_file) {
     H5Fclose(snp_index_info.h5file);
   }
+  if(args.snp_tab_file) {
+    H5Fclose(snp_tab_h5file);
+  }
 
+
+  fprintf(stderr, "done\n");
   
   return 0;
 }

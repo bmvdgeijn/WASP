@@ -4,12 +4,12 @@ EXTLIB = -L$(HDF_INSTALL)/lib
 CC          = gcc
 # CFLAGS      = -g -DH5_USE_16_API
 CFLAGS      = -g -DH5_USE_16_API
-LIB         = -lz -lm -lhdf5
+LIB         = -lz -lm -lhdf5 -lhdf5_hl
 
 INCLUDE   = -I$(HDF_INSTALL)/include
 LIBSHDF   = $(EXTLIB)
 
-objects=vcf.o util.o memutil.o err.o chrom.o
+objects=vcf.o util.o memutil.o err.o chrom.o snptab.o
 
 default: all 
 
@@ -24,4 +24,4 @@ vcf2h5: vcf2h5.o $(objects)
 
 
 clean:
-	rm $(objects) vcf2h5
+	rm -f $(objects) vcf2h5

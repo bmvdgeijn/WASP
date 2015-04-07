@@ -505,7 +505,7 @@ size_t util_strncpy(char *dest, const char *src, size_t n) {
   size_t i;
 
   for(i = 0; i < n-1; i++) {
-    dest[i] = src[i];    
+    dest[i] = src[i];
     if(src[i] == '\0') {
       /* hit end of src string */
       return i;

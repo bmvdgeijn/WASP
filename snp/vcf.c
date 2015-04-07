@@ -24,8 +24,6 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
 
   n_fix_header = sizeof(vcf_fix_headers) / sizeof(const char *);
 
-  fprintf(stderr, "there are %d fixed headers\n", n_fix_header);
-
   vcf_info->n_header_lines = 0;
   
   while(1) {
@@ -57,7 +55,6 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
 	tok_num += 1;
       }
       vcf_info->n_samples = tok_num - n_fix_header;
-      fprintf(stderr, "there are %d samples\n", vcf_info->n_samples);
       break;
     } else {
       my_err("expected last line in header to start with #CHROM");

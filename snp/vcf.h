@@ -4,7 +4,6 @@
 
 #include <zlib.h>
 
-
 #define VCF_MAX_ID 1024
 #define VCF_MAX_CHROM 1024
 #define VCF_MAX_ALLELE 1024

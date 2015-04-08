@@ -4,7 +4,7 @@ This directory contains code for *vcf2h5*, a program to convert VCF files
 into HDF5 files.
 
 HDF5 files are compressed platform-independent binary files. Data in
-these files can be efficiently accessed using libraries written in C,
+HDF5 files can be efficiently accessed using libraries written in C,
 Python, R and other languages.
 
 
@@ -19,16 +19,16 @@ to download and install [Anaconda](http://continuum.io/downloads).
 
 Compiling
 =========
-vcf2h5 is written in C. To compile, first install HDF5 (using
-Anaconda, or by other means). Make sure that the HDF5 library
+vcf2h5 is written in C. To compile, first install HDF5 (for example by installing
+Anaconda). Make sure that the HDF5 library
 is in your library path. For example on Linux you could add
-the following to your .bashrc or .profile (replacing
+the following to your .bashrc or .profile (replace
 $HOME/anaconda/lib with the relevant directory):
 
     export LD_LIBRARY_PATH=$HOME/anaconda/lib::$LD_LIBRARY_PATH
        
-Next modify the Makefile so that HDF_INSTALL points to the location of
-the installed HDF5 library (replace  $(HOME)/anaconda with the
+Next modify the Makefile so that HDF_INSTALL points to the
+HDF5 installation directory (replace $(HOME)/anaconda with the
 appropriate path):
 
     HDF_INSTALL = $(HOME)/anaconda
@@ -66,7 +66,7 @@ Output Options:
 *  --geno_prob GENO_PROB_OUTPUT_FILE [optional]
     
      Path to HDF5 file to write genotype probabilities to.  This option can
-     only be used if the input VCF files provide genotype likelihoods,
+     only be used if the input VCF files provide genotype likelihoods
      (GL in the FORMAT specifier).
 
 *  --haplotype HAPLOTYPE_OUTPUT_FILE [optional]
@@ -95,17 +95,17 @@ Examples:
     # read 1000 genomes VCF files and write haplotype, snp_index
     # and snp_tab to HDF5 files
     vcf2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
-                --haplotype haplotypes.h5 \
-                --snp_index snp_index.h5 \
-                --snp_tab   snp_tab.h5 \
-                data/1000G/ALL.chr*.vcf.gz
+           --haplotype haplotypes.h5 \
+           --snp_index snp_index.h5 \
+           --snp_tab   snp_tab.h5 \
+           data/1000G/ALL.chr*.vcf.gz
 
 
     # read 1000 genomes VCF files that contain genotype likelihoods
     # and write genotype probabilties to HDF5 file
     vcf2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
-                --geno_prob geno_probs.h5 \
-               1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz
+           --geno_prob geno_probs.h5 \
+           1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz
 
 
 Output Files

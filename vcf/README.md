@@ -1,5 +1,7 @@
-This directory contains code for the program vcf2h5, which converts
-VCF files into HDF5 files.
+vcf2h5
+======
+This directory contains code for *vcf2h5*, a program to convert VCF files
+into HDF5 files.
 
 HDF5 files are compressed platform-independent binary files. Data in
 these files can be efficiently accessed using libraries written in C,
@@ -7,16 +9,16 @@ Python, R and other languages.
 
 
 Dependencies
-=========
+============
 vcf2h5 depends on the HDF5 library (version 1.6 or higher). Pytables
 or h5py can be used to access the HDF5 files from within python.
 
-The easiest way to reliably install HDF5 (and Pytables) is to download
-and install (Anaconda)[http://continuum.io/downloads]
+The easiest way to reliably install the HDF5 library (and Pytables) is 
+to download and install [Anaconda](http://continuum.io/downloads).
 
 
 Compiling
-=======
+=========
 vcf2h5 is written in C. To compile, first install HDF5 (using
 Anaconda, or by other means). Make sure that the HDF5 library
 is in your library path. For example on Linux you could add
@@ -37,7 +39,7 @@ Now compile vcf2h5 using make:
 
 
 Usage
-====
+=====
 
     vcf2h5 OPTIONS VCF1 [VCF2 ...]
 
@@ -106,8 +108,8 @@ Examples:
                1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz
 
 
-Output
-====
+Output Files
+============
 
 snp_tab
 ------

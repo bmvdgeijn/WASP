@@ -24,4 +24,4 @@ vcf2h5: vcf2h5.o $(objects)
 
 
 clean:
-	rm -f $(objects) vcf2h5
+	rm -f $(objects) vcf2h5 vcf5h5.o

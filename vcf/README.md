@@ -21,20 +21,24 @@ vcf2h5 is written in C. To compile, first install HDF5 (using
 Anaconda, or by other means). Make sure that the HDF5 library
 is in your library path. For example on Linux you could add
 the following to your .bashrc or .profile (replacing
-$HOME/anaconda/lib with the relevant directory)
+$HOME/anaconda/lib with the relevant directory):
+
     export LD_LIBRARY_PATH=$HOME/anaconda/lib::$LD_LIBRARY_PATH
        
 Next modify the Makefile so that HDF_INSTALL points to the location of
 the installed HDF5 library (replace  $(HOME)/anaconda with the
 appropriate path):
+
     HDF_INSTALL = $(HOME)/anaconda
 
 Now compile vcf2h5 using make:
+
     make
 
 
 Usage
 ====
+
     vcf2h5 OPTIONS VCF1 [VCF2 ...]
 
 VCF Input Files:
@@ -46,6 +50,7 @@ should match those in the CHROM_FILE, which is provided by the --chrom option.
 Input Options:
 ------------
 * --chrom CHROM_FILE [required]
+
      Path to chromInfo.txt file (may be gzipped) with list of chromosomes
      for the relevant genome assembly. Each line in file should
      contain tab-separated chromosome name and chromosome length (in
@@ -57,11 +62,13 @@ Input Options:
 Output Options:
 -------------
 *  --geno_prob GENO_PROB_OUTPUT_FILE [optional]
+    
      Path to HDF5 file to write genotype probabilities to.  This option can
      only be used if the input VCF files provide genotype likelihoods,
      (GL in the FORMAT specifier).
 
 *  --haplotype HAPLOTYPE_OUTPUT_FILE [optional]
+
      Path to HDF5 file to write haplotypes to.  This option can only be
      used if the input VCF files provide genotypes (GT in the VCF
      FORMAT specifier). The genotypes should be phased (| haplotype
@@ -69,17 +76,20 @@ Output Options:
      a warning is printed.
 
 *  --snp_index SNP_INDEX_OUTPUT_FILE [optional]
+
      Path to HDF5 file to write SNP index to. The SNP index can
      be used to convert the genomic position of a SNP to its
      corresponding row in the geno_prob, haplotype and snp_tab
      HDF5 files.
 
 *  --snp_tab SNP_TABLE_OUTPUT_FILE [optional]
+
      Path to HDF5 file to write SNP table to. Each row of SNP
      table contains SNP name (rs_id), position, allele1, allele2.
 
 Examples:
 --------
+
     # read 1000 genomes VCF files and write haplotype, snp_index
     # and snp_tab to HDF5 files
     vcf2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
@@ -87,6 +97,7 @@ Examples:
                 --snp_index snp_index.h5 \
                 --snp_tab   snp_tab.h5 \
                 data/1000G/ALL.chr*.vcf.gz
+
 
     # read 1000 genomes VCF files that contain genotype likelihoods
     # and write genotype probabilties to HDF5 file
@@ -102,6 +113,7 @@ snp_tab
 ------
 An HDF5 file containing one table of SNPs per chromosome.  Each row
 provides a description of a single SNP with the following fields:
+
     name = String[16]
     pos = Int64
     allele1 = String[32]
@@ -115,7 +127,7 @@ snp_index
 An HDF5 file containing one array per chromosome. The array is used to lookup
 SNPs by genomic position.  The value at each index in the array is -1 (no
 SNP) or the row index of a SNP that can be used to obtain information
-from the snp_tab, geno_probs and haplotype files.
+from the snp\_tab, geno\_probs and haplotype files.
 
 geno_probs
 ----------

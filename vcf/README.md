@@ -8,8 +8,7 @@ HDF5 files can be efficiently accessed using libraries written in C,
 Python, R and other languages.
 
 
-Dependencies
-============
+## Dependencies
 vcf2h5 depends on the HDF5 library (version 1.6 or higher). Pytables
 or h5py can be used to access the HDF5 files from within python.
 
@@ -17,8 +16,7 @@ The easiest way to reliably install the HDF5 library (and Pytables) is
 to download and install [Anaconda](http://continuum.io/downloads).
 
 
-Compiling
-=========
+## Compiling
 vcf2h5 is written in C. To compile, first install HDF5 (for example by installing
 Anaconda). Make sure that the HDF5 library
 is in your library path. For example on Linux you could add
@@ -37,20 +35,16 @@ Now compile vcf2h5 using make:
 
     make
 
-
-Usage
-=====
+## Running vcf2h5
 
     vcf2h5 OPTIONS VCF1 [VCF2 ...]
 
-VCF Input Files:
--------------
+### VCF Input Files:
 A separate VCF input file must be provided for each chromosome. The
 filename must contain the name of the chromosome. Chromosome names
 should match those in the CHROM_FILE, which is provided by the --chrom option.
 
-Input Options:
-------------
+### Input Options:
 * --chrom CHROM_FILE [required]
 
      Path to chromInfo.txt file (may be gzipped) with list of chromosomes
@@ -61,8 +55,7 @@ Input Options:
      be downloaded from
      http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/
 
-Output Options:
--------------
+### Output Options:
 *  --geno_prob GENO_PROB_OUTPUT_FILE [optional]
     
      Path to HDF5 file to write genotype probabilities to.  This option can
@@ -89,8 +82,7 @@ Output Options:
      Path to HDF5 file to write SNP table to. Each row of SNP
      table contains SNP name (rs_id), position, allele1, allele2.
 
-Examples:
---------
+### Examples:
 
     # read 1000 genomes VCF files and write haplotype, snp_index
     # and snp_tab to HDF5 files
@@ -108,11 +100,9 @@ Examples:
            1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz
 
 
-Output Files
-============
+## Output Files
 
-snp_tab
-------
+### snp_tab
 An HDF5 file containing one table of SNPs per chromosome.  Each row
 provides a description of a single SNP with the following fields:
 
@@ -124,15 +114,13 @@ provides a description of a single SNP with the following fields:
 Note that maximum length of alleles is 32bp--long indel alleles are truncated.
 
 
-snp_index
---------
+### snp_index
 An HDF5 file containing one array per chromosome. The array is used to lookup
 SNPs by genomic position.  The value at each index in the array is -1 (no
 SNP) or the row index of a SNP that can be used to obtain information
 from the snp\_tab, geno\_probs and haplotype files.
 
-geno_probs
-----------
+### geno_probs
 An HDF5 file containing one matrix of (float32) genotype probabilities
 per chromosome. Each row corresponds to a SNP in the snp_tab.  There
 are 3M columns, where M is number of samples.
@@ -143,8 +131,7 @@ probability", "heterozygous probability", and "homozygous
 non-reference probability" and should sum to 1.0.
 
 
-haplotypes
----------
+### haplotypes
 An HDF5 file containing a matrix of phased (int8) genotypes. Each row
 corresponds to a SNP in the snp_tab.  There are 2M columns, where M is
 number of samples. Each column represents a haplotype and contains 0s

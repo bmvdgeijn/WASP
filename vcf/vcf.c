@@ -55,6 +55,7 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
 	tok_num += 1;
       }
       vcf_info->n_samples = tok_num - n_fix_header;
+      my_free(line);
       break;
     } else {
       my_err("expected last line in header to start with #CHROM");
@@ -97,8 +98,8 @@ int get_format_index(const char *format_str, const char *label) {
 }
 
 
-void parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
-		      char *cur) {
+void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
+			  char *cur) {
   int gt_idx, hap1, hap2, i, n;
   static int warn_phase = TRUE;
   long expect_haps, n_haps;
@@ -182,7 +183,7 @@ void parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 
 
 
-void parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
+void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
 		      char *cur) {
   char delim[] = " \t";
   char inner_delim[] = ":";
@@ -393,13 +394,15 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
     cur_copy = my_malloc(strlen(cur)+1);
     strcpy(cur_copy, cur);
     
-    parse_geno_probs(vcf_info, geno_probs, cur_copy);
+    vcf_parse_geno_probs(vcf_info, geno_probs, cur_copy);
     my_free(cur_copy);
 
-    parse_haplotypes(vcf_info, haplotypes, cur);
+    vcf_parse_haplotypes(vcf_info, haplotypes, cur);
   } else if(geno_probs) {
-    parse_geno_probs(vcf_info, geno_probs, cur);
+    vcf_parse_geno_probs(vcf_info, geno_probs, cur);
   } else if(haplotypes) {
-    parse_haplotypes(vcf_info, haplotypes, cur);
+    vcf_parse_haplotypes(vcf_info, haplotypes, cur);
   }
+
+  my_free(line);
 }

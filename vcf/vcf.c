@@ -305,7 +305,7 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  util_strncpy(vcf_info->chrom, token, sizeof(vcf_info->chrom));
+  util_strncpy(vcf_info->snp.chrom, token, sizeof(vcf_info->snp.chrom));
   
   
   /* pos */
@@ -313,14 +313,14 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  vcf_info->pos = util_parse_long(token);
+  vcf_info->snp.pos = util_parse_long(token);
   
   /* ID */
   token = strsep(&cur, delim);
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  util_strncpy(vcf_info->id, token, sizeof(vcf_info->id));
+  util_strncpy(vcf_info->snp.name, token, sizeof(vcf_info->snp.name));
   
   /* ref */
   token = strsep(&cur, delim);
@@ -328,8 +328,8 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
   vcf_info->ref_len = strlen(token);
-  ref_len = util_strncpy(vcf_info->ref_allele, token,
-			 sizeof(vcf_info->ref_allele));
+  ref_len = util_strncpy(vcf_info->snp.allele1, token,
+			 sizeof(vcf_info->snp.allele1));
 
   if(ref_len != vcf_info->ref_len) {
     my_warn("truncating long allele (%ld bp) to %ld bp\n",
@@ -342,8 +342,8 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
   vcf_info->alt_len = strlen(token);
-  alt_len = util_strncpy(vcf_info->alt_allele, token,
-			 sizeof(vcf_info->alt_allele));
+  alt_len = util_strncpy(vcf_info->snp.allele2, token,
+			 sizeof(vcf_info->snp.allele2));
 
   if(alt_len != vcf_info->alt_len) {
     my_warn("truncating long allele (%ld bp) to %ld bp\n",

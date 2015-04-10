@@ -16,7 +16,7 @@ default: all
 all: vcf2h5 $(objects)
 
 $(objects): %.o: %.c %.h
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $< -o $@ $(INCLUDE)
 
 
 vcf2h5: vcf2h5.o $(objects)

@@ -18,12 +18,11 @@ to download and install [Anaconda](http://continuum.io/downloads).
 
 ## Compiling
 vcf2h5 is written in C. To compile, first install HDF5 (for example by installing
-Anaconda). Make sure that the HDF5 library
-is in your library path. For example on Linux you could add
-the following to your .bashrc or .profile (replace
+Anaconda). Make sure that the HDF5 library is in your library path. For example 
+on Linux you could add the following to your .bashrc or .profile (replace
 $HOME/anaconda/lib with the relevant directory):
 
-    export LD_LIBRARY_PATH=$HOME/anaconda/lib::$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=$HOME/anaconda/lib:$LD_LIBRARY_PATH
        
 Next modify the Makefile so that HDF_INSTALL points to the
 HDF5 installation directory (replace $(HOME)/anaconda with the

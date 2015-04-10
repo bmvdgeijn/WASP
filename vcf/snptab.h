@@ -2,23 +2,14 @@
 #define __SNPTAB_H__
 
 #include <hdf5.h>
-#include "vcf.h"
+
+#include "snp.h"
 
 
 #define SNPTAB_NFIELDS 5
-#define SNPTAB_MAX_ALLELE 32
-#define SNPTAB_MAX_NAME 16
 #define SNPTAB_N_FIELDS 4
 #define SNPTAB_CHUNK_SIZE 1000
 
-
-/* SNPDesc holds data for a single record in table */
-typedef struct {
-  char name[SNPTAB_MAX_NAME];
-  long pos;
-  char allele1[SNPTAB_MAX_ALLELE];
-  char allele2[SNPTAB_MAX_ALLELE];
-} SNPDesc;
 
 
 /* SNPTab holds information about SNP table 
@@ -45,8 +36,7 @@ typedef struct {
 
 SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name);
 void snp_tab_free(SNPTab *tab);
-void snp_tab_append_row(SNPTab *tab, SNPDesc *data);
 
-void snp_tab_append_vcf_row(SNPTab *tab, VCFInfo *vcf_info);
+void snp_tab_append_row(SNPTab *tab, SNP *data);
 
 #endif

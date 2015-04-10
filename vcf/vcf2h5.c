@@ -552,19 +552,19 @@ int main(int argc, char **argv) {
       /*  set snp_index element at this chromosome position
        * to point to row in matrices / SNP table 
        */
-      if(vcf.pos > chrom->len || vcf.pos < 1) {
+      if(vcf.snp.pos > chrom->len || vcf.snp.pos < 1) {
 	my_err("%s:%d: SNP position (%ld) is outside of "
 	       "chromomosome %s range:1-%ld", __FILE__, __LINE__,
-	       vcf.pos, chrom->len);
+	       vcf.snp.pos, chrom->len);
       }
 
       if(snp_index) {
-	snp_index[vcf.pos-1] = row;
+	snp_index[vcf.snp.pos-1] = row;
       }
 
       /* append row to SNP table */
       if(snp_tab) {
-	snp_tab_append_vcf_row(snp_tab, &vcf);
+	snp_tab_append_row(snp_tab, &vcf.snp);
       }
       
       row++;

@@ -57,6 +57,12 @@ should match those in the CHROM_FILE, which is provided by the --chrom option.
      be downloaded from
      http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/
 
+* --format vcf|impute [required]
+
+     Specifies the format of the input files. Currently vcf and impute
+     can be specified.
+
+
 ### Output Options:
 *  --geno_prob GENO_PROB_OUTPUT_FILE [optional]
     

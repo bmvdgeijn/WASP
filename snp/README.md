@@ -1,7 +1,10 @@
-vcf2h5
+snp2h5
 ======
-This directory contains code for *vcf2h5*, a program to convert VCF files
-into HDF5 files.
+This directory contains code for *snp2h5*, a program to convert
+text files containing polymorphism data into HDF5 files. Currently,
+[VCF files](http://faculty.washington.edu/browning/beagle/intro-to-vcf.html) and
+[IMPUTE files](http://www.stats.ox.ac.uk/~marchini/software/gwas/file_format.html)
+are supported.
 
 HDF5 files are compressed platform-independent binary files. Data in
 HDF5 files can be efficiently accessed using libraries written in C,
@@ -9,7 +12,7 @@ Python, R and other languages.
 
 
 ## Dependencies
-vcf2h5 depends on the HDF5 library (version 1.6 or higher). Pytables
+snp2h5 depends on the HDF5 library (version 1.6 or higher). Pytables
 or h5py can be used to access the HDF5 files from within python.
 
 The easiest way to reliably install the HDF5 library (and Pytables) is 
@@ -17,7 +20,7 @@ to download and install [Anaconda](http://continuum.io/downloads).
 
 
 ## Compiling
-vcf2h5 is written in C. To compile, first install HDF5 (for example by installing
+snp2h5 is written in C. To compile, first install HDF5 (for example by installing
 Anaconda). Make sure that the HDF5 library is in your library path. For example 
 on Linux you could add the following to your .bashrc or .profile (replace
 $HOME/anaconda/lib with the relevant directory):
@@ -30,16 +33,16 @@ appropriate path):
 
     HDF_INSTALL = $(HOME)/anaconda
 
-Now compile vcf2h5 using make:
+Now compile snp2h5 using make:
 
     make
 
-## Running vcf2h5
+## Running snp2h5
 
-    vcf2h5 OPTIONS VCF1 [VCF2 ...]
+    snp2h5 OPTIONS INPUT_FILE1 [INPUT_FILE2 ...]
 
-### VCF Input Files:
-A separate VCF input file must be provided for each chromosome. The
+### Input Files:
+A separate input file must be provided for each chromosome. The
 filename must contain the name of the chromosome. Chromosome names
 should match those in the CHROM_FILE, which is provided by the --chrom option.
 
@@ -59,15 +62,17 @@ should match those in the CHROM_FILE, which is provided by the --chrom option.
     
      Path to HDF5 file to write genotype probabilities to.  This option can
      only be used if the input VCF files provide genotype likelihoods
-     (GL in the FORMAT specifier).
+     (GL in the VCF FORMAT specifier) or input impute files contain
+	 genotype probabilities.
 
 *  --haplotype HAPLOTYPE_OUTPUT_FILE [optional]
 
      Path to HDF5 file to write haplotypes to.  This option can only be
      used if the input VCF files provide genotypes (GT in the VCF
-     FORMAT specifier). The genotypes should be phased (| haplotype
-     separator). If the genotypes are unphased (/ haplotype separator)
-     a warning is printed.
+     FORMAT specifier) or the impute files contain haplotypes. The
+     genotypes should be phased (| haplotype separator in GT
+     field). If the genotypes are unphased (/ haplotype separator
+	 in GT field)  a warning is printed.
 
 *  --snp_index SNP_INDEX_OUTPUT_FILE [optional]
 
@@ -85,18 +90,37 @@ should match those in the CHROM_FILE, which is provided by the --chrom option.
 
     # read 1000 genomes VCF files and write haplotype, snp_index
     # and snp_tab to HDF5 files
-    vcf2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
+    snp2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
+	       --format vcf
            --haplotype haplotypes.h5 \
            --snp_index snp_index.h5 \
            --snp_tab   snp_tab.h5 \
-           data/1000G/ALL.chr*.vcf.gz
+           1000G/ALL.chr*.vcf.gz
 
 
     # read 1000 genomes VCF files that contain genotype likelihoods
     # and write genotype probabilties to HDF5 file
-    vcf2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
+    snp2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
+	       --format vcf
            --geno_prob geno_probs.h5 \
            1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz
+
+    # read IMPUTE-formatted files that contain genotype probabilities
+    # and write genotype probabilties, snp_index and snp_tab to
+	# HDF5 files
+    snp2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
+	       --format impute
+           --geno_prob geno_probs.h5 \
+		   --snp_index snp_index.h5 \
+		   --snp_tab snp_tab.h5
+           data/*.hg19.impute2.gz
+
+    # read haplotypes from IMPUTE-formatted files
+	snp2h5 --chrom --chrom data/ucsc/hg19/chromInfo.txt.gz \
+	     --format impute \
+	     --haplotype haplotypes.h5
+		 data/*.hg19.impute2_haps.gz
+
 
 
 ## Output Files
@@ -111,7 +135,6 @@ provides a description of a single SNP with the following fields:
     allele2 = String[32]
 
 Note that maximum length of alleles is 32bp--long indel alleles are truncated.
-
 
 ### snp_index
 An HDF5 file containing one array per chromosome. The array is used to lookup
@@ -128,7 +151,6 @@ Columns 1-3 are for the first sample, columns 4-6 are for the second
 sample, etc.  The columns for each sample are "homozygous reference
 probability", "heterozygous probability", and "homozygous
 non-reference probability" and should sum to 1.0.
-
 
 ### haplotypes
 An HDF5 file containing a matrix of phased (int8) genotypes. Each row

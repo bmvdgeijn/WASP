@@ -6,6 +6,7 @@
 #include <hdf5.h>
 #include <stdint.h>
 
+#include "impute.h"
 #include "vcf.h"
 #include "snptab.h"
 #include "util.h"
@@ -24,23 +25,29 @@
 #define VEC_CHUNK 100000
 
 #define GENO_PROB_DATATYPE H5T_NATIVE_FLOAT
-#define HAPLOTYPE_DATATYPE H5T_NATIVE_SHORT
+#define HAPLOTYPE_DATATYPE H5T_NATIVE_CHAR
 #define SNP_INDEX_DATATYPE H5T_NATIVE_LONG
 
 #define SNP_INDEX_NONE -1
 
+#define FORMAT_VCF 1
+#define FORMAT_IMPUTE 2
+
 typedef struct {
   /* chromInfo.txt.gz file that chromosomes are read from */
   char *chrom_file;
+
+  /* flag indicating format of input files (FORMAT_VCF or FORMAT_IMPUTE) */
+  int format;
 
   /* HDF5 file that genotype probabilities are written to */
   char *geno_prob_file;
   char *haplotype_file;
   char *snp_index_file;
   char *snp_tab_file;
-  char **vcf_files;
+  char **input_files;
   
-  int n_vcf_files;
+  int n_input_files;
 } Arguments;
 
 
@@ -78,21 +85,32 @@ typedef struct {
 } H5VectorInfo;
 
 
+
+typedef struct {
+  long n_lines; /* number of lines in file (including header lines) */
+  long n_row;   /* number of data rows in file */
+  long n_samples; /* number of samples in file */
+
+  long n_geno_prob_col; /* number of genotype prob columns */
+  long n_haplotype_col; /* number of haplotype columns */
+} FileInfo;
+
+
 void usage(char **argv) {
-  fprintf(stderr, "\nusage: %s OPTIONS VCF1 [VCF2 ...]\n"
+  fprintf(stderr, "\nusage: %s OPTIONS INPUT_FILE1 [INPUT_FILE2 ...]\n"
 	  "\n"
 	  "Description:\n"
-	  "  This program converts VCF files containing genetic\n"
+	  "  This program converts VCF or IMPUTE files containing genetic\n"
 	  "  polymorphism data into HDF5 files. HDF5 files are\n"
 	  "  platform-independent binary files that provide very\n"
 	  "  efficient programmatic access to data in C, Python (via\n"
 	  "  PyTables) and several other programming languages\n"
 	  "\n"
-	  "VCF Input Files:\n"
-	  "     A separate VCF input file must be provided for each\n"
-	  "     chromosome. The filename must contain the name of the\n"
-	  "     chromosome. Chromosome names should match those in the\n"
-	  "     CHROM_FILE, which is provided by the --chrom option.\n"
+	  "Input Files:\n"
+	  "     A separate VCF or IMPUTE input file must be provided\n"
+	  "     for each chromosome. The filename must contain the name\n"
+	  "     of the chromosome. Chromosome names should match those in\n"
+	  "     the CHROM_FILE, which is provided by the --chrom option.\n"
 	  "\n"
 	  "Input Options:\n"
 	  "  --chrom CHROM_FILE [required]\n"
@@ -103,6 +121,9 @@ void usage(char **argv) {
 	  "     be downloaded from the UCSC genome browser. For example,\n"
 	  "     a chromInfo.txt.gz file for hg19 can be downloaded from\n"
 	  "     http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/\n"
+	  "  --format vcf|impute [required]\n"
+	  "     Specifies the format of the input files. Currently supported\n"
+	  "     formats are 'impute' or 'vcf'\n"
 	  "\n"
 	  "Output Options:\n"
 	  "  --geno_prob GENO_PROB_OUTPUT_FILE [optional]\n"
@@ -130,7 +151,8 @@ void usage(char **argv) {
 	  "Examples:\n"
 	  "  # read 1000 genomes VCF files and write haplotype, snp_index \n"
 	  "  # and snp_tab to HDF5 files\n"
-	  "  vcf2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \\\n"
+	  "  snp2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \\\n"
+	  "         --format vcf \\\n"
 	  "         --haplotype haplotypes.h5 \\\n"
 	  "         --snp_index snp_index.h5 \\\n"
 	  "         --snp_tab   snp_tab.h5 \\\n"
@@ -138,20 +160,22 @@ void usage(char **argv) {
 	  "\n"
 	  "  # read 1000 genomes VCF files that contain genotype likelihoods\n"
 	  "  # and write genotype probabilties to HDF5 file\n"
-	  "  vcf2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \\\n"
+	  "  snp2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \\\n"
+	  "         --format vcf \\\n"
 	  "         --geno_prob geno_probs.h5 \\\n"
 	  "         1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz\n"
 	  "\n"
 	  "\n", argv[0], argv[0], argv[0]);
-  exit(-1);
 }
 
 
 void parse_args(Arguments *args, int argc, char **argv) {
   int c, i;
+  char *format_str = NULL;
   
    static struct option loptions[] = {
      {"chrom",     required_argument, 0, 'c'},
+     {"format",    required_argument, 0, 'f'},
      {"geno_prob", required_argument, 0, 'p'},
      {"haplotype", required_argument, 0, 'h'},
      {"snp_index", required_argument, 0, 'i'},
@@ -159,13 +183,14 @@ void parse_args(Arguments *args, int argc, char **argv) {
      {0,0,0,0}
    };
    args->chrom_file = NULL;
+   args->format = 0;
    args->geno_prob_file = NULL;
    args->haplotype_file = NULL;
    args->snp_index_file = NULL;
    args->snp_tab_file = NULL;
 
    while(1) {
-     c = getopt_long(argc, argv, "c:p:h:i:t:", loptions, NULL);
+     c = getopt_long(argc, argv, "c:f:p:h:i:t:", loptions, NULL);
      
      if(c == -1) {
        break;
@@ -173,6 +198,7 @@ void parse_args(Arguments *args, int argc, char **argv) {
      switch (c) {
        /** TODO: fix this very small mem leak: filenames never freed */
        case 'c': args->chrom_file = util_str_dup(optarg); break;
+       case 'f': format_str = util_str_dup(optarg); break;
        case 'p': args->geno_prob_file = util_str_dup(optarg); break;
        case 'h': args->haplotype_file = util_str_dup(optarg); break;
        case 'i': args->snp_index_file = util_str_dup(optarg); break;
@@ -182,21 +208,48 @@ void parse_args(Arguments *args, int argc, char **argv) {
    }
       
    if(optind < argc) {
-     args->n_vcf_files = argc - optind;
-     args->vcf_files = &argv[optind];
+     args->n_input_files = argc - optind;
+     args->input_files = &argv[optind];
    } else {
-     fprintf(stderr, "must specify at least one VCF file\n");
      usage(argv);
+     fprintf(stderr, "Error: ");
+     fprintf(stderr, "must specify at least one VCF file\n");
+     exit(-1);
    }
    if(!args->chrom_file) {
-     fprintf(stderr, "--chrom argument is missing\n");
      usage(argv);
+     fprintf(stderr, "Error: ");
+     fprintf(stderr, "--chrom argument is missing\n");
+     exit(-1);
    }
    if(!args->geno_prob_file && !args->haplotype_file &&
       !args->snp_index_file && !args->snp_tab_file) {
+     usage(argv);
+     fprintf(stderr, "Error: ");
      fprintf(stderr, "at least one of --geno_prob, --haplotype, "
 	     "--snp_index should be specified\n");
+     exit(-1);
+   }
+
+   if(format_str == NULL) {
      usage(argv);
+     fprintf(stderr, "Error: ");
+     fprintf(stderr, "--format argument is missing\n");
+     exit(-1);
+   } else {
+     util_str_lc(format_str);
+     if(strcmp(format_str, "vcf") == 0) {
+       args->format = FORMAT_VCF;
+     }
+     else if(strcmp(format_str, "impute") == 0) {
+       args->format = FORMAT_IMPUTE;
+     }
+     else {
+       usage(argv);
+       fprintf(stderr, "Error: ");
+       fprintf(stderr, "--format should be one of 'vcf' or 'impute'");
+       exit(-1);
+     }
    }
 }
 
@@ -312,6 +365,9 @@ void init_h5matrix(H5MatrixInfo *info,
   int rank = 2;
   herr_t status;
 
+  fprintf(stderr, "initializing HDF5 matrix with dimension: (%ld, %ld)\n",
+	  n_row, n_col);
+  
   info->n_row = n_row;
   info->n_col = n_col;
   info->datatype = datatype;
@@ -345,8 +401,8 @@ void init_h5matrix(H5MatrixInfo *info,
   }
   
   /* set chunking properties of dataset */
-  info->chunk[0] = ROW_CHUNK;
-  info->chunk[1] = COL_CHUNK;
+  info->chunk[0] = (ROW_CHUNK < n_row) ? ROW_CHUNK : n_row;
+  info->chunk[1] = (COL_CHUNK < n_col) ? COL_CHUNK : n_col;
   status = H5Pset_chunk(info->dataset_prop, rank, info->chunk);
   if(status < 0) {
     my_err("%s:%d: failed to set chunksize", __FILE__, __LINE__);
@@ -430,22 +486,86 @@ void close_h5vector(H5VectorInfo *info) {
 
 
 
+/**
+ * Counts number of lines in file, reads header information,
+ * sets attributes such as number of samples in FileInfo structure,
+ * and advances file handle to end of header
+ */
+void set_file_info(gzFile gzf, Arguments *args, FileInfo *file_info,
+		   VCFInfo *vcf, ImputeInfo *impute_info) {
+  long n_col;
+  
+  /* count total number lines in file, this tells us number of records */
+  fprintf(stderr, "counting lines in file\n");
+  file_info->n_lines = util_gzcount_lines(gzf);
+  fprintf(stderr, "  total lines: %ld\n", file_info->n_lines);
+
+  if(args->format == FORMAT_VCF) {
+    /* parse VCF headers */
+    fprintf(stderr, "reading VCF header\n");
+    vcf_read_header(gzf, vcf);
+    fprintf(stderr, "  VCF header lines: %ld\n", vcf->n_header_lines);
+    
+    file_info->n_row = file_info->n_lines - vcf->n_header_lines;
+    file_info->n_samples = vcf->n_samples;
+  }
+  else if(args->format == FORMAT_IMPUTE) {
+    /* get number of samples from first row of IMPUTE file */
+    file_info->n_row = file_info->n_lines;
+    n_col = impute_count_fields(gzf) - IMPUTE_FIX_HEADER;
+
+    if(args->geno_prob_file && args->haplotype_file) {
+      my_err("%s:%d: can only specify one of geno_probs "
+	     "and haplotypes for impute input files\n");
+    }
+    else if(args->geno_prob_file) {
+      file_info->n_samples = n_col / 3;
+      file_info->n_geno_prob_col = n_col;
+      file_info->n_haplotype_col = 0;
+    }
+    else if(args->haplotype_file) {
+      file_info->n_samples = n_col / 2;
+      file_info->n_haplotype_col = n_col;
+      file_info->n_geno_prob_col = 0;
+    }
+    else {
+      /* just reading snp info, ignoring genotypes and haplotypes */
+      file_info->n_samples = 0;
+      file_info->n_haplotype_col = 0;
+      file_info->n_geno_prob_col = 0;
+    }
+
+    impute_info->n_samples = file_info->n_samples;
+    
+  } else {
+    my_err("%s:%d: unknown file format\n", __FILE__, __LINE__);
+  }
+  
+  fprintf(stderr, "  number of samples: %ld\n", file_info->n_samples);    
+  file_info->n_geno_prob_col = file_info->n_samples * 3;
+  file_info->n_haplotype_col = file_info->n_samples * 2;  
+}
+
+
+
+
 int main(int argc, char **argv) {
-  VCFInfo vcf;
+  VCFInfo *vcf;
+  FileInfo file_info;
+  ImputeInfo *impute_info;
+  SNP snp;
   Arguments args;
   Chromosome *all_chroms, *chrom;
   int n_chrom;
   H5MatrixInfo gprob_info, haplotype_info;
   H5VectorInfo snp_index_info;
   SNPTab *snp_tab;
-  hsize_t n_geno_prob_col, n_haplotype_col;
-  hsize_t n_row, row;
+  hsize_t row;
   hid_t snp_tab_h5file;
   gzFile gzf;
   float *geno_probs;
   char *haplotypes;
   long *snp_index;
-  size_t n_lines;
   long i, j;
 
   parse_args(&args, argc, argv);
@@ -471,44 +591,45 @@ int main(int argc, char **argv) {
     snp_tab_h5file = create_h5file(args.snp_tab_file);
     fprintf(stderr, "writing SNP table to: %s\n", args.snp_tab_file);
   }
-    
-  for(i = 0; i < args.n_vcf_files; i++) {
-    chrom = guess_chrom(args.vcf_files[i], all_chroms, n_chrom);
+
+  vcf = vcf_info_new();
+  impute_info = impute_info_new();
+  
+  /* loop over input files, there should be one for each chromosome */
+  for(i = 0; i < args.n_input_files; i++) {
+    /* guess chromosome file filename */
+    chrom = guess_chrom(args.input_files[i], all_chroms, n_chrom);
     if(chrom == NULL) {
       my_err("%s:%d: could not guess chromosome from filename '%s'\n",
-	     __FILE__, __LINE__, args.vcf_files[i]);
+	     __FILE__, __LINE__, args.input_files[i]);
     }
     fprintf(stderr, "chromosome: %s, length: %ldbp\n",
 	    chrom->name, chrom->len);
-    
-    fprintf(stderr, "reading from VCF file %s\n", args.vcf_files[i]);
-    gzf = util_must_gzopen(args.vcf_files[i], "rb");
-    
-    fprintf(stderr, "counting lines in file\n");
-    n_lines = util_gzcount_lines(gzf);
-    fprintf(stderr, "  total lines: %ld\n", n_lines);
 
-    fprintf(stderr, "reading VCF header\n");
-    vcf_read_header(gzf, &vcf);
-    fprintf(stderr, "  VCF header lines: %ld\n", vcf.n_header_lines);
-    fprintf(stderr, "  VCF samples: %ld\n", vcf.n_samples);
+    fprintf(stderr, "reading from file %s\n", args.input_files[i]);
+    gzf = util_must_gzopen(args.input_files[i], "rb");
 
-    
-    n_row = n_lines - vcf.n_header_lines;
-    
-    n_geno_prob_col = vcf.n_samples * 3;
-    n_haplotype_col = vcf.n_samples * 2;
+    if(gzbuffer(gzf, 131072) == -1) {
+      my_err("%s:%d: failed to set gzbuffer size\n", __FILE__, __LINE__);
+    }
 
+    set_file_info(gzf, &args, &file_info, vcf, impute_info);
+    
+    /* initialize output files and memory to hold genotypes,
+     * haplotypes, etc
+     */
     if(args.geno_prob_file) {
-      geno_probs = my_malloc(n_geno_prob_col * sizeof(float)); 
-      init_h5matrix(&gprob_info, n_row, n_geno_prob_col,
+      geno_probs = my_malloc(file_info.n_geno_prob_col * sizeof(float));
+      init_h5matrix(&gprob_info, file_info.n_row,
+		    file_info.n_geno_prob_col,
 		    GENO_PROB_DATATYPE, chrom->name);
     } else {
       geno_probs = NULL;
     }
     if(args.haplotype_file) {
-      haplotypes = my_malloc(n_haplotype_col * sizeof(char));
-      init_h5matrix(&haplotype_info, n_row, n_haplotype_col,
+      haplotypes = my_malloc(file_info.n_haplotype_col * sizeof(char));
+      init_h5matrix(&haplotype_info, file_info.n_row,
+		    file_info.n_haplotype_col,
 		    HAPLOTYPE_DATATYPE, chrom->name);
     } else {
       haplotypes = NULL;
@@ -527,21 +648,33 @@ int main(int argc, char **argv) {
       snp_index = NULL;
     }
     if(args.snp_tab_file) {
-      snp_tab = snp_tab_new(snp_tab_h5file, chrom->name);
+      snp_tab = snp_tab_new(snp_tab_h5file, chrom->name,
+			    file_info.n_row);
     } else {
       snp_tab = NULL;
     }    
     
     row = 0;
 
-    fprintf(stderr, "parsing VCF and writing to HDF5 files\n");
-    
-    while(vcf_read_line(gzf, &vcf, geno_probs, haplotypes) != -1) {
-      
-       /* fprintf(stderr, "chrom: %s, id: %s, pos: %ld, ref: %s, alt: %s " */
-       /* 	      "qual: %s, filter: %s, info: %s format: %s\n", */
-       /* 	      vcf.chrom, vcf.id, vcf.pos, vcf.ref_allele, vcf.alt_allele, */
-       /* 	      vcf.qual, vcf.filter, vcf.info, vcf.format); */
+    fprintf(stderr, "parsing file and writing to HDF5 files\n");
+
+    while(TRUE) {
+      if(args.format == FORMAT_VCF) {
+	/* read line from VCF file */
+	if(vcf_read_line(gzf, vcf, &snp, geno_probs, haplotypes) == -1) {
+	  break;
+	}
+      }
+      else if(args.format == FORMAT_IMPUTE) {
+	/* read line from IMPUTE file */
+	if(impute_read_line(gzf, impute_info, &snp, geno_probs,
+			    haplotypes) == -1) {
+	  break;
+	}
+      } else {
+	my_err("%s:%d: unknown format\n", __FILE__, __LINE__);
+      }
+
       if(geno_probs) {
 	write_h5matrix_row(&gprob_info, row, geno_probs);
       }
@@ -552,19 +685,20 @@ int main(int argc, char **argv) {
       /*  set snp_index element at this chromosome position
        * to point to row in matrices / SNP table 
        */
-      if(vcf.snp.pos > chrom->len || vcf.snp.pos < 1) {
+      if(snp.pos > chrom->len || snp.pos < 1) {
 	my_err("%s:%d: SNP position (%ld) is outside of "
 	       "chromomosome %s range:1-%ld", __FILE__, __LINE__,
-	       vcf.snp.pos, chrom->len);
+	       snp.pos, chrom->len);
       }
 
       if(snp_index) {
-	snp_index[vcf.snp.pos-1] = row;
+	/* set value in snp_index array to point to current row */
+	snp_index[snp.pos-1] = row;
       }
 
       /* append row to SNP table */
       if(snp_tab) {
-	snp_tab_append_row(snp_tab, &vcf.snp);
+	snp_tab_append_row(snp_tab, &snp);
       }
       
       row++;
@@ -574,9 +708,9 @@ int main(int argc, char **argv) {
     }
     fprintf(stderr, "\n");
 
-    if(row != n_row) {
+    if(row != file_info.n_row) {
       my_warn("%s:%d: expected %ld data rows, but only read %ld\n",
-	      __FILE__, __LINE__, n_row, row);
+	      __FILE__, __LINE__, file_info.n_row, row);
     }
 
     /* write snp_index data */
@@ -619,6 +753,8 @@ int main(int argc, char **argv) {
     H5Fclose(snp_tab_h5file);
   }
 
+  impute_info_free(impute_info);
+  vcf_info_free(vcf);
 
   fprintf(stderr, "done\n");
   

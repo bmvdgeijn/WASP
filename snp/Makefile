@@ -9,19 +9,19 @@ LIB         = -lz -lm -lhdf5 -lhdf5_hl
 INCLUDE   = -I$(HDF_INSTALL)/include
 LIBSHDF   = $(EXTLIB)
 
-objects=vcf.o util.o memutil.o err.o chrom.o snptab.o
+objects=vcf.o impute.o util.o memutil.o err.o chrom.o snptab.o
 
 default: all 
 
-all: vcf2h5 $(objects)
+all: snp2h5 $(objects)
 
 $(objects): %.o: %.c %.h
 	$(CC) -c $(CFLAGS) $< -o $@ $(INCLUDE)
 
 
-vcf2h5: vcf2h5.o $(objects)
-	$(CC) $(CFLAGS) -o $@ $(objects) vcf2h5.c $(INCLUDE) $(LIBSHDF) $(LIB)
+snp2h5: snp2h5.o $(objects)
+	$(CC) $(CFLAGS) -o $@ $(objects) snp2h5.c $(INCLUDE) $(LIBSHDF) $(LIB)
 
 
 clean:
-	rm -f $(objects) vcf2h5
+	rm -f $(objects) snp2h5

@@ -402,6 +402,55 @@ char *util_gzgets_line(gzFile gzf) {
   return line;
 }
 
+
+/**
+ * Reads a single line from provided the gzfile handle into the provided
+ * buffer. The buffer memory is reallocated as required and the buffer size
+ * is set appropriately. Newlines chars are replaced with terminating '\0'. 
+ * Returns the length of the string read from file (typically one less than 
+ * number of bytes read because newline replaced with '\0') or -1 if at EOF.
+ */
+size_t util_gzgetline(gzFile gzf, char **lineptr, size_t *size) {
+  char c;
+  size_t i;
+
+  i = 0;
+  while((c = gzgetc(gzf)) != -1) {
+    if(i >= *size) {
+      /* buffer is full, double its size */
+      *size = *size * 2;
+      /* fprintf(stderr, "expanding mem to %ld bytes\n", *size); */
+      *lineptr = my_realloc(*lineptr, *size);
+    }
+    
+    if(c == '\n') {
+      /* end of line, terminate  */
+      (*lineptr)[i] = '\0';
+      return i;
+    }
+
+    (*lineptr)[i] = c;
+    i++;
+  }
+
+  if(i == 0) {
+    /* at EOF */
+    return -1;
+  }
+
+  
+  /* did not hit a '\n' before EOF, add terminating '\0' to line 
+   * before returning it
+   */
+  if(i+1 >= *size) {
+    *lineptr = my_realloc(*lineptr, i+1);
+    *size = i+1;
+  }
+  (*lineptr)[i+1] = '\0';
+  
+  return i;
+}
+
 				    
 
 /**

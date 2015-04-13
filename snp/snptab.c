@@ -19,7 +19,8 @@
  * each chromosome, and be freed after use.
  *
  */
-SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name) {
+SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name,
+		    size_t max_record) {
   herr_t status;
   SNPTab *tab;
   SNP snp_desc;
@@ -61,9 +62,12 @@ SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name) {
   /* set chunk size and compression */
   tab->chunk_size = SNPTAB_CHUNK_SIZE;
   tab->compress = 1;
+
+  tab->n_record = 0;
+  tab->max_record = max_record;
   
   status = H5TBmake_table(tab->title, tab->h5file, tab->name,
-			  SNPTAB_N_FIELDS, 0,
+			  SNPTAB_N_FIELDS, tab->max_record,
 			  tab->record_size, field_names,
 			  tab->field_offset, tab->field_type,
 			  tab->chunk_size, NULL, tab->compress, NULL);
@@ -94,15 +98,22 @@ void snp_tab_free(SNPTab *tab) {
  */
 void snp_tab_append_row(SNPTab *tab, SNP *data) {
   herr_t status;
-  hsize_t n_records;
+  hsize_t n_to_write;
 
-  n_records = 1;
+  n_to_write = 1;
 
-  status = H5TBappend_records(tab->h5file, tab->name,
-			      n_records, tab->record_size,
-			      tab->field_offset, tab->field_size,
-			      data);
+  /* status = H5TBappend_records(tab->h5file, tab->name, */
+  /* 			      n_records, tab->record_size, */
+  /* 			      tab->field_offset, tab->field_size, */
+  /* 			      data); */
 
+  status = H5TBwrite_records(tab->h5file, tab->name,
+			     tab->n_record, n_to_write,
+			     tab->record_size, tab->field_offset,
+			     tab->field_size, data);
+
+  tab->n_record += 1;
+  
   if(status < 0) {
     my_err("%s:%d: failed to write record to SNP table\n",
 	   __FILE__, __LINE__);

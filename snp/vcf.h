@@ -11,7 +11,6 @@
 #define VCF_MAX_FORMAT 1024
 
 typedef struct {
-  SNP snp;
   int n_samples;
   long n_header_lines;
 
@@ -26,13 +25,23 @@ typedef struct {
   char info[VCF_MAX_FILTER];
   char format[VCF_MAX_FORMAT];
 
+
+  /* used for reading lines */
+  size_t buf_size;
+  char *buf;
+  
   /* could store lots of header info here */
 } VCFInfo;
 
 
+
+VCFInfo *vcf_info_new();
+void vcf_info_free();
+
 void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info);
 
-int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, float *geno_probs,
+int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
+		  float *geno_probs,
 		  char *haplotypes);
 
 

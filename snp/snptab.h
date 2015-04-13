@@ -8,8 +8,12 @@
 
 #define SNPTAB_NFIELDS 5
 #define SNPTAB_N_FIELDS 4
-#define SNPTAB_CHUNK_SIZE 1000
 
+/* chunk size affects performance a lot
+ * small chunks = much faster writing of tables, but
+ * worse compression
+ */
+#define SNPTAB_CHUNK_SIZE 12
 
 
 /* SNPTab holds information about SNP table 
@@ -30,11 +34,23 @@ typedef struct {
   
   int compress;
   size_t chunk_size;
+
+
+  /* all records in table are created at once (might be faster?) 
+   * then overwritten. max_record is the number in the HDF5 
+   * table and n_record is the number that have actually been written.
+   */
+  size_t n_record;
+  size_t max_record;
+  
+  
 } SNPTab;
 
 
 
-SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name);
+SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name,
+		    size_t max_record);
+
 void snp_tab_free(SNPTab *tab);
 
 void snp_tab_append_row(SNPTab *tab, SNP *data);

@@ -121,6 +121,7 @@ void usage(char **argv) {
 	  "     be downloaded from the UCSC genome browser. For example,\n"
 	  "     a chromInfo.txt.gz file for hg19 can be downloaded from\n"
 	  "     http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/\n"
+	  "\n"
 	  "  --format vcf|impute [required]\n"
 	  "     Specifies the format of the input files. Currently supported\n"
 	  "     formats are 'impute' or 'vcf'\n"

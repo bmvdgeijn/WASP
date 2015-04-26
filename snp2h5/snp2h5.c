@@ -111,6 +111,9 @@ void usage(char **argv) {
 	  "     for each chromosome. The filename must contain the name\n"
 	  "     of the chromosome. Chromosome names should match those in\n"
 	  "     the CHROM_FILE, which is provided by the --chrom option.\n"
+	  "     IMPUTE input files are expected to end with .impute2.gz\n"
+	  "     (for genotype probability files) or .impute2_haps.gz (for\n"
+	  "     haplotype files)"
 	  "\n"
 	  "Input Options:\n"
 	  "  --chrom CHROM_FILE [required]\n"
@@ -129,13 +132,13 @@ void usage(char **argv) {
 	  "Output Options:\n"
 	  "  --geno_prob GENO_PROB_OUTPUT_FILE [optional]\n"
 	  "     Path to HDF5 file to write genotype probabilities to.\n"
-	  "     This option can only be used if the input VCF files provide\n"
-	  "     genotype likelihoods, (GL in the FORMAT specifier).\n"
+	  "     This option can only be used for impute2 files or VCF files\n"
+	  "     that provide genotype likelihoods, (GL in the FORMAT specifier).\n"
 	  "\n"
 	  "  --haplotype HAPLOTYPE_OUTPUT_FILE [optional]\n"
-	  "     Path to HDF5 file to write haplotypes to.\n"
-	  "     This option can only be used if the input VCF files provide\n"
-	  "     genotypes (GT in the VCF FORMAT specifier). The genotypes\n"
+	  "     Path to HDF5 file to write haplotypes to. This option can only\n"
+	  "     be used if impute2_haps files or VCF files with genotypes (GT\n"
+	  "     in the VCF FORMAT specifier) are provided. The genotypes\n"
 	  "     should be phased (| haplotype separator). If the genotypes\n"
 	  "     are unphased (/ haplotype separator) a warning is printed.\n"
 	  "\n"
@@ -214,7 +217,7 @@ void parse_args(Arguments *args, int argc, char **argv) {
    } else {
      usage(argv);
      fprintf(stderr, "Error: ");
-     fprintf(stderr, "must specify at least one VCF file\n");
+     fprintf(stderr, "must specify at least one input file\n");
      exit(-1);
    }
    if(!args->chrom_file) {
@@ -366,8 +369,8 @@ void init_h5matrix(H5MatrixInfo *info,
   int rank = 2;
   herr_t status;
 
-  fprintf(stderr, "initializing HDF5 matrix with dimension: (%ld, %ld)\n",
-	  n_row, n_col);
+  fprintf(stderr, "initializing HDF5 matrix with dimension: "
+	  "(%ld, %ld)\n", n_row, n_col);
   
   info->n_row = n_row;
   info->n_col = n_col;
@@ -514,28 +517,24 @@ void set_file_info(gzFile gzf, Arguments *args, FileInfo *file_info,
     /* get number of samples from first row of IMPUTE file */
     file_info->n_row = file_info->n_lines;
     n_col = impute_count_fields(gzf) - IMPUTE_FIX_HEADER;
+    
+    /* here we assume that the file is an IMPUTE file
+     * with genotypes, and that info from this file is assumed
+     * correct. Due to impute bug sometimes lines are missing 
+     * from haplotype files.
+     */
 
-    if(args->geno_prob_file && args->haplotype_file) {
-      my_err("%s:%d: can only specify one of geno_probs "
-	     "and haplotypes for impute input files\n");
+    if((n_col % 3) != 0) {
+      my_err("%s:%d: expected number of columns (%ld) in .impute2 file to be "
+	     "multiple of 3", __FILE__, __LINE__, n_col);
     }
-    else if(args->geno_prob_file) {
-      file_info->n_samples = n_col / 3;
-      file_info->n_geno_prob_col = n_col;
-      file_info->n_haplotype_col = 0;
-    }
-    else if(args->haplotype_file) {
-      file_info->n_samples = n_col / 2;
-      file_info->n_haplotype_col = n_col;
-      file_info->n_geno_prob_col = 0;
-    }
-    else {
-      /* just reading snp info, ignoring genotypes and haplotypes */
-      file_info->n_samples = 0;
-      file_info->n_haplotype_col = 0;
-      file_info->n_geno_prob_col = 0;
-    }
+    
+    file_info->n_samples = n_col / 3;
+    file_info->n_geno_prob_col = n_col;
 
+    /* if we used haplotype file, n_samples would be n_col/2 */
+    /* file_info->n_samples = n_col / 2; */
+    
     impute_info->n_samples = file_info->n_samples;
     
   } else {
@@ -550,92 +549,363 @@ void set_file_info(gzFile gzf, Arguments *args, FileInfo *file_info,
 
 
 
-int main(int argc, char **argv) {
-  VCFInfo *vcf;
-  FileInfo file_info;
+/** groups impute files by whether their extension. Filenames with
+ * extension .impute2.gz are put into imp_files array, while filenames
+ * with extension .impute2_haps.gz are put into hap_files array.
+ * files in the hap array are then ordered so that their chromosomal
+ * ordering matches the imp array.
+ * 
+ */
+void group_impute_files(char **all_files, int n_files, Chromosome *all_chrom,
+			int n_chrom, char **imp_files, char **hap_files,
+			int *n_imp_files, int *n_hap_files) {
+  Chromosome *hap_chrom, *imp_chrom;
+  char **tmp_hap_files;
+  int i, j;
+
+  *n_imp_files = 0;
+  *n_hap_files = 0;
+
+  tmp_hap_files = my_malloc(sizeof(char *) * n_files);
+  
+  for(i = 0; i < n_files; i++) {
+    fprintf(stderr, "     '%s'\n", all_files[i]);
+    if(util_str_ends_with(all_files[i], ".impute2.gz")) {
+      imp_files[*n_imp_files] = util_str_dup(all_files[i]);
+      *n_imp_files += 1;
+    }
+    else if(util_str_ends_with(all_files[i], ".impute2_haps.gz")) {
+      tmp_hap_files[*n_hap_files] = util_str_dup(all_files[i]);
+      *n_hap_files += 1;
+    }
+    else {
+      my_warn("%s:%d: ignoring file '%s'. Expected extension "
+	     "'.impute2.gz' or 'impute2_haps.gz'", __FILE__, __LINE__,
+	      all_files[i]);
+    }
+  }
+
+  if(*n_hap_files > 0) {
+    if(*n_hap_files != *n_imp_files) {
+      my_err("%s:%d: expected same number of 'haps' and 'impute' files"
+	     ", but got %d and %d", __FILE__, __LINE__, *n_imp_files,
+	     *n_hap_files);
+    }
+
+    /* re-order hap files so chromosome order matches imp files
+     */
+    for(i = 0; i < *n_hap_files; i++) {
+      imp_chrom = guess_chrom(imp_files[i], all_chrom, n_chrom);
+
+      if(imp_chrom == NULL) {
+	my_err("%s:%d: could not guess chromosome name from "
+	       "filename %s\n", __FILE__, __LINE__, imp_files[i]);
+      }
+      
+      hap_files[i] = NULL;
+      
+      for(j = 0; j < *n_imp_files; j++) {
+	hap_chrom = guess_chrom(tmp_hap_files[i], all_chrom, n_chrom);
+
+	if(hap_chrom == NULL) {
+	  my_err("%s:%d: could not guess chromosome name from "
+		 "filename %s\n", __FILE__, __LINE__,
+		 tmp_hap_files[i]);
+	}
+	
+	if(strcmp(hap_chrom->name, imp_chrom->name) == 0) {
+	  /* found match */
+	  hap_files[i] = tmp_hap_files[j];
+	  break;
+	}
+      }
+      if(hap_files[i] == NULL) {
+	my_err("%s:%d: could not find hap file for chrom %s\n",
+	       __FILE__, __LINE__, imp_chrom[i]);
+      }
+    }
+  }
+
+  my_free(tmp_hap_files);
+}
+
+
+
+void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
+		  H5MatrixInfo *gprob_info, H5MatrixInfo *haplotype_info,
+		  H5VectorInfo *snp_index_info,
+		  hid_t snp_tab_h5file) {
   ImputeInfo *impute_info;
-  SNP snp;
-  Arguments args;
-  Chromosome *all_chroms, *chrom;
-  int n_chrom;
-  H5MatrixInfo gprob_info, haplotype_info;
-  H5VectorInfo snp_index_info;
-  SNPTab *snp_tab;
-  hsize_t row;
-  hid_t snp_tab_h5file;
-  gzFile gzf;
+  FileInfo file_info;
+  long i, j;
   float *geno_probs;
   char *haplotypes;
   long *snp_index;
-  long i, j;
+  SNP snp;
+  SNPTab *snp_tab;
+  hsize_t row;
+  gzFile gzf;
+  Chromosome *chrom;		  
+  char **imp_files;
+  char **hap_files;
+  int n_imp_files;
+  int n_hap_files;
 
-  parse_args(&args, argc, argv);
-
-  /* read chromosomes */
-  all_chroms = chrom_read_file(args.chrom_file, &n_chrom);
-  
-  /* create new HDF5 file(s) */
-  if(args.geno_prob_file) {
-    gprob_info.h5file = create_h5file(args.geno_prob_file);
-    fprintf(stderr, "writing genotype probabilities to: %s\n",
-	    args.geno_prob_file);
-  }
-  if(args.haplotype_file) {
-    haplotype_info.h5file = create_h5file(args.haplotype_file);
-    fprintf(stderr, "writing haplotypes to: %s\n", args.haplotype_file);
-  }
-  if(args.snp_index_file) {
-    snp_index_info.h5file = create_h5file(args.snp_index_file);
-    fprintf(stderr, "writing SNP index to: %s\n", args.snp_index_file);
-  }
-  if(args.snp_tab_file) {
-    snp_tab_h5file = create_h5file(args.snp_tab_file);
-    fprintf(stderr, "writing SNP table to: %s\n", args.snp_tab_file);
-  }
-
-  vcf = vcf_info_new();
   impute_info = impute_info_new();
   
+  imp_files = my_malloc(sizeof(char *) * args->n_input_files);
+  hap_files = my_malloc(sizeof(char *) * args->n_input_files);
+
+  group_impute_files(args->input_files, args->n_input_files,
+		     all_chroms, n_chrom, imp_files, hap_files,
+		     &n_imp_files, &n_hap_files);
+
   /* loop over input files, there should be one for each chromosome */
-  for(i = 0; i < args.n_input_files; i++) {
+  for(i = 0; i < n_imp_files; i++) {
     /* guess chromosome file filename */
-    chrom = guess_chrom(args.input_files[i], all_chroms, n_chrom);
+    chrom = guess_chrom(imp_files[i], all_chroms, n_chrom);
     if(chrom == NULL) {
       my_err("%s:%d: could not guess chromosome from filename '%s'\n",
-	     __FILE__, __LINE__, args.input_files[i]);
+	     __FILE__, __LINE__, args->input_files[i]);
     }
+
     fprintf(stderr, "chromosome: %s, length: %ldbp\n",
 	    chrom->name, chrom->len);
 
-    fprintf(stderr, "reading from file %s\n", args.input_files[i]);
-    gzf = util_must_gzopen(args.input_files[i], "rb");
+    /* open file, count number of lines */
+    fprintf(stderr, "reading from file %s\n", imp_files[i]);
+    gzf = util_must_gzopen(args->input_files[i], "rb");
 
+    /* set gzip buffer size to 128k (131072 bytes) */
     if(gzbuffer(gzf, 131072) == -1) {
-      my_err("%s:%d: failed to set gzbuffer size\n", __FILE__, __LINE__);
+      my_err("%s:%d: failed to set gzbuffer size\n",
+	     __FILE__, __LINE__);
     }
 
-    set_file_info(gzf, &args, &file_info, vcf, impute_info);
+    set_file_info(gzf, args, &file_info, NULL, impute_info);
     
     /* initialize output files and memory to hold genotypes,
      * haplotypes, etc
      */
-    if(args.geno_prob_file) {
-      geno_probs = my_malloc(file_info.n_geno_prob_col * sizeof(float));
-      init_h5matrix(&gprob_info, file_info.n_row,
+    if(args->geno_prob_file) {
+      geno_probs = my_malloc(file_info.n_geno_prob_col*sizeof(float));
+      init_h5matrix(gprob_info, file_info.n_row,
 		    file_info.n_geno_prob_col,
 		    GENO_PROB_DATATYPE, chrom->name);
     } else {
       geno_probs = NULL;
     }
-    if(args.haplotype_file) {
+
+    /* SNP index vector is same length as chromosome,
+     * initialize to SNP_INDEX_NONE (-1)
+     */
+    snp_index = my_malloc(chrom->len * sizeof(long));
+    for(j = 0; j < chrom->len; j++) {
+      snp_index[j] = SNP_INDEX_NONE;
+    }
+
+    if(args->snp_index_file) {
+      init_h5vector(snp_index_info, chrom->len,
+		    SNP_INDEX_DATATYPE, chrom->name);
+    }
+
+    if(args->snp_tab_file) {
+      snp_tab = snp_tab_new(snp_tab_h5file, chrom->name,
+			    file_info.n_row);
+    } else {
+      snp_tab = NULL;
+    }
+    
+    row = 0;
+    
+    fprintf(stderr, "parsing file and writing to HDF5 files\n");
+    
+    while(impute_read_line(gzf, impute_info,
+			   &snp, geno_probs, NULL) != -1) {
+
+      if(geno_probs) {
+	write_h5matrix_row(gprob_info, row, geno_probs);
+      }
+
+      /*  set snp_index element at this chromosome position
+       * to point to row in matrices / SNP table 
+       */
+      if(snp.pos > chrom->len || snp.pos < 1) {
+	my_err("%s:%d: SNP position (%ld) is outside of "
+	       "chromomosome %s range:1-%ld", __FILE__, __LINE__,
+	       snp.pos, chrom->len);
+      }
+
+      /* set value in snp_index array to point to current row */
+      snp_index[snp.pos-1] = row;
+
+      /* append row to SNP table */
+      if(snp_tab) {
+	snp_tab_append_row(snp_tab, &snp);
+      }
+      
+      row++;
+      if((row % 1000) == 0) {
+	fprintf(stderr, ".");
+      }
+    }
+    if(row != file_info.n_row) {
+      my_warn("%s:%d: expected %ld data rows, but only read %ld\n",
+	      __FILE__, __LINE__, file_info.n_row, row);
+    }
+    gzclose(gzf);
+
+    /* clean up geno_prob memory for this chromosome */
+    if(geno_probs) {
+      my_free(geno_probs);
+      close_h5matrix(gprob_info);
+    }
+
+    fprintf(stderr, "\n");
+    
+    if(args->haplotype_file) {
+      /* NOW do pass of haplotype file. */
+      /* Due to bug? in IMPUTE some SNPs are missing from the haplotype
+       * files, so we need to lookup correct index in hap table
+       * using the snp_index array we created from the main impute
+       * files.
+       */
+	haplotypes = my_malloc(file_info.n_haplotype_col *
+			       sizeof(char));
+	init_h5matrix(haplotype_info, file_info.n_row,
+		      file_info.n_haplotype_col,
+		      HAPLOTYPE_DATATYPE, chrom->name);
+      
+	fprintf(stderr, "reading from file %s\n", hap_files[i]);
+	gzf = util_must_gzopen(hap_files[i], "rb");
+      
+	/* set gzip buffer size to 128k (131072 bytes) */
+	if(gzbuffer(gzf, 131072) == -1) {
+	  my_err("%s:%d: failed to set gzbuffer size\n",
+		 __FILE__, __LINE__);
+	}
+      
+	fprintf(stderr, "parsing file and writing to HDF5 files\n");
+
+	int line_num = 0;
+	while(impute_read_line(gzf, impute_info, &snp,
+			       NULL, haplotypes) != -1) {
+
+	  if(snp.pos > chrom->len || snp.pos < 1) {
+	    my_err("%s:%d: SNP position (%ld) is outside of "
+		   "chromomosome %s range:1-%ld", __FILE__, __LINE__,
+		   snp.pos, chrom->len);
+	  }
+	    
+	  row = snp_index[snp.pos-1];
+	  if(row == SNP_INDEX_NONE) {
+	    /* ignore SNPs that are present in haps file but missing from
+	     * genotype file. 
+	     */
+	    my_warn("%s:%d: snp at position %ld present in "
+		    "impute2_haps file but not in impute2 file\n",
+		    __FILE__, __LINE__, snp.pos);	    
+	  } else {
+	    write_h5matrix_row(haplotype_info, row, haplotypes);
+	  }
+
+	  line_num += 1;
+
+	  if((line_num % 1000) == 0) {
+	    fprintf(stderr, ".");
+	  }
+	}
+	
+	gzclose(gzf);
+
+	/* cleanup haplotype memory for this chrom */
+	my_free(haplotypes);
+	close_h5matrix(haplotype_info);
+    }
+
+    fprintf(stderr, "\n");
+    
+    /* write snp_index data */
+    if(args->snp_index_file) {
+      write_snp_index(snp_index_info, snp_index);
+      close_h5vector(snp_index_info);
+    }
+
+    /* cleanup snp_index and snp_tab memory for this chromosome */
+    my_free(snp_index);
+    
+    if(snp_tab) {
+      snp_tab_free(snp_tab);
+    }
+  }
+  
+  
+  impute_info_free(impute_info);
+}
+
+
+
+void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
+	       H5MatrixInfo *gprob_info, H5MatrixInfo *haplotype_info,
+	       H5VectorInfo *snp_index_info, hid_t snp_tab_h5file) {
+  VCFInfo *vcf;
+  FileInfo file_info;
+  SNPTab *snp_tab;
+  long i, j;
+  float *geno_probs;
+  char *haplotypes;
+  long *snp_index;
+  SNP snp;
+  hsize_t row;
+  gzFile gzf;
+  Chromosome *chrom;
+  
+  vcf = vcf_info_new();
+
+  /* loop over input files, there should be one for each chromosome */
+  for(i = 0; i < args->n_input_files; i++) {
+    /* guess chromosome file filename */
+    chrom = guess_chrom(args->input_files[i], all_chroms, n_chrom);
+    if(chrom == NULL) {
+      my_err("%s:%d: could not guess chromosome from filename '%s'\n",
+	     __FILE__, __LINE__, args->input_files[i]);
+    }
+
+    fprintf(stderr, "chromosome: %s, length: %ldbp\n",
+	    chrom->name, chrom->len);
+
+    fprintf(stderr, "reading from file %s\n", args->input_files[i]);
+    gzf = util_must_gzopen(args->input_files[i], "rb");
+
+    /* set gzip buffer size to 128k (131072 bytes) */
+    if(gzbuffer(gzf, 131072) == -1) {
+      my_err("%s:%d: failed to set gzbuffer size\n",
+	     __FILE__, __LINE__);
+    }
+
+    set_file_info(gzf, args, &file_info, vcf, NULL);
+    
+    /* initialize output files and memory to hold genotypes,
+     * haplotypes, etc
+     */
+    if(args->geno_prob_file) {
+      geno_probs = my_malloc(file_info.n_geno_prob_col *
+			     sizeof(float));
+      init_h5matrix(gprob_info, file_info.n_row,
+		    file_info.n_geno_prob_col,
+		    GENO_PROB_DATATYPE, chrom->name);
+    } else {
+      geno_probs = NULL;
+    }
+    if(args->haplotype_file) {
       haplotypes = my_malloc(file_info.n_haplotype_col * sizeof(char));
-      init_h5matrix(&haplotype_info, file_info.n_row,
+      init_h5matrix(haplotype_info, file_info.n_row,
 		    file_info.n_haplotype_col,
 		    HAPLOTYPE_DATATYPE, chrom->name);
     } else {
       haplotypes = NULL;
     }
-    if(args.snp_index_file) {
+    if(args->snp_index_file) {
       /* SNP index vector is same length as chromosome,
        * initialize to SNP_INDEX_NONE (-1)
        */
@@ -643,44 +913,31 @@ int main(int argc, char **argv) {
       for(j = 0; j < chrom->len; j++) {
 	snp_index[j] = SNP_INDEX_NONE;
       }
-      init_h5vector(&snp_index_info, chrom->len,
+      init_h5vector(snp_index_info, chrom->len,
 		    SNP_INDEX_DATATYPE, chrom->name);
     } else {
       snp_index = NULL;
     }
-    if(args.snp_tab_file) {
+    if(args->snp_tab_file) {
       snp_tab = snp_tab_new(snp_tab_h5file, chrom->name,
 			    file_info.n_row);
     } else {
       snp_tab = NULL;
-    }    
+    }
     
     row = 0;
 
     fprintf(stderr, "parsing file and writing to HDF5 files\n");
 
-    while(TRUE) {
-      if(args.format == FORMAT_VCF) {
-	/* read line from VCF file */
-	if(vcf_read_line(gzf, vcf, &snp, geno_probs, haplotypes) == -1) {
-	  break;
-	}
-      }
-      else if(args.format == FORMAT_IMPUTE) {
-	/* read line from IMPUTE file */
-	if(impute_read_line(gzf, impute_info, &snp, geno_probs,
-			    haplotypes) == -1) {
-	  break;
-	}
-      } else {
-	my_err("%s:%d: unknown format\n", __FILE__, __LINE__);
-      }
+    
+    while(vcf_read_line(gzf, vcf, &snp,
+			geno_probs, haplotypes) != -1) {
 
       if(geno_probs) {
-	write_h5matrix_row(&gprob_info, row, geno_probs);
+	write_h5matrix_row(gprob_info, row, geno_probs);
       }
       if(haplotypes) {
-	write_h5matrix_row(&haplotype_info, row, haplotypes);
+	write_h5matrix_row(haplotype_info, row, haplotypes);
       }
 
       /*  set snp_index element at this chromosome position
@@ -716,28 +973,82 @@ int main(int argc, char **argv) {
 
     /* write snp_index data */
     if(snp_index) {
-      write_snp_index(&snp_index_info, snp_index);
+      write_snp_index(snp_index_info, snp_index);
     }
         
     /* clean up memory etc. for this chromosome */
     if(geno_probs) {
       my_free(geno_probs);
-      close_h5matrix(&gprob_info);
+      close_h5matrix(gprob_info);
     }
     if(haplotypes) {
       my_free(haplotypes);
-      close_h5matrix(&haplotype_info);
+      close_h5matrix(haplotype_info);
     }
     if(snp_index) {
       my_free(snp_index);
-      close_h5vector(&snp_index_info);
+      close_h5vector(snp_index_info);
     }
     if(snp_tab) {
       snp_tab_free(snp_tab);
     }
     gzclose(gzf);
   }
+
+  vcf_info_free(vcf);
+}
+
+
+
+int main(int argc, char **argv) {
+  FileInfo file_info;
+  Arguments args;
+  Chromosome *all_chroms;
+  int n_chrom;
+  H5MatrixInfo gprob_info, haplotype_info;
+  H5VectorInfo snp_index_info;
+  hid_t snp_tab_h5file;
+
+  parse_args(&args, argc, argv);
+
+  /* read chromosomes */
+  all_chroms = chrom_read_file(args.chrom_file, &n_chrom);
   
+  /* create new HDF5 file(s) */
+  if(args.geno_prob_file) {
+    gprob_info.h5file = create_h5file(args.geno_prob_file);
+    fprintf(stderr, "writing genotype probabilities to: %s\n",
+	    args.geno_prob_file);
+  }
+  if(args.haplotype_file) {
+    haplotype_info.h5file = create_h5file(args.haplotype_file);
+    fprintf(stderr, "writing haplotypes to: %s\n",
+	    args.haplotype_file);
+  }
+  if(args.snp_index_file) {
+    snp_index_info.h5file = create_h5file(args.snp_index_file);
+    fprintf(stderr, "writing SNP index to: %s\n", args.snp_index_file);
+  }
+  if(args.snp_tab_file) {
+    snp_tab_h5file = create_h5file(args.snp_tab_file);
+    fprintf(stderr, "writing SNP table to: %s\n", args.snp_tab_file);
+  }
+    
+  
+  if(args.format == FORMAT_VCF) {
+    parse_vcf(&args, all_chroms, n_chrom,
+	      &gprob_info, &haplotype_info, &snp_index_info,
+	      snp_tab_h5file);
+  }
+  else if(args.format == FORMAT_IMPUTE) {
+    parse_impute(&args, all_chroms, n_chrom,
+		 &gprob_info, &haplotype_info, &snp_index_info,
+		 snp_tab_h5file);
+  }
+  else {
+    my_err("%s:%d: unknown format\n", __FILE__, __LINE__);
+  }
+    
   chrom_array_free(all_chroms, n_chrom);
 
   /* close HDF5 files */
@@ -753,9 +1064,6 @@ int main(int argc, char **argv) {
   if(args.snp_tab_file) {
     H5Fclose(snp_tab_h5file);
   }
-
-  impute_info_free(impute_info);
-  vcf_info_free(vcf);
 
   fprintf(stderr, "done\n");
   

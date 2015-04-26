@@ -107,25 +107,19 @@ should match those in the CHROM_FILE, which is provided by the --chrom option.
     # read 1000 genomes VCF files that contain genotype likelihoods
     # and write genotype probabilties to HDF5 file
     snp2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
-	       --format vcf
+	       --format vcf \
            --geno_prob geno_probs.h5 \
            1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz
 
-    # read IMPUTE-formatted files that contain genotype probabilities
-    # and write genotype probabilties, snp_index and snp_tab to
-	# HDF5 files
+    # read IMPUTE-formatted files and write genotype probabilties,
+	# haplotypes, snp_index and snp_tab to HDF5 files
     snp2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
-	       --format impute
+	       --format impute \
            --geno_prob geno_probs.h5 \
 		   --snp_index snp_index.h5 \
-		   --snp_tab snp_tab.h5
-           data/*.hg19.impute2.gz
-
-    # read haplotypes from IMPUTE-formatted files
-	snp2h5 --chrom --chrom data/ucsc/hg19/chromInfo.txt.gz \
-	     --format impute \
-	     --haplotype haplotypes.h5
-		 data/*.hg19.impute2_haps.gz
+		   --snp_tab snp_tab.h5 \
+		   --haplotype haplotypes.h5 \
+           data/*.hg19.impute2.gz data/*.hg19.impute2_haps.gz
 
 
 

@@ -97,7 +97,7 @@ should match those in the CHROM_FILE, which is provided by the --chrom option.
     # read 1000 genomes VCF files and write haplotype, snp_index
     # and snp_tab to HDF5 files
     snp2h5 --chrom data/ucsc/hg19/chromInfo.txt.gz \
-	       --format vcf
+	       --format vcf \
            --haplotype haplotypes.h5 \
            --snp_index snp_index.h5 \
            --snp_tab   snp_tab.h5 \

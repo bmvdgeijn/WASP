@@ -73,8 +73,12 @@ import numpy as np
 import sys
 import gzip
 
-import genome.db
-import genome.coord
+import tables
+
+
+import chromosome
+import chromstat
+import coord
 
 SNP_UNDEF = -1
 HAP_UNDEF = -1
@@ -91,62 +95,99 @@ class SNP(object):
     
 
 
-class DataTracks(object):
-    def __init__(self, gdb, track_prefix, pop):
-
+class DataFiles(object):
+    def __init__(self, args):
         # open tracks that read counts will be pulled from
-        ref_as_name = "%s_AS_ref_count" % track_prefix
-
-        alt_as_name = "%s_AS_alt_count" % track_prefix
-
-        oth_as_name = "%s_AS_other_count" % track_prefix
-
-        read_count_name = "%s_read_start_count" % track_prefix
-
-        self.ref_count_track = gdb.open_track(ref_as_name)
-        self.alt_count_track = gdb.open_track(alt_as_name)
-        self.other_count_track = gdb.open_track(oth_as_name)
-        self.read_count_track = gdb.open_track(read_count_name)
+        self.ref_count_h5 = tables.openFile(args.ref_as_counts, "r")
+        self.alt_count_h5 = tables.openFile(args.alt_as_counts, "r")
+        self.other_count_h5 = tables.openFile(args.other_as_counts, "r")
+        self.read_count_h5 = tables.openFile(args.read_counts, "r")
 
         # open tracks where SNP information can be extracted
-        self.snp_track = gdb.open_track("impute2/snps")
-        self.snp_index_track = gdb.open_track("impute2/snp_index")
-        self.geno_track = gdb.open_track("impute2/%s_geno_probs" % 
-                                         pop.lower())
-        self.hap_track = gdb.open_track("impute2/%s_haplotypes" % 
-                                        pop.lower())
+        self.snp_tab_h5 = tables.openFile(args.snp_tab, "r")
+        self.snp_index_h5 = tables.openFile(args.snp_index, "r")
+        self.geno_prob_h5 = tables.openFile(args.geno_prob, "r")
+        self.hap_h5 = tables.openFile(args.haplotype, "r")
 
     
     def close(self):
-        """closes all of the data tracks"""
+        """closes all of the data files"""
 
-        self.ref_count_track.close()
-        self.alt_count_track.close()
-        self.other_count_track.close()
-        self.read_count_track.close()
+        self.ref_count_h5.close()
+        self.alt_count_h5.close()
+        self.other_count_h5.close()
+        self.read_count_h5.close()
 
-        self.snp_track.close()
-        self.snp_index_track.close()
-        self.geno_track.close()
-        self.hap_track.close()
+        self.snp_tab_h5.close()
+        self.snp_index_h5.close()
+        self.geno_prob_h5.close()
+        self.hap_h5.close()
         
 
 
         
 def parse_args():
     parser = argparse.ArgumentParser()
-
-    parser.add_argument("--assembly", help="genome assembly that reads "
-                        "were mapped to (e.g. hg18)", default=None)
-
+    
     parser.add_argument('--target_region_size', 
                         help='override target region size that is '
                         'specified by input file',
                         type=int, default=None)
-
-    parser.add_argument("--sample_file",
-                        help="path to file containing ordered list of "
-                        "genotyped individuals",
+        
+    parser.add_argument("--chrom",
+                        help="Path to chromInfo.txt file (may be gzipped) "
+                        "with list of chromosomes for the relevant genome "
+                        "assembly. Each line in file should contain "
+                        "tab-separated chromosome name and chromosome length "
+                        "(in basepairs). chromInfo.txt files can be "
+                        "downloaded from the UCSC genome browser. For "
+                        "example, a chromInfo.txt.gz file for hg19 can "
+                        "be downloaded from "
+                        "http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/",
+                        metavar="CHROM_TXT_FILE",
+                        required=True)
+        
+    parser.add_argument("--samples",
+                        help="Path to text file containing a list of "
+                        "individual identifiers. The ordering of individuals "
+                        "must be consistent with those in the haplotype files. "
+                        "The samples file is assumed to have one identifier per "
+                        "line in the first column (other columns are "
+                        "ignored).",
+                        required=True,
+                        metavar="SAMPLES_TXT_FILE",
+                        default=None)
+    
+    parser.add_argument("--individual",
+                        help="Identifier for individual, used to determine "
+                        "phasing and which SNPs are heterozygous. Must match "
+                        "one of the individuals in the file provided "
+                        "with --samples argument.",
+                        metavar="INDIVIDUAL",
+                        required=True,
+                        default=None)
+    
+    parser.add_argument("--snp_index",
+                        help="Path to HDF5 file containing SNP index. The "
+                        "SNP index is used to convert the genomic position "
+                        "of a SNP to its corresponding row in the haplotype "
+                        "and snp_tab HDF5 files.",
+                        metavar="SNP_INDEX_H5_FILE",
+                        required=True)
+    
+    parser.add_argument("--geno_prob",
+                        "Path to HDF5 file containing genotype probabilities",
+                        metavar="GENO_PROB_H5_FILE",
+                        required=True)
+    
+    parser.add_argument("--haplotype",
+                        help=" Path to HDF5 file to read phased haplotypes "
+                        "from. If supplied, when read overlaps multiple SNPs "
+                        "counts are randomly assigned to ONE of the "
+                        "overlapping HETEROZYGOUS SNPs; if not supplied "
+                        "counts are randomly assigned to ONE of overlapping "
+                        "SNPs (regardless of their genotype).",
+                        metavar="HAPLOTYPE_H5_FILE",
                         default=None)
     
     parser.add_argument("--homozygous_as_counts",
@@ -158,24 +199,43 @@ def parse_args():
                         "rand_allele: choose random allele at each SNP to "
                         "be reference", default="zero",
                         choices=("zero", "rand_hap", "rand_allele"))
-                        
-
-    parser.add_argument("track_prefix", 
-                        help="prefix of tracks to extract reads from "
-                        "(e.g. 10_IND/PolII/read_counts/PolII_18505)")
-
-    parser.add_argument("pop",
-                        help="population prefix for genotype tracks "
-                        "(YRI or CEU)")
     
-    parser.add_argument("individual", 
-                        help="individual to extract read counts "
-                        "for (e.g. 18505)")
+    parser.add_argument("--ref_as_counts",
+                        help="Path to HDF5 file containing counts of reads "
+                        "that match reference allele. Allele-specific counts "
+                        "are stored at the position of the SNP."
+                        "that match reference",
+                        metavar="REF_AS_COUNT_H5_FILE",
+                        required=True)
+    
+    parser.add_argument("--alt_as_counts", 
+                        help="Path to HDF5 file to write counts of reads "
+                        "that match alternate allele. Allele-specific counts "
+                        "are stored at the position of the SNP.",
+                        metavar="ALT_AS_COUNT_H5_FILE",
+                        required=True)
+    
+    parser.add_argument("--other_as_counts", 
+                        help="Path to HDF5 file to write counts of reads "
+                        "that match neither reference nor alternate allele. "
+                        "Allele-specific counts are stored at the position "
+                        "of the SNP.",
+                        metavar="OTHER_COUNT_H5_FILE",
+                        required=True)
+    
+    parser.add_argument("--read_counts",
+                       help="Path to HDF5 file to write counts of all "
+                       "reads, regardless of whether they overlap a SNP. "
+                       "Read counts are stored at the left-most position "
+                       "of the mapped read.",
+                       metavar="READ_COUNT_H5_FILE",
+                       required=True)
+    
     
     parser.add_argument("input_file", 
                         help="bed-like file to read coordinates of "
                         "test SNP and target region from")
-
+    
     args = parser.parse_args()
 
     return args
@@ -184,29 +244,31 @@ def parse_args():
 
 
 
-def get_region_snps(dt, region_list, ind_idx):
+def get_region_snps(data_files, region_list, ind_idx):
     """Retrieves all of the SNPs in the requested regions. 
     The test SNP is also returned."""
 
     if len(region_list) == 0:
-        raise genome.coord.CoordError("expected at least one coordinate, got 0")
+        raise genome.coord.CoordError("expected at least one coordinate, "
+                                      "got 0")
 
     chrom = region_list[0].chrom
+
+    node_name = "/%s" % chrom.name
+    snp_tab = data_files.snp_tab_h5.getNode(node_name)
+    hap_tab = data_files.hap_h5.getNode(node_name)
+    geno_tab = data_files.geno_prob_h5.getNode(node_name)
+    snp_idx_tab = data_files.snp_index_h5.getNode(node_name)
     
-    snp_tab = dt.snp_track.h5f.getNode("/%s" % chrom.name)
-    hap_tab = dt.hap_track.h5f.getNode("/%s" % chrom.name)
-    geno_tab = dt.geno_track.h5f.getNode("/%s" % chrom.name)
-
     region_snps = []
-
+    
     for region in region_list:
         if region.chrom.name != chrom.name:
             raise CoordError("only regions on same chromosome are supported")
-        
-        snp_idx = dt.snp_index_track.get_nparray(chrom, region.start, region.end)
 
+        # get index (which is row number in SNP tables) of SNPs in this region
+        snp_idx = snp_indx_tab[region.start-1:region.end]
         offsets = np.where(snp_idx != SNP_UNDEF)[0]
-
         test_snp = None
 
         for offset in offsets:
@@ -280,7 +342,7 @@ def lookup_individual_index(options, ind_name):
 
 
 
-def set_snp_counts(dt, region_list, snps, test_snp, options):
+def set_snp_counts(data_files, region_list, snps, test_snp, options):
     """Sets counts of reference and alternate haplotype matching reads
     for each of the provided SNPs. Labeling of 'reference' or 'alternate'
     is with respect to the test SNP"""
@@ -314,15 +376,16 @@ def set_snp_counts(dt, region_list, snps, test_snp, options):
                 
 
     for region in region_list:
-        ref_counts = dt.ref_count_track.get_nparray(region.chrom, region.start,
-                                                    region.end)
+        node_name = "/%s" % region.chrom.name
         
-        alt_counts = dt.alt_count_track.get_nparray(region.chrom, region.start,
-                                                    region.end)
+        ref_node = data_files.ref_count_h5.getNode(node_name)
+        alt_node = data_files.alt_count_h5.getNode(node_name)
+        other_node = data_files.other_count_h5.getNode(node_name)
 
-        other_counts = dt.other_count_track.get_nparray(region.chrom, 
-                                                        region.start,
-                                                        region.end)
+        ref_counts = ref_node[region.start-1:region.end]
+        alt_counts = alt_node[region.start-1:region.end]
+        other_counts = other_node[region.start-1:region.end]
+        
         for snp in snps:
             # we have het SNPs from several regions, but only want to consider
             # ones in current region
@@ -346,8 +409,8 @@ def set_snp_counts(dt, region_list, snps, test_snp, options):
                             snp.ref_hap_count = alt_count
                             snp.alt_hap_count = ref_count
                     else:
-                        raise ValueError("unknown homozygous_as_counts option %s" % 
-                                         options.homozygous_as_counts)
+                        raise ValueError("unknown homozygous_as_counts option %s" 
+                                         % options.homozygous_as_counts)
                 else:
                     if snp.haps[ref_idx] == 0:
                         # reference allele is on "reference" haplotype
@@ -438,16 +501,18 @@ def write_output(f, region_list, snps, test_snp, test_snp_pos, region_read_count
     
     
     
-def get_genomewide_count(gdb, track):
-    stat = genome.trackstat.get_stats(gdb, track)
+def get_genomewide_count(h5file, chrom_list):
+    stat = chromstat.get_stats(gdb, chrom_list)
     return stat.sum
 
 
-def get_region_read_counts(dt, region_list):
+def get_region_read_counts(data_files, region_list):
     total_count = 0
 
     for region in region_list:
-        counts = dt.read_count_track.get_nparray(region.chrom, region.start, region.end)
+        node_name = "/%s" % region.chrom.name
+        node = data_files.read_count_h5.getNode(node_name)
+        counts = node[region.start-1:region.end]
         total_count += np.sum(counts)
 
     return total_count
@@ -455,15 +520,15 @@ def get_region_read_counts(dt, region_list):
 
 
 def get_target_regions(args, chrom, words):
-    """Parse start and end positions and return list of Coord objects representing
-    target region(s)."""
+    """Parse start and end positions and return list of Coord "
+    objects representing arget region(s)."""
 
     start_words = words[7].split(";")
     end_words = words[8].split(";")
     
     if len(start_words) != len(end_words):
-        raise genome.coord.CoordError("number of start (%d) and end (%d) positions "
-                                      "do not match" % (len(start_words), len(end_words)))
+        raise coord.CoordError("number of start (%d) and end (%d) positions "
+                               "do not match" % (len(start_words), len(end_words)))
     
     n_coord = len(start_words)
 
@@ -472,7 +537,7 @@ def get_target_regions(args, chrom, words):
         start = int(start_words[i])
         end = int(end_words[i])        
 
-        region = genome.coord.Coord(chrom, start, end)
+        region = coord.Coord(chrom, start, end)
         
         if args.target_region_size:
             if region.length() != args.target_region_size:
@@ -495,18 +560,18 @@ def get_target_regions(args, chrom, words):
 def main():
     args = parse_args()
 
-    gdb = genome.db.GenomeDB(assembly=args.assembly)
-
     write_header(sys.stdout)
-    
-    individual = args.individual.replace("NA","").replace("GM", "")
-    ind_idx = lookup_individual_index(args, individual)
-    
-    dt = DataTracks(gdb, args.track_prefix, args.pop)
 
-    genomewide_read_counts = get_genomewide_count(gdb, dt.read_count_track)
+    # find index of individual in list of samples
+    ind_idx = lookup_individual_index(args, args.individual)
     
-    chrom_dict = gdb.get_chromosome_dict()
+    data_files = DataFiles(args)
+
+    chrom_list = chromosome.get_all_chromosomes(args.chrom)
+    chrom_dict = chromosome.get_chromosome_dict(args.chrom)
+    
+    genomewide_read_counts = get_genomewide_count(data_files.read_count_h5,
+                                                  chrom_list)
 
     if args.input_file.endswith(".gz"):
         f = gzip.open(args.input_file)
@@ -533,7 +598,6 @@ def main():
             # no SNP defined on this line:
             write_NA_line(sys.stdout)
             continue
-
         
         chrom_name = words[0]
         chrom = chrom_dict[chrom_name]
@@ -545,10 +609,10 @@ def main():
         snp_alt_base = words[4]
         # TODO: check that SNP ref/alt match?
                     
-        snp_region = genome.coord.Coord(chrom, snp_pos, snp_pos)
+        snp_region = coord.Coord(chrom, snp_pos, snp_pos)
         
         # pull out all of the SNPs in the target region(s)
-        region_snps = get_region_snps(dt, region_list, ind_idx)
+        region_snps = get_region_snps(data_files, region_list, ind_idx)
 
         # pull out test SNP
         test_snp_list = get_region_snps(dt, [snp_region], ind_idx)
@@ -562,9 +626,9 @@ def main():
                 
             # pull out haplotype counts from linked heterozygous SNPs
             het_snps = get_het_snps(region_snps)
-            set_snp_counts(dt, region_list, het_snps, test_snp, args)
+            set_snp_counts(data_files, region_list, het_snps, test_snp, args)
 
-        region_read_counts = get_region_read_counts(dt, region_list)
+        region_read_counts = get_region_read_counts(data_files, region_list)
 
         write_output(sys.stdout, region_list, het_snps, test_snp, snp_pos,
                      region_read_counts, genomewide_read_counts)

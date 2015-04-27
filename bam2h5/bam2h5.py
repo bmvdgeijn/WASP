@@ -33,7 +33,7 @@ Reads that overlap known indels are not included in allele-specific
 counts.
 
 
-usage: bam2h5 OPTIONS BAM_FILE1 [BAM_FILE2 ...]
+usage: bam2h5.py OPTIONS BAM_FILE1 [BAM_FILE2 ...]
 
 BAM Files:
      Aligned reads are read from one or more BAM files. The provided

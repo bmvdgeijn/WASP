@@ -402,6 +402,55 @@ char *util_gzgets_line(gzFile gzf) {
   return line;
 }
 
+
+/**
+ * Reads a single line from provided the gzfile handle into the provided
+ * buffer. The buffer memory is reallocated as required and the buffer size
+ * is set appropriately. Newlines chars are replaced with terminating '\0'. 
+ * Returns the length of the string read from file (typically one less than 
+ * number of bytes read because newline replaced with '\0') or -1 if at EOF.
+ */
+size_t util_gzgetline(gzFile gzf, char **lineptr, size_t *size) {
+  char c;
+  size_t i;
+
+  i = 0;
+  while((c = gzgetc(gzf)) != -1) {
+    if(i >= *size) {
+      /* buffer is full, double its size */
+      *size = *size * 2;
+      /* fprintf(stderr, "expanding mem to %ld bytes\n", *size); */
+      *lineptr = my_realloc(*lineptr, *size);
+    }
+    
+    if(c == '\n') {
+      /* end of line, terminate  */
+      (*lineptr)[i] = '\0';
+      return i;
+    }
+
+    (*lineptr)[i] = c;
+    i++;
+  }
+
+  if(i == 0) {
+    /* at EOF */
+    return -1;
+  }
+
+  
+  /* did not hit a '\n' before EOF, add terminating '\0' to line 
+   * before returning it
+   */
+  if(i+1 >= *size) {
+    *lineptr = my_realloc(*lineptr, i+1);
+    *size = i+1;
+  }
+  (*lineptr)[i+1] = '\0';
+  
+  return i;
+}
+
 				    
 
 /**
@@ -493,27 +542,43 @@ char *util_str_ndup(const char *str, size_t n) {
 
 
 /** 
- * more efficient/practical version of strncpy that:
- * [1] does not zero-pad end of array
- * [2] returns length of dest string
- * [3] always null terminates by setting dest[n-1] to '\0'
+ * more practical version of strncpy that:
+ * [1] returns length of dest string
+ * [2] always null terminates by setting dest[n-1] to '\0'
  * 
  * This function still gives no indication that src string is
  * truncated, however.
  */
 size_t util_strncpy(char *dest, const char *src, size_t n) {
-  size_t i;
+  size_t i, len;
+  int src_end;
 
+  len = 0;
+  src_end = FALSE;
+  
   for(i = 0; i < n-1; i++) {
-    dest[i] = src[i];
-    if(src[i] == '\0') {
-      /* hit end of src string */
-      return i;
+    if(src_end) {
+      /* Continue NULL padding to end of dest buf with '\0'.
+       * This is to have consistent behaviour with strncpy and also
+       * HDF5 API seems to expect this. WHen HDF5 string written
+       * with non-null chars past terminating '\0', entire length of
+       * string buffer is printed by pytables (including unprintable 
+       * binary chars) when string retrieved.
+       */
+      dest[i] = '\0';
+    } else {		 
+      dest[i] = src[i];
+      if(src[i] == '\0') {
+	/* hit end of src string */
+	src_end = TRUE;
+      } else {
+	len += 1;
+      }
     }
   }
 
-  dest[i] = '\0';
-  return i;
+  dest[n-1] = '\0';
+  return len;
 }
 
 

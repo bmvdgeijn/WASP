@@ -2,6 +2,7 @@
 #include <zlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "util.h"
 #include "vcf.h"
@@ -10,10 +11,37 @@
 #define VCF_GTYPE_MISSING -1
 
 
+
 const char *vcf_fix_headers[] =
   {"#CHROM", "POS", "ID", "REF", "ALT", "QUAL",
    "FILTER", "INFO", "FORMAT"};
 
+
+
+/**
+ * Allocates memory for VCFInfo structure
+ * which is used for parsing VCF files.
+ */
+VCFInfo *vcf_info_new() {
+  VCFInfo *vcf_info;
+
+  vcf_info = my_malloc(sizeof(VCFInfo));
+
+  /* dynamic buffer used for reading lines (can grow)  */
+  vcf_info->buf_size = 1024;
+  vcf_info->buf = my_malloc(vcf_info->buf_size);
+
+  return vcf_info;
+}
+
+
+/** 
+ * free memory allocated for reading lines
+ */
+void vcf_info_free(VCFInfo *vcf_info) {
+  my_free(vcf_info->buf);
+  my_free(vcf_info);
+}
 
 
 void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
@@ -26,15 +54,17 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
 
   vcf_info->n_header_lines = 0;
   
-  while(1) {
-    line = util_gzgets_line(vcf_fh);
+  while(util_gzgetline(vcf_fh, &vcf_info->buf, &vcf_info->buf_size) != -1) {
 
+    /*
+    line = util_gzgets_line(vcf_fh);
     if(line == NULL) {
       my_err("%s:%d: could not read header information from file",
 	     __FILE__, __LINE__);
-
     }
-
+    */
+    line = vcf_info->buf;
+  
     if(util_str_starts_with(line, "##")) {
       /* header line */
       vcf_info->n_header_lines += 1;
@@ -43,7 +73,7 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
       /* this should be last header line that contains list of fixed fields */
       vcf_info->n_header_lines += 1;
 	
-      cur = line;
+      cur = vcf_info->buf;
       tok_num = 0;
       while((token = strsep(&cur, delim)) != NULL) {
 	if(tok_num < n_fix_header) {
@@ -55,11 +85,12 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
 	tok_num += 1;
       }
       vcf_info->n_samples = tok_num - n_fix_header;
+      /* my_free(line); */
       break;
     } else {
       my_err("expected last line in header to start with #CHROM");
     }
-    my_free(line);
+    /* my_free(line); */
   }
 }
 
@@ -97,8 +128,8 @@ int get_format_index(const char *format_str, const char *label) {
 }
 
 
-void parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
-		      char *cur) {
+void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
+			  char *cur) {
   int gt_idx, hap1, hap2, i, n;
   static int warn_phase = TRUE;
   long expect_haps, n_haps;
@@ -182,7 +213,7 @@ void parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 
 
 
-void parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
+void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
 		      char *cur) {
   char delim[] = " \t";
   char inner_delim[] = ":";
@@ -281,9 +312,9 @@ void parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
  *
  * Returns 0 on success, -1 if at EOF.
  */
-int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
+int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
 		  float *geno_probs, char *haplotypes) {
-  char *line, *cur, *token;
+  char *cur, *token;
   int n_fix_header, ref_len, alt_len;
   size_t tok_num;
   const char delim[] = " \t";
@@ -291,13 +322,11 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
   n_fix_header = sizeof(vcf_fix_headers) / sizeof(const char *);
 
   /* read a line */
-  line = util_gzgets_line(vcf_fh);
-
-  if(!line) {
+  if(util_gzgetline(vcf_fh, &vcf_info->buf, &vcf_info->buf_size) == -1) {
     return -1;
   }
   
-  cur = line;
+  cur = vcf_info->buf;
   tok_num = 0;
 
   /* chrom */
@@ -305,7 +334,7 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  util_strncpy(vcf_info->chrom, token, sizeof(vcf_info->chrom));
+  util_strncpy(snp->chrom, token, sizeof(snp->chrom));
   
   
   /* pos */
@@ -313,14 +342,14 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  vcf_info->pos = util_parse_long(token);
+  snp->pos = util_parse_long(token);
   
   /* ID */
   token = strsep(&cur, delim);
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  util_strncpy(vcf_info->id, token, sizeof(vcf_info->id));
+  util_strncpy(snp->name, token, sizeof(snp->name));
   
   /* ref */
   token = strsep(&cur, delim);
@@ -328,8 +357,7 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
   vcf_info->ref_len = strlen(token);
-  ref_len = util_strncpy(vcf_info->ref_allele, token,
-			 sizeof(vcf_info->ref_allele));
+  ref_len = util_strncpy(snp->allele1, token, sizeof(snp->allele1));
 
   if(ref_len != vcf_info->ref_len) {
     my_warn("truncating long allele (%ld bp) to %ld bp\n",
@@ -342,8 +370,7 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
   vcf_info->alt_len = strlen(token);
-  alt_len = util_strncpy(vcf_info->alt_allele, token,
-			 sizeof(vcf_info->alt_allele));
+  alt_len = util_strncpy(snp->allele2, token, sizeof(snp->allele2));
 
   if(alt_len != vcf_info->alt_len) {
     my_warn("truncating long allele (%ld bp) to %ld bp\n",
@@ -393,13 +420,15 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info,
     cur_copy = my_malloc(strlen(cur)+1);
     strcpy(cur_copy, cur);
     
-    parse_geno_probs(vcf_info, geno_probs, cur_copy);
+    vcf_parse_geno_probs(vcf_info, geno_probs, cur_copy);
     my_free(cur_copy);
 
-    parse_haplotypes(vcf_info, haplotypes, cur);
+    vcf_parse_haplotypes(vcf_info, haplotypes, cur);
   } else if(geno_probs) {
-    parse_geno_probs(vcf_info, geno_probs, cur);
+    vcf_parse_geno_probs(vcf_info, geno_probs, cur);
   } else if(haplotypes) {
-    parse_haplotypes(vcf_info, haplotypes, cur);
+    vcf_parse_haplotypes(vcf_info, haplotypes, cur);
   }
+
+  /* my_free(line); */
 }

@@ -7,10 +7,9 @@
 
 #include "memutil.h"
 #include "snptab.h"
-#include "vcf.h"
 #include "err.h"
 #include "util.h"
-
+#include "snp.h"
 
 
 /**
@@ -20,10 +19,11 @@
  * each chromosome, and be freed after use.
  *
  */
-SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name) {
+SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name,
+		    size_t max_record) {
   herr_t status;
   SNPTab *tab;
-  SNPDesc snp_desc;
+  SNP snp_desc;
 
   const char *field_names[] =
     {"name", "pos", "allele1", "allele2"};
@@ -34,9 +34,9 @@ SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name) {
   
   /* set datatypes for each field */
   tab->name_type = H5Tcopy(H5T_C_S1);
-  H5Tset_size(tab->name_type, SNPTAB_MAX_NAME);
+  H5Tset_size(tab->name_type, SNP_MAX_NAME);
   tab->allele_type = H5Tcopy(H5T_C_S1);
-  H5Tset_size(tab->allele_type, SNPTAB_MAX_ALLELE);    
+  H5Tset_size(tab->allele_type, SNP_MAX_ALLELE);    
   tab->field_type[0] = tab->name_type; /* name */
   tab->field_type[1] = H5T_NATIVE_LONG; /* pos */
   tab->field_type[2] = tab->allele_type; /* allele1 */
@@ -50,10 +50,10 @@ SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name) {
   tab->field_size[3] = sizeof(snp_desc.allele2);
 
   /* offsets of each field */
-  tab->field_offset[0] = HOFFSET(SNPDesc, name);
-  tab->field_offset[1] = HOFFSET(SNPDesc, pos);
-  tab->field_offset[2] = HOFFSET(SNPDesc, allele1);
-  tab->field_offset[3] = HOFFSET(SNPDesc, allele2);
+  tab->field_offset[0] = HOFFSET(SNP, name);
+  tab->field_offset[1] = HOFFSET(SNP, pos);
+  tab->field_offset[2] = HOFFSET(SNP, allele1);
+  tab->field_offset[3] = HOFFSET(SNP, allele2);
     
   /* title and name of table */
   tab->title = util_str_concat(chrom_name, " SNPs", NULL);  
@@ -62,9 +62,12 @@ SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name) {
   /* set chunk size and compression */
   tab->chunk_size = SNPTAB_CHUNK_SIZE;
   tab->compress = 1;
+
+  tab->n_record = 0;
+  tab->max_record = max_record;
   
   status = H5TBmake_table(tab->title, tab->h5file, tab->name,
-			  SNPTAB_N_FIELDS, 0,
+			  SNPTAB_N_FIELDS, tab->max_record,
 			  tab->record_size, field_names,
 			  tab->field_offset, tab->field_type,
 			  tab->chunk_size, NULL, tab->compress, NULL);
@@ -93,36 +96,27 @@ void snp_tab_free(SNPTab *tab) {
 /**
  * Appends row to table described by provided SNPTab datastructure.
  */
-void snp_tab_append_row(SNPTab *tab, SNPDesc *data) {
+void snp_tab_append_row(SNPTab *tab, SNP *data) {
   herr_t status;
-  hsize_t n_records;
+  hsize_t n_to_write;
 
-  n_records = 1;
+  n_to_write = 1;
 
-  status = H5TBappend_records(tab->h5file, tab->name,
-			      n_records, tab->record_size,
-			      tab->field_offset, tab->field_size,
-			      data);
+  /* status = H5TBappend_records(tab->h5file, tab->name, */
+  /* 			      n_records, tab->record_size, */
+  /* 			      tab->field_offset, tab->field_size, */
+  /* 			      data); */
 
+  status = H5TBwrite_records(tab->h5file, tab->name,
+			     tab->n_record, n_to_write,
+			     tab->record_size, tab->field_offset,
+			     tab->field_size, data);
+
+  tab->n_record += 1;
+  
   if(status < 0) {
     my_err("%s:%d: failed to write record to SNP table\n",
 	   __FILE__, __LINE__);
   }
 }
 
-
-/**
- * Copies data from VCF data structure and appends row to SNP table
- */
-void snp_tab_append_vcf_row(SNPTab *tab, VCFInfo *vcf) {
-  SNPDesc data;
-  
-  strncpy(data.name, vcf->id, SNPTAB_MAX_NAME);
-  data.pos = vcf->pos;
-
-  /* TODO: could warn when long alleles are truncated here... */
-  strncpy(data.allele1, vcf->ref_allele, SNPTAB_MAX_ALLELE);
-  strncpy(data.allele2, vcf->alt_allele, SNPTAB_MAX_ALLELE);
-  
-  snp_tab_append_row(tab, &data);
-}

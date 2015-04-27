@@ -113,11 +113,7 @@ import numpy as np
 import pysam
 
 import chromosome
-
-### TODO: remove these dependencies:
-###    import genome.db
-###    import genome.coord
-###    import genome.trackstat as trackstat
+import chromstat
 
 
 # codes used by pysam for aligned read CIGAR strings
@@ -670,18 +666,19 @@ def main():
             samfile.close()
 
     # set track statistics and close HDF5 files
-
-    #### TODO: fix this part with setting trackstats
     
-    sys.stderr.write("setting track statistics\n")
-    for track in output_tracks:
-        sys.stderr.write("%s\n" % track.name)
-        trackstat.set_stats(gdb, track)
-        track.close()        
-    snp_track.close()
-    snp_index_track.close()    
-    if hap_track:
-        hap_track.close()
+    sys.stderr.write("setting statistics for each chromosome\n")
+    for h5f in output_h5:
+        chromstat.set_stats(h5f, chrom_list)
+        h5f.close()
+
+    snp_tab_h5.close()
+    snp_index_h5.close()    
+    if hap_h5:
+        hap_h5.close()
+
+
+    sys.stderr.write("done\n")
 
     
 main()

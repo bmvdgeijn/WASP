@@ -79,8 +79,8 @@ BAM files must be sorted and indexed.
 
     Data type of stored counts; uint8 takes up less disk
     space but has a maximum value of 255 (default=uint8).
-     
- * --ref_as_counts REF_AS_COUNT_H5_FILE [required]
+
+* --ref_as_counts REF_AS_COUNT_H5_FILE [required]
 	 
      Path to HDF5 file to write counts of reads that match reference allele.
      Allele-specific counts are stored at the position of the SNP.
@@ -108,15 +108,15 @@ BAM files must be sorted and indexed.
     # write HDF5 read count files for individual 18505
 	INDIVIDUAL=18505
 	
-    ./bam2h5/bam2h5.py --chrom test_data/chromInfo.hg19.txt \
-	      --snp_index test_data/snp_index.h5 \
-	      --snp_tab test_data/snp_tab.h5 \
-	      --haplotype test_data/haps.h5 \
-	      --samples test_data/H3K27ac/samples.txt \
+    ./bam2h5/bam2h5.py --chrom chromInfo.hg19.txt \
+	      --snp_index snp_index.h5 \
+	      --snp_tab snp_tab.h5 \
+	      --haplotype haps.h5 \
+	      --samples H3K27ac/samples.txt \
 	      --individual $INDIVIDUAL \
-	      --ref_as_counts test_data/ref_as_counts.$INDIVIDUAL.h5 \
-	      --alt_as_counts test_data/alt_as_counts.$INDIVIDUAL.h5 \
-	      --other_as_counts test_data/other_as_counts.$INDIVIDUAL.h5 \
-	      --read_counts test_data/read_counts.$INDIVIDUAL.h5 \
-	      test_data/H3K27ac/$INDIVIDUAL.chr*.keep.rmdup.bam
+	      --ref_as_counts ref_as_counts.$INDIVIDUAL.h5 \
+	      --alt_as_counts alt_as_counts.$INDIVIDUAL.h5 \
+	      --other_as_counts other_as_counts.$INDIVIDUAL.h5 \
+	      --read_counts read_counts.$INDIVIDUAL.h5 \
+	      H3K27ac/$INDIVIDUAL.chr*.keep.rmdup.bam
 

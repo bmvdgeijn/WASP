@@ -1,5 +1,5 @@
 
-from chrom import Chromosome
+from chromosome import Chromosome
 
 class CoordError(Exception):
     """An exception indicating that something is wrong with a coordinate"""

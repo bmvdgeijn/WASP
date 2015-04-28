@@ -26,8 +26,8 @@ The test is described in
 Dependencies
 ----------
 
-The code depends on both [numpy](http://www.numpy.org) and [scipy](http://www.scipy.org). 
-The code also depends on [argparse](https://code.google.com/p/argparse/), which is included 
+The code depends on both [numpy](http://www.numpy.org) and
+[scipy](http://www.scipy.org).  The code also depends on [argparse](https://code.google.com/p/argparse/), which is included 
 by default in newer versions of python (>= 2.7).
 
 Input Format
@@ -58,7 +58,10 @@ The columns in the input file are as follows (example values are given in [*brac
 16. REGION.READ.COUNT - number of reads in region [*72*]
 17. GENOMEWIDE.READ.COUNT - total number of mapped, filtered reads for this individual [*26219310*]
 
-Note: We have written a set of scripts to generate these files, however they have several file and source code dependencies that may make them difficult to use. We have included the scripts ``import_bam_ref_nonref_counts.py``, ``extract_haplotype_read_counts.py`` and ``workflow/submit_import_10_IND_ref_nonref_counts.sh`` as examples of our workflow  and we are currently working to provide scripts with fewer dependencies.
+
+These input files can be generated using the script `extract_haplotype_read_counts.py`.
+
+An example workflow is provided in the file `../workflow.sh`.
 
 Some of the input files that we used for our paper can be downloaded from 
 [here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/). 

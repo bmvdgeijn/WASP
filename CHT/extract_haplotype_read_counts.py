@@ -16,57 +16,6 @@
 #
 #
 #
-"""
-usage: extract_haplotype_read_counts.py [-h] [--assembly ASSEMBLY]
-                                        [--target_region_size TARGET_REGION_SIZE]
-                                        [--sample_file SAMPLE_FILE]
-                                        [--homozygous_as_counts {zero,rand_hap,rand_allele}]
-                                        track_prefix pop individual input_file
-
-positional arguments:
-  track_prefix          prefix of tracks to extract reads from (e.g.
-                        10_IND/PolII/read_counts/PolII_18505)
-  pop                   population prefix for genotype tracks (YRI or CEU)
-  individual            individual to extract read counts for (e.g. 18505)
-  input_file            bed-like file to read coordinates of test SNP and
-                        target region from
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --assembly ASSEMBLY   genome assembly that reads were mapped to (e.g. hg18)
-  --target_region_size TARGET_REGION_SIZE
-                        override target region size that is specified by input
-                        file
-  --sample_file SAMPLE_FILE
-                        path to file containing ordered list of genotyped
-                        individuals
-  --homozygous_as_counts {zero,rand_hap,rand_allele}
-                        how to report AS counts at linked het SNPs when test
-                        SNP genotype is homozygous or unknown. zero (default):
-                        set allele-specific counts to 0; rand_hap: randomly
-                        choose one of the haplotypes to be 'reference';
-                        rand_allele: choose random allele at each SNP to be
-                        reference
-
-This script is used to generate input files for the combined haplotype
-test script.  It depends on a number of datafiles, which may make it
-difficult for other people to use. More specifically this script reads
-data from HDF5 files (a.k.a. tracks) and uses code from the 'genome'
-library (https://github.com/gmcvicker/genome) to access them.
-
-The script reads from the following HDF5 tracks. <PREFIX> and <POP> are specified by
-positional command line arguments "track_prefix", "pop":
-  <PREFIX>_AS_ref_count - number of allele-specific reads that match ref allele at each SNP
-  <PREFIX>_AS_alt_count - number of allele-specific reads that match alt allele at each SNP
-  <PREFIX>_AS_other_count - number of reads that match neither ref nor alt allele at each SNP
-  <PREFIX>_read_start_count - number of aligned reads that start at each position
-
-  impute2/snps - table with info about each SNP including alleles, and position
-  impute2/snp_index - mapping from genomic position to index in snps table
-  impute2/<POP>_geno_probs - genotype probabilites for each individual
-  impute2/<POP>_haplotypes - phasing information for alleles
-  
-"""
 
 import argparse
 import numpy as np
@@ -127,7 +76,16 @@ class DataFiles(object):
 
         
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="This script generates input "
+                                     "files for the combined haplotype "
+                                     "test. A single input file must be "
+                                     "generated for each individual. "
+                                     "This script reads genotypes and mapped "
+                                     "read counts from HDF5 files. HDF5 files "
+                                     "for genotypes and phasing can be created "
+                                     "using the snp2h5 program. HDF5 files for "
+                                     "read counts can be created using the "
+                                     "bam2h5.py script.")
     
     parser.add_argument('--target_region_size', 
                         help='override target region size that is '
@@ -150,10 +108,10 @@ def parse_args():
     parser.add_argument("--samples",
                         help="Path to text file containing a list of "
                         "individual identifiers. The ordering of individuals "
-                        "must be consistent with those in the haplotype files. "
-                        "The samples file is assumed to have one identifier per "
-                        "line in the first column (other columns are "
-                        "ignored).",
+                        "must be consistent with those in the haplotype and "
+                        "geno_prob files. The samples file is assumed to have "
+                        "one identifier per line in the first column (other "
+                        "columns are ignored).",
                         required=True,
                         metavar="SAMPLES_TXT_FILE",
                         default=None)
@@ -167,6 +125,13 @@ def parse_args():
                         required=True,
                         default=None)
     
+    parser.add_argument("--snp_tab",
+                        help="Path to HDF5 file to read SNP information "
+                        "from. Each row of SNP table contains SNP name "
+                        "(rs_id), position, allele1, allele2.",
+                        metavar="SNP_TABLE_H5_FILE",
+                        required=True)
+    
     parser.add_argument("--snp_index",
                         help="Path to HDF5 file containing SNP index. The "
                         "SNP index is used to convert the genomic position "
@@ -176,28 +141,24 @@ def parse_args():
                         required=True)
     
     parser.add_argument("--geno_prob",
-                        "Path to HDF5 file containing genotype probabilities",
+                        help="Path to HDF5 file containing genotype probabilities",
                         metavar="GENO_PROB_H5_FILE",
                         required=True)
     
     parser.add_argument("--haplotype",
-                        help=" Path to HDF5 file to read phased haplotypes "
-                        "from. If supplied, when read overlaps multiple SNPs "
-                        "counts are randomly assigned to ONE of the "
-                        "overlapping HETEROZYGOUS SNPs; if not supplied "
-                        "counts are randomly assigned to ONE of overlapping "
-                        "SNPs (regardless of their genotype).",
+                        help="Path to HDF5 file to read phased haplotypes "
+                        "from.",
                         metavar="HAPLOTYPE_H5_FILE",
+                        required=True,
                         default=None)
     
     parser.add_argument("--homozygous_as_counts",
-                        help="how to report AS counts at linked het SNPs when "
-                        "test SNP genotype is homozygous or unknown. "
-                        "zero (default): set allele-specific counts to 0; "
-                        "rand_hap: randomly choose one of the haplotypes "
-                        "to be 'reference'; "
-                        "rand_allele: choose random allele at each SNP to "
-                        "be reference", default="zero",
+                        help="how to report allele-specific read counts at "
+                        "linked het SNPs when test SNP genotype is homozygous "
+                        "or unknown. zero (default): set allele-specific counts "
+                        "to 0; rand_hap: randomly choose one of the haplotypes "
+                        "to be 'reference'; rand_allele: choose random allele "
+                        "at each SNP to be reference", default="zero",
                         choices=("zero", "rand_hap", "rand_allele"))
     
     parser.add_argument("--ref_as_counts",
@@ -230,7 +191,6 @@ def parse_args():
                        "of the mapped read.",
                        metavar="READ_COUNT_H5_FILE",
                        required=True)
-    
     
     parser.add_argument("input_file", 
                         help="bed-like file to read coordinates of "
@@ -267,7 +227,7 @@ def get_region_snps(data_files, region_list, ind_idx):
             raise CoordError("only regions on same chromosome are supported")
 
         # get index (which is row number in SNP tables) of SNPs in this region
-        snp_idx = snp_indx_tab[region.start-1:region.end]
+        snp_idx = snp_idx_tab[region.start-1:region.end]
         offsets = np.where(snp_idx != SNP_UNDEF)[0]
         test_snp = None
 
@@ -309,27 +269,22 @@ def get_het_snps(snp_list):
             het_snp_list.append(snp)
     
     return het_snp_list
-            
-            
+
         
 
 def lookup_individual_index(options, ind_name):
     """Gets the index of individual that is used 
     to lookup information in the genotype and haplotype tables"""
-
-    if options.sample_file is None:
-        sample_file = "/data/share/10_IND/IMPUTE/%s_samples.txt" % options.pop
-    else:
-        sample_file = options.sample_file
-
-    sys.stderr.write("reading list of individuals from %s\n" % sample_file)
-    f = open(sample_file)
+    sys.stderr.write("reading list of individuals from %s\n" % 
+                     options.samples)
+    f = open(options.samples)
 
     idx = 0
     for line in f:
         words = line.rstrip().split()
 
-        name = words[0].replace("NA", "")
+        # name = words[0].replace("NA", "")
+        name = words[0]
         if name == ind_name:
             f.close()
             return idx
@@ -337,7 +292,7 @@ def lookup_individual_index(options, ind_name):
         idx += 1
 
     raise ValueError("individual %s is not in samples file %s" %
-                     (ind_name, options.sample_file))
+                     (ind_name, options.samples))
 
 
 
@@ -502,7 +457,7 @@ def write_output(f, region_list, snps, test_snp, test_snp_pos, region_read_count
     
     
 def get_genomewide_count(h5file, chrom_list):
-    stat = chromstat.get_stats(gdb, chrom_list)
+    stat = chromstat.get_stats(h5file, chrom_list)
     return stat.sum
 
 
@@ -615,7 +570,7 @@ def main():
         region_snps = get_region_snps(data_files, region_list, ind_idx)
 
         # pull out test SNP
-        test_snp_list = get_region_snps(dt, [snp_region], ind_idx)
+        test_snp_list = get_region_snps(data_files, [snp_region], ind_idx)
         if len(test_snp_list) != 1:
             test_snp = None
             sys.stderr.write("WARNING: could not find test SNP at "
@@ -635,7 +590,7 @@ def main():
 
     sys.stderr.write("\n")
     f.close()
-    dt.close()
+    data_files.close()
 
         
 

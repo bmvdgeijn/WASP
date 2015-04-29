@@ -169,7 +169,7 @@ void usage(char **argv) {
 	  "         --geno_prob geno_probs.h5 \\\n"
 	  "         1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz\n"
 	  "\n"
-	  "\n", argv[0], argv[0], argv[0]);
+	  "\n", argv[0]);
 }
 
 
@@ -259,41 +259,6 @@ void parse_args(Arguments *args, int argc, char **argv) {
 
 
 
-/**
- * Returns appropriate chromosome for filename by looking for match
- * with chromosome name in filename. Returns NULL if no match found.
- */
-Chromosome *guess_chrom(char *filename, Chromosome *chroms,
-			int n_chrom) {
-  int i, j, longest_match, n1, n2;
-  Chromosome *match_chrom;
-
-  longest_match = 0;
-  match_chrom = NULL;
-  
-  for(i = 0; i < n_chrom; i++) {
-    n1 = strlen(chroms[i].name);
-
-    if(n1 > longest_match) {
-      /* is this longest-matching chromosome name?
-       * Use longest as best match because otherwise "chr1" will match
-       * filenames that contain "chr10", etc.
-       */
-      n2 = strlen(filename);
-      for(j = 0; j < n2 - n1 + 1; j++) {
-	if(strncmp(chroms[i].name, &filename[j], n1) == 0) {
-	  /* chromosome name is present in this filename */
-	  match_chrom = &chroms[i];
-	  longest_match = n1;
-	  break;
-	}
-      }
-    }
-  }
-
-  return match_chrom;
-}
-
 
 
 hid_t create_h5file(const char *filename) {
@@ -322,7 +287,7 @@ void init_h5vector(H5VectorInfo *info, hsize_t len, hid_t datatype,
   info->datatype = datatype;
 
   dim[0] = len;
-  chunk[0] = VEC_CHUNK;
+  chunk[0] = (VEC_CHUNK < len) ? VEC_CHUNK : len;
     
   /* define a matrix dataspace which can hold genotype probs, etc... */
 
@@ -595,7 +560,8 @@ void group_impute_files(char **all_files, int n_files, Chromosome *all_chrom,
     /* re-order hap files so chromosome order matches imp files
      */
     for(i = 0; i < *n_hap_files; i++) {
-      imp_chrom = guess_chrom(imp_files[i], all_chrom, n_chrom);
+      imp_chrom = chrom_guess_from_file(imp_files[i],
+					all_chrom, n_chrom);
 
       if(imp_chrom == NULL) {
 	my_err("%s:%d: could not guess chromosome name from "
@@ -605,7 +571,8 @@ void group_impute_files(char **all_files, int n_files, Chromosome *all_chrom,
       hap_files[i] = NULL;
       
       for(j = 0; j < *n_imp_files; j++) {
-	hap_chrom = guess_chrom(tmp_hap_files[i], all_chrom, n_chrom);
+	hap_chrom = chrom_guess_from_file(tmp_hap_files[i],
+					  all_chrom, n_chrom);
 
 	if(hap_chrom == NULL) {
 	  my_err("%s:%d: could not guess chromosome name from "
@@ -663,7 +630,8 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
   /* loop over input files, there should be one for each chromosome */
   for(i = 0; i < n_imp_files; i++) {
     /* guess chromosome file filename */
-    chrom = guess_chrom(imp_files[i], all_chroms, n_chrom);
+    chrom = chrom_guess_from_file(imp_files[i], all_chroms,
+				  n_chrom);
     if(chrom == NULL) {
       my_err("%s:%d: could not guess chromosome from filename '%s'\n",
 	     __FILE__, __LINE__, args->input_files[i]);
@@ -865,7 +833,8 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
   /* loop over input files, there should be one for each chromosome */
   for(i = 0; i < args->n_input_files; i++) {
     /* guess chromosome file filename */
-    chrom = guess_chrom(args->input_files[i], all_chroms, n_chrom);
+    chrom = chrom_guess_from_file(args->input_files[i],
+				  all_chroms, n_chrom);
     if(chrom == NULL) {
       my_err("%s:%d: could not guess chromosome from filename '%s'\n",
 	     __FILE__, __LINE__, args->input_files[i]);

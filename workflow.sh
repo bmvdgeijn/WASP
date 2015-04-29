@@ -10,6 +10,16 @@
 	      test_data/genotypes/chr*.hg19.impute2.gz \
 	      test_data/genotypes/chr*.hg19.impute2_haps.gz
 
+#
+# convert FASTA files to HDF5 format
+# Note the HDF5 sequence files are only used for GC content
+# correction part of CHT. This step can be ommitted if
+# GC-content correction is not used.
+#
+./snp2h5/fasta2h5 --chrom test_data/chromInfo.hg19.txt \
+	--seq test_data/seq.h5 \
+	/data/external_public/reference_genomes/hg19/chr*.fa.gz
+
 
 INDIVIDUAL=18505
 #

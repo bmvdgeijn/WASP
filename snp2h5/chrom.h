@@ -9,6 +9,9 @@ typedef struct {
 } Chromosome;
 
 
+Chromosome *chrom_guess_from_file(const char *filename,
+				  Chromosome *chroms,
+				  int n_chrom);
 
 void chrom_array_free(Chromosome *chrom, int n_chrom);
 Chromosome *chrom_copy(const Chromosome *chrom);

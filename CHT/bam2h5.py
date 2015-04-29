@@ -630,9 +630,7 @@ def main():
         alt_carray = get_carray(alt_count_h5, chrom)
         other_carray = get_carray(other_count_h5, chrom)
         read_count_carray = get_carray(read_count_h5, chrom)
-
-        sys.stderr.write("chrom.name: %s, chrom.length: %d, dtype:%s\n" %
-                         (chrom.name, chrom.length, repr(dtype)))
+        
         ref_array = np.zeros(chrom.length, dtype)
         alt_array = np.zeros(chrom.length, dtype)
         other_array = np.zeros(chrom.length, dtype)

@@ -1,7 +1,7 @@
 ## bam2h5.py
 
 bam2h5.py is a python program for converting BAM
-files read count HDF5 files. Specifically, bam2h5.py counts the number
+files to read count HDF5 files. Specifically, bam2h5.py counts the number
 of reads that match the alternate and reference allele at every SNP in the provided
 SNP HDF5 data files. The read counts are stored in specified HDF5 output
 files.

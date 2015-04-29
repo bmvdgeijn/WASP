@@ -21,42 +21,51 @@
 	/data/external_public/reference_genomes/hg19/chr*.fa.gz
 
 
-INDIVIDUAL=18505
 #
-# read BAM files for individual 18505 and write read counts to
-# HDF5 files
+# Loop over all of the individuals
 #
-./bam2h5/bam2h5.py --chrom test_data/chromInfo.hg19.txt \
+SAMPLES_FILE=test_data/H3K27ac/samples.txt
+
+for INDIVIDUAL in $(cat $SAMPLES_FILE)
+do
+    echo $INDIVIDUAL
+
+    #
+    # read BAM files for this individual and write read counts to
+    # HDF5 files
+    #
+    python CHT/bam2h5.py --chrom test_data/chromInfo.hg19.txt \
 	      --snp_index test_data/snp_index.h5 \
 	      --snp_tab test_data/snp_tab.h5 \
 	      --haplotype test_data/haps.h5 \
-	      --samples test_data/H3K27ac/samples.txt \
+	      --samples $SAMPLES_FILE \
 	      --individual $INDIVIDUAL \
-	      --ref_as_counts test_data/ref_as_counts.$INDIVIDUAL.h5 \
-	      --alt_as_counts test_data/alt_as_counts.$INDIVIDUAL.h5 \
-	      --other_as_counts test_data/other_as_counts.$INDIVIDUAL.h5 \
-	      --read_counts test_data/read_counts.$INDIVIDUAL.h5 \
+	      --ref_as_counts test_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
+	      --alt_as_counts test_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
+	      --other_as_counts test_data/H3K27ac/other_as_counts.$INDIVIDUAL.h5 \
+	      --read_counts test_data/H3K27ac/read_counts.$INDIVIDUAL.h5 \
 	      test_data/H3K27ac/$INDIVIDUAL.chr*.keep.rmdup.bam
 
 
-#
-# create CHT input file for individual 18505
-#
-python CHT/extract_haplotype_read_counts.py \
+    #
+    # create CHT input file for this individual
+    #
+    python CHT/extract_haplotype_read_counts.py \
        --chrom test_data/chromInfo.hg19.txt \
        --snp_index test_data/snp_index.h5 \
        --snp_tab test_data/snp_tab.h5 \
        --geno_prob test_data/geno_probs.h5 \
        --haplotype test_data/haps.h5 \
-       --samples test_data/H3K27ac/samples.txt \
+       --samples $SAMPLES_FILE \
        --individual $INDIVIDUAL \
-       --ref_as_counts test_data/ref_as_counts.$INDIVIDUAL.h5 \
-       --alt_as_counts test_data/alt_as_counts.$INDIVIDUAL.h5 \
-       --other_as_counts test_data/other_as_counts.$INDIVIDUAL.h5 \
-       --read_counts test_data/read_counts.$INDIVIDUAL.h5 \
+       --ref_as_counts test_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
+       --alt_as_counts test_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
+       --other_as_counts test_data/H3K27ac/other_as_counts.$INDIVIDUAL.h5 \
+       --read_counts test_data/H3K27ac/read_counts.$INDIVIDUAL.h5 \
        test_data/H3K27ac/chr22.peaks.txt \
        > test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.txt
 
+done
 
 
 #

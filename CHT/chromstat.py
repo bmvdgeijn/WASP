@@ -63,7 +63,7 @@ class ChromStats(object):
 
 
 
-def calc_stats(h5f, chrom_list):
+def calc_stats(h5f, chrom_list, verbose=False):
     """Calculates stats for each chromosome in provided list as well
     as combined stats."""
     
@@ -76,7 +76,8 @@ def calc_stats(h5f, chrom_list):
             node = h5f.getNode("/%s" % chrom.name)
             vals = node[:]
             chrom_stat.set_from_vals(vals)
-            sys.stderr.write("%s %s\n" % (str(chrom), str(chrom_stat)))
+            if verbose:
+                sys.stderr.write("%s %s\n" % (str(chrom), str(chrom_stat)))
         else:
             sys.stderr.write("skipping chromosome %s because "
                              "not present in HDF5 file" % chrom.name)
@@ -86,7 +87,7 @@ def calc_stats(h5f, chrom_list):
     return combined
 
 
-def set_stats(h5f, chrom_list):
+def set_stats(h5f, chrom_list, verbose=False):
     """Calculates stats for each chromosome and entire track and
     stores them as attributes on the chromosome nodes. The
     provided HDF5 file handle must have been opened in append mode"""
@@ -107,7 +108,8 @@ def set_stats(h5f, chrom_list):
             node.attrs.sum = chrom_stat.sum
             node.flush()
 
-            sys.stderr.write("%s %s\n" % (str(chrom), str(chrom_stat)))
+            if verbose:
+                sys.stderr.write("%s %s\n" % (str(chrom), str(chrom_stat)))
             combined.add(chrom_stat)
         else:
             sys.stderr.write("skipping chromosome %s because "

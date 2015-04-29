@@ -23,7 +23,8 @@
 
 INDIVIDUAL=18505
 #
-# read BAM files for individual 18505 and write read counts to HDF5 files
+# read BAM files for individual 18505 and write read counts to
+# HDF5 files
 #
 ./bam2h5/bam2h5.py --chrom test_data/chromInfo.hg19.txt \
 	      --snp_index test_data/snp_index.h5 \
@@ -39,7 +40,7 @@ INDIVIDUAL=18505
 
 
 #
-# create combined haplotype test input file for individual 18505
+# create CHT input file for individual 18505
 #
 python CHT/extract_haplotype_read_counts.py \
        --chrom test_data/chromInfo.hg19.txt \
@@ -54,8 +55,18 @@ python CHT/extract_haplotype_read_counts.py \
        --other_as_counts test_data/other_as_counts.$INDIVIDUAL.h5 \
        --read_counts test_data/read_counts.$INDIVIDUAL.h5 \
        test_data/H3K27ac/chr22.peaks.txt \
-       > test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.h5
+       > test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.txt
 
 
 
+#
+# Adjust read counts in CHT files(first make files containing lists of
+# input and output files)
+#
+IN_FILE=test_data/H3K27ac/input_files.txt
+OUT_FILE=test_data/H3K27ac/output_files.txt
+ls test_data/H3K27ac/haplotype_read_counts* > $IN_FILE
+cat $IN_FILE | sed 's/.txt$/.adjusted.txt/' >  $OUT_FILE
+
+python CHT/update_total_depth.py --seq test_data/seq.h5 $IN_FILE $OUT_FILE
 

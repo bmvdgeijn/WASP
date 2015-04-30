@@ -17,16 +17,6 @@
 #
 #
 """
-usage: update_total_depth.py input_file_list output_directory
-
-positional arguments:
-  input_file_list       name of the .txt file containing a list of files for input
-  out_directory         directory to output the updated files
-
-optional arguments:
-  None
-
-
 This script updates the expected read depths of the input files 
 for the Combined Haplotype Test. GC content biases and peakiness 
 of the data (potentially caused by differences in ChIP efficiency 
@@ -94,7 +84,7 @@ def parse_options():
 
 def main():
     args = parse_options()
-    inlist = [i for i in open(args.infile_list, "r")]
+    inlist = [line.strip() for line in open(args.infile_list, "r")]
 
     for i in inlist:
         sys.stderr.write(i + "\n")
@@ -113,7 +103,8 @@ def main():
     if args.fit_out_file:
         write_splines(coefs_list,args.fit_out_file)
     else:
-        outlist = [i for i in open(args.outfile_list,"r")]
+        outlist = [line.strip() for 
+                   line in open(args.outfile_list,"r")]
         update_totals(inlist, outlist, count_table, coefs_list,
                       keep_list)
 
@@ -122,12 +113,13 @@ def main():
     
 def open_files(file_list, r_w):
     files=[]
+    
     for f in file_list:
-        split_name = f.strip().split(".")
-        if f.strip()[-3:] == ".gz":
-            files.append(gzip.open(f.strip(),r_w))
+        if f.endswith(".gz"):
+            files.append(gzip.open(f, r_w))
         else:
-            files.append(open(f.strip(),r_w))
+            files.append(open(f,r_w))
+    
     return(files)
 
 
@@ -158,7 +150,7 @@ def get_at_gc_count(seq_h5, chrm, start, end):
 
     
 def load_data(inlist, seq_h5_filename, min_counts, skips):
-    infiles = open_files(inlist,"r")
+    infiles = open_files(inlist, "r")
 
     seq_h5 = tables.openFile(seq_h5_filename, "r")
     
@@ -227,6 +219,7 @@ def load_data(inlist, seq_h5_filename, min_counts, skips):
     seq_h5.close()
     
     return count_table, keep_list
+
 
 
 def read_splines(fit_in_file):
@@ -347,7 +340,7 @@ def update_totals(inlist, outlist, count_table, coefs_table,
                     has_NAs=True
                     break
 
-                adj_tot = calc_adjusted_totals(count_table[count_row,0], count_table[count_row,1],coefs_table[ind])
+                adj_tot = calc_adjusted_totals(count_table[count_row,0], count_table[count_row, 1], coefs_table[ind])
                 adj_tot_list.append(max(adj_tot, -1000000))
                 
             for ind in range(len(infiles)):

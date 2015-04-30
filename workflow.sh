@@ -1,5 +1,6 @@
 #
-# convert snp files to HDF5 format
+# Convert SNP files to HDF5 format. This program can be used
+# on output from impute2 or on VCF files
 #
 ./snp2h5/snp2h5 --chrom test_data/chromInfo.hg19.txt \
 	      --format impute \
@@ -11,7 +12,7 @@
 	      test_data/genotypes/chr*.hg19.impute2_haps.gz
 
 #
-# convert FASTA files to HDF5 format
+# Convert FASTA files to HDF5 format.
 # Note the HDF5 sequence files are only used for GC content
 # correction part of CHT. This step can be ommitted if
 # GC-content correction is not used.
@@ -63,19 +64,42 @@ do
        --other_as_counts test_data/H3K27ac/other_as_counts.$INDIVIDUAL.h5 \
        --read_counts test_data/H3K27ac/read_counts.$INDIVIDUAL.h5 \
        test_data/H3K27ac/chr22.peaks.txt \
-       > test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.txt
+       | gzip > test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.txt.gz
 
 done
 
 
 #
-# Adjust read counts in CHT files(first make files containing lists of
-# input and output files)
+# Adjust read counts in CHT files by modeling
+# relationship between read depth and GC content & peakiness
+# in each sample.
+# (first make files containing lists of input and output files)
 #
 IN_FILE=test_data/H3K27ac/input_files.txt
 OUT_FILE=test_data/H3K27ac/output_files.txt
-ls test_data/H3K27ac/haplotype_read_counts* > $IN_FILE
-cat $IN_FILE | sed 's/.txt$/.adjusted.txt/' >  $OUT_FILE
+ls test_data/H3K27ac/haplotype_read_counts* | grep -v adjusted > $IN_FILE
+cat $IN_FILE | sed 's/.txt/.adjusted.txt/' >  $OUT_FILE
 
 python CHT/update_total_depth.py --seq test_data/seq.h5 $IN_FILE $OUT_FILE
 
+
+#
+# Adjust heterozygote probabilities in CHT files to account for
+# possible genotyping errors. Total counts of reference and
+# alternative alleles are used to adjust the probability. In
+# this example we just provide the same H3K27ac read counts, however
+# you could also use read counts combined across many different
+# experiments or (perhaps ideally) from DNA sequencing.
+#
+for INDIVIDUAL in $(cat $SAMPLES_FILE)
+do
+    IN_FILE=test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.adjusted.txt.gz
+    OUT_FILE=test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.adjusted.hetp.txt.gz
+    
+    python CHT/update_het_probs.py \
+	   --ref_as_counts test_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5  \
+	   --alt_as_counts test_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
+	   $IN_FILE $OUT_FILE
+
+    
+done

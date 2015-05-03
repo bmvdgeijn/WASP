@@ -104,11 +104,20 @@ done
 
 
 #
-# Estimate overdispersion parameters for allele-specific test
+# Estimate overdispersion parameters for allele-specific test (beta binomial)
 #
 IN_FILE=test_data/H3K27ac/cht_input_files.txt
 ls test_data/H3K27ac/haplotype_read_counts*.adjusted.hetp.txt.gz > $IN_FILE
 OUT_FILE=test_data/H3K27ac/cht_as_coef.txt
 
 python CHT/fit_as_coefficients.py $IN_FILE $OUT_FILE
+
+
+#
+# Estimate overdispersion parameters for association test (beta-negative binomial)
+#
+IN_FILE=test_data/H3K27ac/cht_input_files.txt
+OUT_FILE=test_data/H3K27ac/cht_bnb_coef.txt
+
+python CHT/fit_bnb_coefficients.py --min_counts 50 --min_as_counts 10 $IN_FILE $OUT_FILE
 

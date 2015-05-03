@@ -22,9 +22,9 @@
 	/data/external_public/reference_genomes/hg19/chr*.fa.gz
 
 
-#
-# Loop over all of the individuals
-#
+
+
+# loop over all individuals in samples file
 SAMPLES_FILE=test_data/H3K27ac/samples.txt
 
 for INDIVIDUAL in $(cat $SAMPLES_FILE)
@@ -63,7 +63,7 @@ do
        --alt_as_counts test_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
        --other_as_counts test_data/H3K27ac/other_as_counts.$INDIVIDUAL.h5 \
        --read_counts test_data/H3K27ac/read_counts.$INDIVIDUAL.h5 \
-       test_data/H3K27ac/chr22.peaks.txt \
+       test_data/H3K27ac/chr22.peaks.txt.gz \
        | gzip > test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.txt.gz
 
 done
@@ -99,7 +99,16 @@ do
     python CHT/update_het_probs.py \
 	   --ref_as_counts test_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5  \
 	   --alt_as_counts test_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
-	   $IN_FILE $OUT_FILE
-
-    
+	   $IN_FILE $OUT_FILE    
 done
+
+
+#
+# Estimate overdispersion parameters for allele-specific test
+#
+IN_FILE=test_data/H3K27ac/cht_input_files.txt
+ls test_data/H3K27ac/haplotype_read_counts*.adjusted.hetp.txt.gz > $IN_FILE
+OUT_FILE=test_data/H3K27ac/cht_as_coef.txt
+
+python CHT/fit_as_coefficients.py $IN_FILE $OUT_FILE
+

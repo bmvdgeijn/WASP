@@ -1,9 +1,48 @@
 
 #include <limits.h>
+#include <string.h>
 
 #include "memutil.h"
 #include "chrom.h"
 #include "util.h"
+
+
+
+/**
+ * Returns appropriate chromosome for filename by looking for match
+ * with chromosome name in filename. Returns NULL if no match found.
+ */
+Chromosome *chrom_guess_from_file(const char *filename,
+				  Chromosome *chroms,
+				  int n_chrom) {
+  int i, j, longest_match, n1, n2;
+  Chromosome *match_chrom;
+
+  longest_match = 0;
+  match_chrom = NULL;
+  
+  for(i = 0; i < n_chrom; i++) {
+    n1 = strlen(chroms[i].name);
+
+    if(n1 > longest_match) {
+      /* is this longest-matching chromosome name?
+       * Use longest as best match because otherwise "chr1" will match
+       * filenames that contain "chr10", etc.
+       */
+      n2 = strlen(filename);
+      for(j = 0; j < n2 - n1 + 1; j++) {
+	if(strncmp(chroms[i].name, &filename[j], n1) == 0) {
+	  /* chromosome name is present in this filename */
+	  match_chrom = &chroms[i];
+	  longest_match = n1;
+	  break;
+	}
+      }
+    }
+  }
+
+  return match_chrom;
+}
 
 
 

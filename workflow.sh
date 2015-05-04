@@ -23,11 +23,11 @@
 
 
 
-
 # loop over all individuals in samples file
-SAMPLES_FILE=test_data/H3K27ac/samples.txt
+H3K27AC_SAMPLES_FILE=test_data/H3K27ac/samples.txt
+ALL_SAMPLES_FILE=test_data/genotypes/YRI_samples.txt
 
-for INDIVIDUAL in $(cat $SAMPLES_FILE)
+for INDIVIDUAL in $(cat $H3K27AC_SAMPLES_FILE)
 do
     echo $INDIVIDUAL
 
@@ -39,7 +39,7 @@ do
 	      --snp_index test_data/snp_index.h5 \
 	      --snp_tab test_data/snp_tab.h5 \
 	      --haplotype test_data/haps.h5 \
-	      --samples $SAMPLES_FILE \
+	      --samples $ALL_SAMPLES_FILE \
 	      --individual $INDIVIDUAL \
 	      --ref_as_counts test_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
 	      --alt_as_counts test_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
@@ -57,7 +57,7 @@ do
        --snp_tab test_data/snp_tab.h5 \
        --geno_prob test_data/geno_probs.h5 \
        --haplotype test_data/haps.h5 \
-       --samples $SAMPLES_FILE \
+       --samples $ALL_SAMPLES_FILE \
        --individual $INDIVIDUAL \
        --ref_as_counts test_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
        --alt_as_counts test_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
@@ -91,7 +91,7 @@ python CHT/update_total_depth.py --seq test_data/seq.h5 $IN_FILE $OUT_FILE
 # you could also use read counts combined across many different
 # experiments or (perhaps ideally) from DNA sequencing.
 #
-for INDIVIDUAL in $(cat $SAMPLES_FILE)
+for INDIVIDUAL in $(cat $H3K27AC_SAMPLES_FILE)
 do
     IN_FILE=test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.adjusted.txt.gz
     OUT_FILE=test_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.adjusted.hetp.txt.gz
@@ -101,7 +101,6 @@ do
 	   --alt_as_counts test_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
 	   $IN_FILE $OUT_FILE    
 done
-
 
 
 CHT_IN_FILE=test_data/H3K27ac/cht_input_files.txt

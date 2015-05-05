@@ -169,6 +169,17 @@ void usage(char **argv) {
 	  "         --geno_prob geno_probs.h5 \\\n"
 	  "         1000G/supporting/genotype_likelihoods/shapeit2/ALL.chr*.gl.vcf.gz\n"
 	  "\n"
+	  "  # read genotype probabilities and haplotypes from IMPUTE2\n"
+	  "  # output files and write to HDF5 files\n"
+	  " snp2h5 --chrom data/ucsc/hg19/chromInfo.txt\n"
+	  "    --format impute\n"
+	  "    --geno_prob geno_probs.h5 \n"
+	  "    --snp_index snp_index.h5 \n"
+	  "    --snp_tab snp_tab.h5 \n"
+	  "    --haplotype haps.h5 \n"
+	  "    genotypes/chr*.hg19.impute2.gz \n"
+	  "    genotypes/chr*.hg19.impute2_haps.gz\n"
+	  "\n"
 	  "\n", argv[0]);
 }
 
@@ -335,7 +346,7 @@ void init_h5matrix(H5MatrixInfo *info,
   herr_t status;
 
   fprintf(stderr, "initializing HDF5 matrix with dimension: "
-	  "(%ld, %ld)\n", n_row, n_col);
+	  "(%zu, %zu)\n", (size_t)n_row, (size_t)n_col);
   
   info->n_row = n_row;
   info->n_col = n_col;
@@ -534,7 +545,6 @@ void group_impute_files(char **all_files, int n_files, Chromosome *all_chrom,
   tmp_hap_files = my_malloc(sizeof(char *) * n_files);
   
   for(i = 0; i < n_files; i++) {
-    fprintf(stderr, "     '%s'\n", all_files[i]);
     if(util_str_ends_with(all_files[i], ".impute2.gz")) {
       imp_files[*n_imp_files] = util_str_dup(all_files[i]);
       *n_imp_files += 1;
@@ -571,7 +581,7 @@ void group_impute_files(char **all_files, int n_files, Chromosome *all_chrom,
       hap_files[i] = NULL;
       
       for(j = 0; j < *n_imp_files; j++) {
-	hap_chrom = chrom_guess_from_file(tmp_hap_files[i],
+	hap_chrom = chrom_guess_from_file(tmp_hap_files[j],
 					  all_chrom, n_chrom);
 
 	if(hap_chrom == NULL) {
@@ -583,12 +593,14 @@ void group_impute_files(char **all_files, int n_files, Chromosome *all_chrom,
 	if(strcmp(hap_chrom->name, imp_chrom->name) == 0) {
 	  /* found match */
 	  hap_files[i] = tmp_hap_files[j];
+	  fprintf(stderr, "     %s pairs with %s\n", imp_files[i], tmp_hap_files[j]);
 	  break;
 	}
       }
       if(hap_files[i] == NULL) {
+	fprintf(stderr, "     '%s' pairs with ???\n", imp_files[i]);
 	my_err("%s:%d: could not find hap file for chrom %s\n",
-	       __FILE__, __LINE__, imp_chrom[i]);
+	       __FILE__, __LINE__, imp_chrom->name);
       }
     }
   }
@@ -752,10 +764,11 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	  my_err("%s:%d: failed to set gzbuffer size\n",
 		 __FILE__, __LINE__);
 	}
-      
+	  
 	fprintf(stderr, "parsing file and writing to HDF5 files\n");
 
 	int line_num = 0;
+	long missing = 0;
 	while(impute_read_line(gzf, impute_info, &snp,
 			       NULL, haplotypes) != -1) {
 
@@ -770,9 +783,16 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	    /* ignore SNPs that are present in haps file but missing from
 	     * genotype file. 
 	     */
-	    my_warn("%s:%d: snp at position %ld present in "
-		    "impute2_haps file but not in impute2 file\n",
-		    __FILE__, __LINE__, snp.pos);	    
+	    
+	    if(!missing) {
+	      my_warn("%s:%d: SNP %s as position %ld is present in "
+		      "impute2_haps file but not in impute2 file\n",
+		      __FILE__, __LINE__, snp.name, snp.pos);
+	    }
+
+	    missing += 1;
+
+	    
 	  } else {
 	    write_h5matrix_row(haplotype_info, row, haplotypes);
 	  }
@@ -783,6 +803,14 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	    fprintf(stderr, ".");
 	  }
 	}
+	
+	fprintf(stderr, "\n");
+	if(missing) {
+	  my_warn("%s:%d: %ld SNPs were present in "
+		  "impute2_haps file but not in impute2 file\n",
+		  __FILE__, __LINE__, missing);
+	}
+
 	
 	gzclose(gzf);
 

@@ -534,7 +534,6 @@ void group_impute_files(char **all_files, int n_files, Chromosome *all_chrom,
   tmp_hap_files = my_malloc(sizeof(char *) * n_files);
   
   for(i = 0; i < n_files; i++) {
-    fprintf(stderr, "     '%s'\n", all_files[i]);
     if(util_str_ends_with(all_files[i], ".impute2.gz")) {
       imp_files[*n_imp_files] = util_str_dup(all_files[i]);
       *n_imp_files += 1;
@@ -583,12 +582,17 @@ void group_impute_files(char **all_files, int n_files, Chromosome *all_chrom,
 	if(strcmp(hap_chrom->name, imp_chrom->name) == 0) {
 	  /* found match */
 	  hap_files[i] = tmp_hap_files[j];
+
+	  fprintf(stderr, "     %s => %s\n", imp_files[i], tmp_hap_files[j]);
+
+	  
 	  break;
 	}
       }
       if(hap_files[i] == NULL) {
+	fprintf(stderr, "     '%s' => ?\n", imp_files[i]);
 	my_err("%s:%d: could not find hap file for chrom %s\n",
-	       __FILE__, __LINE__, imp_chrom[i]);
+	       __FILE__, __LINE__, imp_chrom->name);
       }
     }
   }
@@ -756,6 +760,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	fprintf(stderr, "parsing file and writing to HDF5 files\n");
 
 	int line_num = 0;
+	long missing = 0;
 	while(impute_read_line(gzf, impute_info, &snp,
 			       NULL, haplotypes) != -1) {
 
@@ -770,9 +775,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	    /* ignore SNPs that are present in haps file but missing from
 	     * genotype file. 
 	     */
-	    my_warn("%s:%d: snp at position %ld present in "
-		    "impute2_haps file but not in impute2 file\n",
-		    __FILE__, __LINE__, snp.pos);	    
+	    missing += 1;
 	  } else {
 	    write_h5matrix_row(haplotype_info, row, haplotypes);
 	  }
@@ -783,6 +786,13 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	    fprintf(stderr, ".");
 	  }
 	}
+
+	if(missing) {
+	  my_warn("%s:%d: %ld SNPs were present in "
+		  "impute2_haps file but not in impute2 file\n",
+		  __FILE__, __LINE__, missing);
+	}
+
 	
 	gzclose(gzf);
 

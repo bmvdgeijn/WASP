@@ -50,13 +50,12 @@ compressed binary file format.  For this reason, the Combined
 Haplotype Test requires the HDF5 library
 (version 1.6 or higher) and [PyTables](http://www.pytables.org/).
 
-The easiest way to install HDF5, numpy, scipy and
-Pytables is to download and install
-[Anaconda](http://continuum.io/downloads).
-
-*Installing Anaconda is highly recommended.*  After installing
-Anaconda, the only other dependency that must be downloaded
-and installed is [pysam](https://github.com/pysam-developers/pysam).
+The easiest way to install HDF5, numpy, scipy and Pytables is to
+download and install
+[Anaconda](http://continuum.io/downloads). *Installing Anaconda is
+highly recommended.* After installing Anaconda, the only
+dependency that must be downloaded and installed is
+[pysam](https://github.com/pysam-developers/pysam).
 
 
 ## Installation

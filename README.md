@@ -70,22 +70,25 @@ and installed is [pysam](https://github.com/pysam-developers/pysam).
 on Linux or OSX you can add the following to your .bashrc or .profile (replace
 $HOME/anaconda with your Anaconda installation directory):
 
-    export LD_LIBRARY_PATH=$HOME/anaconda/lib:$LD_LIBRARY_PATH
+		export LD_LIBRARY_PATH=$HOME/anaconda/lib:$LD_LIBRARY_PATH
 
-4. Clone the WASP repository from github:
+4. Clone or download the WASP repository from github:
 
-    git clone https://github.com/bmvdgeijn/WASP.git
+		# clone the WASP repository
+		git clone https://github.com/bmvdgeijn/WASP.git
 
-(Alternatively download the respository instead):
-	wget https://github.com/bmvdgeijn/WASP/archive/master.zip
+		# Alternatively download the respository instead:
+		wget https://github.com/bmvdgeijn/WASP/archive/master.zip
 
 5. Compile snp2h5 (optional: only needs to be done if you plan to use
 snp2h5 or fasta2h5). First modify the snp2h5/Makefile to point to the
-Anaconda (or HDF5) installation directory. For example:
-    HDF_INSTALL = $(HOME)/anaconda
+		Anaconda (or HDF5) installation directory. For example:
 
-Now compile snp2h5 using make:
-    cd snp2h5
-    make
+		HDF_INSTALL = $(HOME)/anaconda
+
+	Now compile snp2h5 using make:
+
+		cd snp2h5
+		make
 
 

@@ -23,13 +23,6 @@ The test is described in
 [our paper](http://biorxiv.org/content/early/2014/11/07/011221): van de Geijn B\*, McVicker G\*, Gilad Y, Pritchard JK. "WASP: allele-specific software for robust discovery of molecular quantitative trait loci"
 
 
-Dependencies
-----------
-
-The code depends on both [numpy](http://www.numpy.org) and
-[scipy](http://www.scipy.org).  The code also depends on [argparse](https://code.google.com/p/argparse/), which is included 
-by default in newer versions of python (>= 2.7).
-
 Input Format
 ----------
 
@@ -61,7 +54,7 @@ The columns in the input file are as follows (example values are given in [*brac
 
 These input files can be generated using the script `extract_haplotype_read_counts.py`.
 
-An example workflow is provided in the file `../workflow.sh`.
+An example workflow is provided in the file `../exapmle_workflow.sh`.
 
 Some of the input files that we used for our paper can be downloaded from 
 [here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/). 

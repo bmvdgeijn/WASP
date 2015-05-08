@@ -72,12 +72,11 @@ $HOME/anaconda with your Anaconda installation directory):
 
     export LD_LIBRARY_PATH=$HOME/anaconda/lib:$LD_LIBRARY_PATH
 
-4. Clone or download the WASP repository from github:
+4. Clone the WASP repository from github:
 
-	# to clone:
-	git clone https://github.com/bmvdgeijn/WASP.git
+    git clone https://github.com/bmvdgeijn/WASP.git
 
-    # to download
+(Alternatively download the respository instead):
 	wget https://github.com/bmvdgeijn/WASP/archive/master.zip
 
 5. Compile snp2h5 (optional: only needs to be done if you plan to use

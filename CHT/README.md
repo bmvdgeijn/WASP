@@ -1,37 +1,40 @@
-CHT -  Combined Haplotype Test
-======================
+# CHT -  Combined Haplotype Test
 
-This directory contains source code for the Combined Haplotype Test (CHT) portion of the WASP pipeline.
+This directory contains the Combined Haplotype Test (CHT) portion of
+the WASP pipeline.
 
-Introduction
-----------
+## Introduction
 
-The test is designed to test for genetic associations with data from ChIP-seq or 
-other experiments that generate read counts. The test uses both read depth from a 
-test region and allelic imbalance of reads that overlap phased heterozygous SNPs in 
-the same test region. The SNP that is tested for association can be within or 
-nearby the test region. The SNP should not be too far away, because it is assumed 
-to be in LD with the other SNPs (i.e. the phasing information is assumed to be 
-correct). 
+The CHT is designed to test for genetic associations with
+quantitatitve traits that can be measured with next-generation
+sequencing reads. For example experiments such as ChIP-seq or RNA-seq
+that generate read counts can be used. The test uses both read depth
+from a test region and allelic imbalance of reads that overlap phased
+heterozygous SNPs in the same test region. The test SNP whose
+genotypes are tested for association can be within or nearby the test
+region. (The SNP should not be too far away, because phasing
+information between SNPs is currently assumed to be correct.)
 
-The test accounts for overdispersion in the data (excess variation that cannot be 
-attributed to binomial sampling or genotype) with three dispersion parameters. Two 
-of these parameters are global (i.e. fixed across test regions), while one is 
+The test accounts for overdispersion in the data (excess variation
+that cannot be attributed to binomial sampling or genotype) with three
+dispersion parameters. Two of these parameters are globally estimated
+for each individual (i.e. fixed across test regions), while one is
 estimated for each region.
 
-The test is described in  
+The test is described in 
 [our paper](http://biorxiv.org/content/early/2014/11/07/011221): van de Geijn B\*, McVicker G\*, Gilad Y, Pritchard JK. "WASP: allele-specific software for robust discovery of molecular quantitative trait loci"
 
 
-Input Format
-----------
+## Input Format
 
 The combined haplotype test script takes a set of input files with
-read count and genotype information for each individual. 
+read count and genotype information for each individual.
 
-Each file is a space-delimited text file that contains a single header line.
+Each file is a space-delimited text file that contains a single header
+line.
 
-The columns in the input file are as follows (example values are given in [*brackets*]):
+The columns in the input file are as follows (example values are given
+in [*brackets*]):
 
 1. CHROM - name of chromosome [*chr1*]
 2. TEST.SNP.POS - position of test SNP on chromosome (first base is numbered 1) [*963531*]
@@ -52,37 +55,158 @@ The columns in the input file are as follows (example values are given in [*brac
 17. GENOMEWIDE.READ.COUNT - total number of mapped, filtered reads for this individual [*26219310*]
 
 
-These input files can be generated using the script `extract_haplotype_read_counts.py`.
+These input files can be generated using the following workflow or
+created by the user.
 
-An example workflow is provided in the file `../exapmle_workflow.sh`.
+##  Workflow
+
+An example workflow is provided in the file `../example_workflow.sh`.
+
+We provide example data for the workflow under the directory `../example_data.txt`.
 
 Some of the input files that we used for our paper can be downloaded from 
 [here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/). 
 
 
-Running the combined test
----------------------
+### Step 1
 
-    python combined_test.py [options] input_files.txt output_file.txt
-        input_files.txt - A file containing a list of the input files to be tested
-        output_file.txt - File to write output to
+Map reads to the genome, and filter them to correct for mapping
+bias. This procedure is described by the README in the mapping
+directory.
 
-    Options:
-        -a perform the allele specific portion of the test only
-        -d perform the total read depth portion of the test only
-        -s randomly permute the genotypes and allele specific counts
-        -b <float> choose a total read depth overdispersion parameter (default=0.00001)
-        -o <float> choose an allele specific overdispersion parameter (default=0.00001)
-        -m <int>   choose a threshold for minimum number of allele specific reads (default 0)
-        -e <float> choose a sequencing error rate in the reads (default 0.005)
+### Step 2
 
-An example input file named H3K27ac\_example\_input\_file.txt is included in this repo. This can be used to run the combined haplotype test on H3K27ac data from 10 individuals. The input file points to files that contain read count and haplotype information for dsQTLs, which can be downloaded from [here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/dsQTLs/).
+Convert SNP data to HDF5 format using the program snp2h5.  HDF5 files
+are an efficient binary data format used by WASP scripts. The snp2h5
+program can take VCF or IMPUTE2 files as input.
+
+Example:
+	./snp2h5/snp2h5 --chrom example_data/chromInfo.hg19.txt \
+	      --format impute \
+	      --geno_prob example_data/geno_probs.h5 \
+	      --snp_index example_data/snp_index.h5 \
+	      --snp_tab example_data/snp_tab.h5 \
+	      --haplotype example_data/haps.h5 \
+	      example_data/genotypes/chr*.hg19.impute2.gz \
+	      example_data/genotypes/chr*.hg19.impute2_haps.gz
 
 
-Output
-------
+### Step 3
 
-The script writes a tab delimited text file with the following columns:
+Convert FASTA files to HDF5 format. Note the HDF5 sequence files are
+only used for GC content correction part of CHT. This step can be
+ommitted if GC-content correction is not used.
+
+Example:
+	./snp2h5/fasta2h5 --chrom example_data/chromInfo.hg19.txt \
+		--seq example_data/seq.h5 \
+		/data/external_public/reference_genomes/hg19/chr*.fa.gz
+
+### Step 4
+
+Extract read counts from BAM files (from Step 1) and write them to
+HDF5 files using the bam2h5.py program.  This must be done for each
+sample/individual in the dataset.
+
+Example:
+    python CHT/bam2h5.py --chrom example_data/chromInfo.hg19.txt \
+	      --snp_index example_data/snp_index.h5 \
+	      --snp_tab example_data/snp_tab.h5 \
+	      --haplotype example_data/haps.h5 \
+	      --samples $ALL_SAMPLES_FILE \
+	      --individual $INDIVIDUAL \
+	      --ref_as_counts example_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
+	      --alt_as_counts example_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
+	      --other_as_counts example_data/H3K27ac/other_as_counts.$INDIVIDUAL.h5 \
+	      --read_counts example_data/H3K27ac/read_counts.$INDIVIDUAL.h5 \
+	      example_data/H3K27ac/$INDIVIDUAL.chr*.keep.rmdup.bam
+
+### Step 5
+
+TODO: describe user-created input file 
+
+### Step 6
+
+Create a CHT input file for each individual using the
+extract_haplotype_read_counts.py script.
+
+Example:
+    python CHT/extract_haplotype_read_counts.py \
+       --chrom example_data/chromInfo.hg19.txt \
+       --snp_index example_data/snp_index.h5 \
+       --snp_tab example_data/snp_tab.h5 \
+       --geno_prob example_data/geno_probs.h5 \
+       --haplotype example_data/haps.h5 \
+       --samples $ALL_SAMPLES_FILE \
+       --individual $INDIVIDUAL \
+       --ref_as_counts example_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
+       --alt_as_counts example_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
+       --other_as_counts example_data/H3K27ac/other_as_counts.$INDIVIDUAL.h5 \
+       --read_counts example_data/H3K27ac/read_counts.$INDIVIDUAL.h5 \
+       example_data/H3K27ac/chr22.peaks.txt.gz \
+       | gzip > example_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.txt.gz
+
+
+### Step 7
+
+Adjust read counts in CHT files by modeling relationship between read
+depth and GC content & peakiness in each sample.
+
+Example:
+	IN_FILE=example_data/H3K27ac/input_files.txt
+	OUT_FILE=example_data/H3K27ac/output_files.txt
+	ls example_data/H3K27ac/haplotype_read_counts* | grep -v adjusted > $IN_FILE
+	cat $IN_FILE | sed 's/.txt/.adjusted.txt/' >  $OUT_FILE
+
+	python CHT/update_total_depth.py --seq example_data/seq.h5 $IN_FILE $OUT_FILE
+
+
+### Step 8
+
+Adjust heterozygote probabilities in CHT files to account for possible
+genotyping errors. Total counts of reference and alternative alleles
+are used to adjust the probability. In this example we just provide
+the same H3K27ac read counts, however you could also use read counts
+combined across many different experiments or (perhaps ideally) from
+DNA sequencing.
+
+This must be done for each individual in the dataset.
+
+    python CHT/update_het_probs.py \
+	   --ref_as_counts example_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5  \
+	   --alt_as_counts example_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
+	   example_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.adjusted.txt.gz
+	   example_data/H3K27ac/haplotype_read_counts.$INDIVIDUAL.adjusted.hetp.txt.gz
+
+
+### Step 9
+
+Estimate overdispersion parameters for the allele-specific test (beta binomial):
+	python CHT/fit_as_coefficients.py \
+		example_data/H3K27ac/cht_input_files.txt \
+		example_data/H3K27ac/cht_as_coef.txt
+
+and for the for association test (beta-negative binomial):
+	python CHT/fit_bnb_coefficients.py \
+		--min_counts 50 \
+		--min_as_counts 10 \
+		example_data/H3K27ac/cht_input_files.txt \
+		example_data/H3K27ac/cht_bnb_coef.txt
+
+### Step 10
+
+Run the combined haplotype test:
+	python CHT/combined_test.py --min_as_counts 10 \
+		--bnb_disp example_data/H3K27ac/cht_bnb_coef.txt \
+		--as_disp example_data/H3K27ac/cht_as_coef.txt \
+		example_data/H3K27ac/cht_input_files.txt \
+		example_data/H3K27ac/cht_results.txt
+
+
+## Output
+
+The combined haplotype test outputs a tab delimited text file with the
+following columns:
 
 1. chromosome - location of tested SNP
 2. position - position of tested SNP
@@ -93,24 +217,39 @@ The script writes a tab delimited text file with the following columns:
 7. number of AS reads - number  of of allele specific reads in tested region
 
 
-Updating total read depths and heterozygous probabilities
------
-
-Prior to running the CHT, we recommend updating the heterozygote probabilities for the target SNPs using all of the available reads for each individual. This is done using the script ``update_het_probs.py``.
-
-We also recommend correcting read depths based on the fraction of reads that fall within peaks for each sample and the GC content of each region. This is done using the script ``update_total_depth.py``.
+## Updating total read depths and heterozygous probabilities
 
 
-Choosing dispersion parameters
-------
+Prior to running the CHT, we recommend updating the heterozygote
+probabilities for the target SNPs using all of the available reads for
+each individual. This is done using the script
+``update_het_probs.py``.
 
-The CHT includes three parameters that model the dispersion of the read count data. One dispersion parameter is estimated separately for each region when the CHT is run. The other two parameters are estimated across all regions, and can be considered hyperparameters. They are estimated before running the CHT using the scripts `fit_as_coefficients.py` and `fit_bnb_coefficients.py`. 
+We also recommend correcting read depths based on the fraction of
+reads that fall within peaks for each sample and the GC content of
+each region. This is done using the script ``update_total_depth.py``.
 
-We suggest running the CHT on permuted data and visualizing the results with a quantile-quantile plot to ensure that the test is working properly. If the permutations do not follow the null distribution, this may indicate that the dispersion parameters have not been accurately estimated. In this case, you may manually set the overdispersion parameters or adjust the p-values according to the permuted distribution. One of the command line options (`-s`) runs the test on permuted genotypes. 
+
+## Choosing dispersion parameters
 
 
-Contact
-------
+The CHT includes three parameters that model the dispersion of the
+read count data. One dispersion parameter is estimated separately for
+each region when the CHT is run. The other two parameters are
+estimated across all regions, and can be considered
+hyperparameters. They are estimated before running the CHT using the
+scripts `fit_as_coefficients.py` and `fit_bnb_coefficients.py`.
+
+We suggest running the CHT on permuted data and visualizing the
+results with a quantile-quantile plot to ensure that the test is
+working properly. If the permutations do not follow the null
+distribution, this may indicate that the dispersion parameters have
+not been accurately estimated. In this case, you may manually set the
+overdispersion parameters or adjust the p-values according to the
+permuted distribution. One of the command line options (`-s`) runs the
+test on permuted genotypes.
+
+## Contact
 
 For questions about the combined haplotype test, please contact Graham McVicker 
 (gpm@stanford.edu) or Bryce van de Geijn (bmvdgeijn@uchicago.edu).

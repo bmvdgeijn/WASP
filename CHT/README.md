@@ -60,12 +60,16 @@ created by the user.
 
 ##  Workflow
 
-An example workflow is provided in the file `../example_workflow.sh`.
-
-We provide example data for the workflow under the directory `../example_data.txt`.
+An example workflow is provided in the file
+`../example_workflow.sh`. This workflow uses example data under the
+directory `../example_data`.
 
 Some of the input files that we used for our paper can be downloaded from 
 [here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/). 
+
+The following steps can be used to generate input files and run the
+Combined Haplotype Test. The examples given below use the example
+data files that are provided in the `../example_data` directory.
 
 
 ### Step 1
@@ -80,7 +84,6 @@ Convert SNP data to HDF5 format using the program snp2h5.  HDF5 files
 are an efficient binary data format used by WASP scripts. The snp2h5
 program can take VCF or IMPUTE2 files as input.
 
-Example:
 	./snp2h5/snp2h5 --chrom example_data/chromInfo.hg19.txt \
 	      --format impute \
 	      --geno_prob example_data/geno_probs.h5 \
@@ -97,7 +100,6 @@ Convert FASTA files to HDF5 format. Note the HDF5 sequence files are
 only used for GC content correction part of CHT. This step can be
 ommitted if GC-content correction is not used.
 
-Example:
 	./snp2h5/fasta2h5 --chrom example_data/chromInfo.hg19.txt \
 		--seq example_data/seq.h5 \
 		/data/external_public/reference_genomes/hg19/chr*.fa.gz
@@ -108,7 +110,6 @@ Extract read counts from BAM files (from Step 1) and write them to
 HDF5 files using the bam2h5.py program.  This must be done for each
 sample/individual in the dataset.
 
-Example:
     python CHT/bam2h5.py --chrom example_data/chromInfo.hg19.txt \
 	      --snp_index example_data/snp_index.h5 \
 	      --snp_tab example_data/snp_tab.h5 \
@@ -130,7 +131,6 @@ TODO: describe user-created input file
 Create a CHT input file for each individual using the
 extract_haplotype_read_counts.py script.
 
-Example:
     python CHT/extract_haplotype_read_counts.py \
        --chrom example_data/chromInfo.hg19.txt \
        --snp_index example_data/snp_index.h5 \
@@ -152,7 +152,6 @@ Example:
 Adjust read counts in CHT files by modeling relationship between read
 depth and GC content & peakiness in each sample.
 
-Example:
 	IN_FILE=example_data/H3K27ac/input_files.txt
 	OUT_FILE=example_data/H3K27ac/output_files.txt
 	ls example_data/H3K27ac/haplotype_read_counts* | grep -v adjusted > $IN_FILE
@@ -181,12 +180,15 @@ This must be done for each individual in the dataset.
 
 ### Step 9
 
-Estimate overdispersion parameters for the allele-specific test (beta binomial):
+Estimate overdispersion parameters for the allele-specific test (beta
+binomial):
+
 	python CHT/fit_as_coefficients.py \
 		example_data/H3K27ac/cht_input_files.txt \
 		example_data/H3K27ac/cht_as_coef.txt
 
 and for the for association test (beta-negative binomial):
+
 	python CHT/fit_bnb_coefficients.py \
 		--min_counts 50 \
 		--min_as_counts 10 \
@@ -196,6 +198,7 @@ and for the for association test (beta-negative binomial):
 ### Step 10
 
 Run the combined haplotype test:
+
 	python CHT/combined_test.py --min_as_counts 10 \
 		--bnb_disp example_data/H3K27ac/cht_bnb_coef.txt \
 		--as_disp example_data/H3K27ac/cht_as_coef.txt \

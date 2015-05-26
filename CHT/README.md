@@ -151,7 +151,7 @@ values are given in [*brackets*])::
 1. The chromosome of the test-SNP [*chr22*]
 2. The position of the SNP. Unlike BED files, first base of chromosome
 is 1. [*16050408*]
-3. The end position of the SNP+1. *Currently ignored*. [*16050408*]
+3. The end position of the SNP. *Currently ignored*. [*16050408*]
 4. The reference allele of the SNP [*T*]
 5. The non-reference allele of the SNP [ *C*]
 6. The strand of the SNP.  *Currently ignored and assumed to be '+' *. [*+*]

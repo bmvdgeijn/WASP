@@ -145,7 +145,7 @@ We provide an example of a a test SNP / target region input file here:
 
 	example_data/H3K27ac/chr22.peaks.txt.gz
 
-The tab-delimited columns of the input file are as follows (example
+The whitespace-delimited columns of the input file are as follows (example
 values are given in [*brackets*])::
 
 1. The chromosome of the test-SNP [*chr22*]

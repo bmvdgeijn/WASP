@@ -107,7 +107,7 @@ ommitted if GC-content correction is not used.
 ### Step 4
 
 Extract read counts from BAM files (from Step 1) and write them to
-HDF5 files using the bam2h5.py program.  This must be done for each
+HDF5 files using the [bam2h5.py](README.bam2h5.md) program.  This must be done for each
 sample/individual in the dataset.
 
     python CHT/bam2h5.py --chrom example_data/chromInfo.hg19.txt \

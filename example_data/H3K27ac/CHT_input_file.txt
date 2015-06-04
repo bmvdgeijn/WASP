@@ -1,0 +1,10 @@
+dsQTLs/H3K27ac_18505_read_counts.txt.gz
+dsQTLs/H3K27ac_18507_read_counts.txt.gz
+dsQTLs/H3K27ac_18508_read_counts.txt.gz
+dsQTLs/H3K27ac_18516_read_counts.txt.gz
+dsQTLs/H3K27ac_18522_read_counts.txt.gz
+dsQTLs/H3K27ac_19141_read_counts.txt.gz
+dsQTLs/H3K27ac_19193_read_counts.txt.gz
+dsQTLs/H3K27ac_19204_read_counts.txt.gz
+dsQTLs/H3K27ac_19238_read_counts.txt.gz
+dsQTLs/H3K27ac_19239_read_counts.txt.gz

@@ -93,6 +93,13 @@ def open_input_files(in_filename):
     
 
 
+def write_header(outfile):
+    outfile.write("\t".join(["TEST.SNP.CHROM", "TEST.SNP.POS",
+                             "CHISQ", "P.VALUE", "ALPHA", "BETA", 
+                             "PHI", "TOTAL.AS.READ.COUNT", 
+                             "TOTAL.READ.COUNT"]) + "\n")
+
+
 def main():
     options = parse_options()
     
@@ -108,6 +115,8 @@ def main():
     else:
         outfile = open(options.out_file, 'w')
 
+    write_header(outfile)
+        
     infiles = open_input_files(options.infile_list)
     
     if (options.bnb_disp):
@@ -264,27 +273,39 @@ def main():
                                  pc_coefs, pc_matrix)
 
             # compute likelihood ratio test statistic:
-            chisq = 2*(loglike1par-loglike2par)
+            chisq = 2 * (loglike1par - loglike2par)
             
             loglike1par_up = ll_one([best1par[0],best2par[2]], test_snps, options.is_bnb_only,
                                     options.is_as_only, bnb_sigmas,
                                     as_sigmas, options.read_error_rate,
                                     pc_coefs, pc_matrix)
-
-            # sys.stderr.write("%f %f %f %f %f %f %f %f %f\n" % (best1par[0], best2par[0], best2par[1], best1par[1],
-            #                                                    best2par[2], loglike1par, loglike1par_up, loglike2par, (loglike1par-loglike2par)*2))
-            # sys.stderr.write(", ".join([str(test_snps[i].counts) for i in range(len(test_snps))]) + "\n")
-            # sys.stderr.write(", ".join([str(test_snps[i].totals) for i in range(len(test_snps))]) + "\n")
-            # sys.stderr.write(", ".join([str(test_snps[i].geno_hap1 + test_snps[i].geno_hap2) for i in range(len(test_snps))]) + "\n")
-            # sys.stderr.write(", ".join([str(old_genos[i]) for i in range(len(test_snps))]) + "\n")
                 
-
-            all_counts=sum([test_snps[i].counts for i in range(len(test_snps))])
-            # write result to output file
+            all_counts = sum([test_snps[i].counts for i in range(len(test_snps))])
+            
+            # write result to output file. Format  is: 
+            # 1. chromosome, 
+            # 2. SNP position, 
+            # 3. Chi-squared statistic, 
+            # 4. P-value
+            # 5. alpha parameter estimate (expression level 
+            #    of reference allele)
+            # 6. beta parameter estimate (expression level of 
+            #    alternative allele)
+            # 7. phi parameter estimate (beta-negative-binomial 
+            #    overdispersion 
+            #    parameter for this region)
+            # 8. total number of allele-specific read counts for this
+            #    region summed across individuals
+            # 9. total number of mapped reads for this region, 
+            #    summed across individuals
             outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], 
-                                     str(1-scipy.stats.chi2.cdf(chisq,1)), str(best2par[0]),
-                                     str(best2par[1]), str(best2par[2]), 
-                                     str(totcounts),str(all_counts)]) + '\n')
+                                     "%.3f" % chisq,
+                                     "%g" % (1-scipy.stats.chi2.cdf(chisq,1)), 
+                                     "%.3f" % best2par[0], 
+                                     "%.3f" % best2par[1], 
+                                     "%g" % best2par[2], 
+                                     "%d" % totcounts, 
+                                     "%d" % all_counts]) + '\n')
             outfile.flush()
 
         except Exception as e:
@@ -292,7 +313,7 @@ def main():
             sys.stderr.write("An error occurred, writing line with 0s for SNP:\n%s\n" % str(e))
             
             outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], 
-                                    "0", "0", "0", "0", "0"]) + '\n')
+                                    "0", "NA", "0", "0", "0", "0"]) + '\n')
             #continue
             raise
 

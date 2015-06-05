@@ -21,18 +21,18 @@ other:
 The following directories and files are included with WASP.
 Each directory contains its own README file:
 
-* CHT - Code for running the Combined Haplotype Test
+* [CHT](./CHT) - Code for running the Combined Haplotype Test
 
-* mapping -Tools for correcting mapping biases
+* [mapping](./mapping) -Tools for correcting mapping biases
 
-* snp2h5 - Contains snp2h5 and fasta2h5:  programs for converting
+* [snp2h5](./snp2h5) - Contains snp2h5 and fasta2h5:  programs for converting
   common SNP and sequence data formats (IMPUTE, VCF and FASTA)
   to an efficient binary format, HDF5.
 
-* example_data - Example data files that can be used to try out the
+* [example_data](./example_data) - Example data files that can be used to try out the
   Combined Haplotype Test.
 
-* example_workflow.sh - A script illustrating how each step of the
+* [example_workflow.sh](./example_workflow.sh) - A script illustrating how each step of the
   Combined Haplotype Test workflow can be run.
 
 
@@ -50,7 +50,7 @@ compressed binary file format.  For this reason, the Combined
 Haplotype Test requires the HDF5 library
 (version 1.6 or higher) and [PyTables](http://www.pytables.org/).
 
-The easiest way to install HDF5, numpy, scipy and Pytables is to
+The easiest way to install [HDF5](https://www.hdfgroup.org/HDF5/), [numpy](http://www.numpy.org), [scipy](http://scipy.org) and [Pytables](http://www.pytables.org/) is to
 download and install
 [Anaconda](http://continuum.io/downloads). *Installing Anaconda is
 highly recommended.* After installing Anaconda, the only
@@ -81,13 +81,13 @@ $HOME/anaconda with your Anaconda installation directory):
 
 5. Compile snp2h5 (optional: only needs to be done if you plan to use
 snp2h5 or fasta2h5). First modify the snp2h5/Makefile to point to the
-		Anaconda (or HDF5) installation directory. For example:
+		Anaconda (or HDF5) installation directory. For example open [snp2h5/Makefile](snp2h5/Makefile) with a text editor and modify the HDF_INSTALL variable to point to your Anaconda installation directory:
 
 		HDF_INSTALL = $(HOME)/anaconda
 
 	Now compile snp2h5 using make:
 
-		cd snp2h5
+		cd WASP/snp2h5
 		make
 
 

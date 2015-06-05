@@ -81,13 +81,13 @@ $HOME/anaconda with your Anaconda installation directory):
 
 5. Compile snp2h5 (optional: only needs to be done if you plan to use
 snp2h5 or fasta2h5). First modify the snp2h5/Makefile to point to the
-		Anaconda (or HDF5) installation directory. For example:
+		Anaconda (or HDF5) installation directory. For example open [snp2h5/Makefile](snp2h5/Makefile) with a text editor and modify the HDF_INSTALL variable to point to your Anaconda installation directory:
 
 		HDF_INSTALL = $(HOME)/anaconda
 
 	Now compile snp2h5 using make:
 
-		cd snp2h5
+		cd WASP/snp2h5
 		make
 
 

@@ -103,7 +103,7 @@ do
 done
 
 
-CHT_IN_FILE=example_data/H3K27ac/cht_input_files.txt
+CHT_IN_FILE=example_data/H3K27ac/cht_input_file.txt
 ls example_data/H3K27ac/haplotype_read_counts*.adjusted.hetp.txt.gz > $CHT_IN_FILE
 
 #

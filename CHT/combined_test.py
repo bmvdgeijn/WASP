@@ -230,7 +230,7 @@ def main():
                                                  options.read_error_rate,
                                                  pc_coefs,
                                                  pc_matrix),
-                            disp=options.verbose,maxiter=50000,maxfun=50000,ftol=1e-6, xtol=1e-6)
+                            disp=options.verbose,maxiter=50000,maxfun=50000,ftol=1e-4, xtol=1e-4)
 
             if options.verbose:
                 sys.stderr.write("null model optimization took %.3fs\n" % (time.time()-t1))
@@ -252,6 +252,7 @@ def main():
                                                  options.read_error_rate,
                                                  pc_coefs,
                                                  pc_matrix),
+
                             disp = options.verbose, maxiter=50000, maxfun=50000, ftol=1e-6, xtol=1e-6)
             
             if options.verbose:
@@ -281,7 +282,7 @@ def main():
             all_counts=sum([test_snps[i].counts for i in range(len(test_snps))])
             # write result to output file
             outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], 
-                                     str(chisq), str(best2par[0]),
+                                     str(1-scipy.stats.chi2.cdf(chisq,1)), str(best2par[0]),
                                      str(best2par[1]), str(best2par[2]), 
                                      str(totcounts),str(all_counts)]) + '\n')
             outfile.flush()

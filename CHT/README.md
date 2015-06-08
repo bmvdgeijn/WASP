@@ -252,13 +252,15 @@ following columns:
 
 1. chromosome - location of tested SNP 
 2. position - position of tested SNP
-3. chi-squared value - likelihood ratio test statistic
-4. p-value - p-value from likelihood ratio test
-5. best alpha parameter - maximum likelihood estimate of alpha parameter (expression level of reference allele)
-6. best beta parameter - maximum likelihood estimate of beta parameter (expression level of non-reference allele)
-7. overdispersion parameter - maximum  likelihood estimate of phi parameter (per-region beta-negative-binomial dispersion parameter)
-8. number of AS reads - number of allele specific reads in tested regio,n summed across individuals
-9. total reads - number of mapped reads in tested region, summed across individuals
+3. log likelihood under null model
+4. log likelihood under alternative model
+5. chi-squared value - likelihood ratio test statistic
+6. p-value - p-value from likelihood ratio test
+7. best alpha parameter - maximum likelihood estimate of alpha parameter (expression level of reference allele)
+8. best beta parameter - maximum likelihood estimate of beta parameter (expression level of non-reference allele)
+9. overdispersion parameter - maximum  likelihood estimate of phi parameter (per-region beta-negative-binomial dispersion parameter)
+10. number of AS reads - number of allele specific reads in tested regio,n summed across individuals
+11. total reads - number of mapped reads in tested region, summed across individuals
 
 
 ## Updating total read depths and heterozygous probabilities

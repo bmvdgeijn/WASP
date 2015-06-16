@@ -21,8 +21,11 @@ dispersion parameters. Two of these parameters are globally estimated
 for each individual (i.e. fixed across test regions), while one is
 estimated for each region.
 
-The test is described in 
-[our paper](http://biorxiv.org/content/early/2014/11/07/011221): van de Geijn B\*, McVicker G\*, Gilad Y, Pritchard JK. "WASP: allele-specific software for robust discovery of molecular quantitative trait loci"
+The test is described in
+[our paper](http://biorxiv.org/content/early/2014/11/07/011221): van
+de Geijn B\*, McVicker G\*, Gilad Y, Pritchard JK. "WASP:
+allele-specific software for robust discovery of molecular
+quantitative trait loci"
 
 
 ## Input Format
@@ -107,8 +110,8 @@ ommitted if GC-content correction is not used.
 ### Step 4
 
 Extract read counts from BAM files (from Step 1) and write them to
-HDF5 files using the [bam2h5.py](README.bam2h5.md) program.  This must be done for each
-sample/individual in the dataset.
+HDF5 files using the [bam2h5.py](README.bam2h5.md) program.  This must
+be done for each sample/individual in the dataset.
 
     python CHT/bam2h5.py --chrom example_data/chromInfo.hg19.txt \
 	      --snp_index example_data/snp_index.h5 \
@@ -261,6 +264,36 @@ following columns:
 9. overdispersion parameter - maximum  likelihood estimate of phi parameter (per-region beta-negative-binomial dispersion parameter)
 10. number of AS reads - number of allele specific reads in tested regio,n summed across individuals
 11. total reads - number of mapped reads in tested region, summed across individuals
+
+
+## Obtaining phased genotype data
+
+Step 3 of the combined haplotype test pipeline requires *phased*
+genotype data.  The [snp2h5](../snp2h5/README.md) program provided
+with WASP can read phased genotypes in IMPUTE2 and VCF
+formatted files.
+
+Several methods are available for genotype phasing:
+
+* [IMPUTE2](https://mathgen.stats.ox.ac.uk/impute/impute_v2.html) can
+  perform both imputation and genotype phasing. (Phasing information
+  is written to a file specified with with -o option). The output
+  files written by IMPUTE2 can be read directly by snp2h5.
+
+* [SHAPEIT2](https://mathgen.stats.ox.ac.uk/genetics_software/shapeit/shapeit.html)
+  is a fast method for genotype phasing. Output files from SHAPEIT can
+  be converted to IMPUTE2's .hap format or to VCF format using the
+  `shapeit -convert`  command described in the SHAPEIT documentation.
+  
+* [BEAGLE](https://faculty.washington.edu/browning/beagle/b3.html) can
+  be used for both imputation and genotype phasing. BEAGLE output
+  files can be converted to VCF format using the
+  [beagle2vcf](http://faculty.washington.edu/browning/beagle_utilities/utilities.html#beagle2vcf)
+  utility program provided with BEAGLE.
+
+If you are using samples that are part of the 1000 Genomes project,
+genotypes that have been phased using SHAPEIT can be downloaded from
+the [1000 Genomes website](http://www.1000genomes.org/data#DataAccess).
 
 
 ## Updating total read depths and heterozygous probabilities

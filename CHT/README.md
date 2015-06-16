@@ -65,7 +65,7 @@ created by the user.
 
 Step 3 of the CHT workflow requires *phased*
 genotype data.  The [snp2h5](../snp2h5/README.md) program provided
-with WASP can read phased genotypes in IMPUTE2 and VCF
+with WASP can read phased genotypes from IMPUTE2 or VCF
 formatted files.
 
 Several methods are available for genotype phasing:

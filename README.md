@@ -6,7 +6,10 @@ WASP is a suite of tools for unbiased allele-specific read mapping and
 discovery of molecular QTLs
 
 WASP is described in
-[our paper](http://biorxiv.org/content/early/2014/11/07/011221): van de Geijn B\*, McVicker G\*, Gilad Y, Pritchard JK. "WASP: allele-specific software for robust discovery of molecular quantitative trait loci"
+[our paper](http://biorxiv.org/content/early/2014/11/07/011221): van
+de Geijn B\*, McVicker G\*, Gilad Y, Pritchard JK. "WASP:
+allele-specific software for robust discovery of molecular
+quantitative trait loci"
 
 WASP has two parts, which can be used independently of each
 other: 
@@ -32,17 +35,19 @@ Each directory contains its own README file:
 * [example_data](./example_data) - Example data files that can be used to try out the
   Combined Haplotype Test.
 
-* [example_workflow.sh](./example_workflow.sh) - A script illustrating how each step of the
-  Combined Haplotype Test workflow can be run.
+* [example_workflow.sh](./example_workflow.sh) - A script illustrating
+  how each step of the Combined Haplotype Test workflow can be run.
 
 
 ## Dependencies
 
-WASP is written in C and python and depends on both [numpy](http://www.numpy.org) and
-[scipy](http://www.scipy.org).  The code also depends on
-[argparse](https://code.google.com/p/argparse/), which is included by default in newer versions of python (>= 2.7).
+WASP is written in C and python and depends on both
+[numpy](http://www.numpy.org) and [scipy](http://www.scipy.org).  The
+code also depends on [argparse](https://code.google.com/p/argparse/),
+which is included by default in newer versions of python (>= 2.7).
 
-Some scripts depend on the [pysam python library](https://github.com/pysam-developers/pysam)
+Some scripts depend on the
+[pysam python library](https://github.com/pysam-developers/pysam)
 
 The combined haplotype test uses
 [HDF5](https://www.hdfgroup.org/HDF5/), an efficient
@@ -50,11 +55,12 @@ compressed binary file format.  For this reason, the Combined
 Haplotype Test requires the HDF5 library
 (version 1.6 or higher) and [PyTables](http://www.pytables.org/).
 
-The easiest way to install [HDF5](https://www.hdfgroup.org/HDF5/), [numpy](http://www.numpy.org), [scipy](http://scipy.org) and [Pytables](http://www.pytables.org/) is to
-download and install
+The easiest way to install [HDF5](https://www.hdfgroup.org/HDF5/),
+[numpy](http://www.numpy.org), [scipy](http://scipy.org) and
+[Pytables](http://www.pytables.org/) is to download and install
 [Anaconda](http://continuum.io/downloads). *Installing Anaconda is
-highly recommended.* After installing Anaconda, the only
-dependency that must be downloaded and installed is
+highly recommended.* After installing Anaconda, the only dependency
+that must be downloaded and installed is
 [pysam](https://github.com/pysam-developers/pysam).
 
 
@@ -81,7 +87,9 @@ $HOME/anaconda with your Anaconda installation directory):
 
 5. Compile snp2h5 (optional: only needs to be done if you plan to use
 snp2h5 or fasta2h5). First modify the snp2h5/Makefile to point to the
-		Anaconda (or HDF5) installation directory. For example open [snp2h5/Makefile](snp2h5/Makefile) with a text editor and modify the HDF_INSTALL variable to point to your Anaconda installation directory:
+Anaconda (or HDF5) installation directory. For example open
+[snp2h5/Makefile](snp2h5/Makefile) with a text editor and modify the
+HDF_INSTALL variable to point to your Anaconda installation directory:
 
 		HDF_INSTALL = $(HOME)/anaconda
 

@@ -75,7 +75,7 @@ Several methods are available for genotype phasing:
   is written to a file specified with with -o option). Output
   files written by IMPUTE2 can be read directly by snp2h5.
 
-* [SHAPEIT2](https://mathgen.stats.ox.ac.uk/genetics_software/shapeit/shapeit.html)
+* [SHAPEIT](https://mathgen.stats.ox.ac.uk/genetics_software/shapeit/shapeit.html)
   is a fast method for genotype phasing. Output files from SHAPEIT can
   be converted to IMPUTE2's .hap format or to VCF format using the
   `shapeit -convert`  command described in the SHAPEIT documentation.

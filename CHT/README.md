@@ -296,7 +296,6 @@ following columns:
 11. total reads - number of mapped reads in tested region, summed across individuals
 
 
-
 ## Updating total read depths and heterozygous probabilities
 
 Prior to running the CHT, we recommend updating the heterozygote

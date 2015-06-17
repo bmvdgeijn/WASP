@@ -76,3 +76,18 @@ Use filter_remapped_reads.py to retrieve reads that remapped correctly
 At the end of the pipeline, ${LANE_NAME}.keep.bam and ${LANE_NAME}.remap.keep.bam 
 can be merged for a complete set of mappability filtered aligned reads
 	
+
+Step 5 (Optional)
+------
+
+Filter duplicate reads. Programs such as samtools rmdup introduce bias when they filter duplicate reads because they
+retain the read with the highest score (which usually matches the reference). We provide a script rmdup.py which performs unbiased removal of duplicate reads. The script discards duplicate reads at random (independent of their score). The input BAM or SAM file must be sorted.
+
+#### Usage:
+	python rmdup.py <sorted.input.bam> <output.bam>
+	
+	
+	
+
+
+

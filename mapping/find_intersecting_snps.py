@@ -1,4 +1,4 @@
-import sys, pysam, gzip, pdb, argparse
+import sys, pysam, gzip, pdb, argparse, array
 #from pympler import asizeof
 
 #### Class to hold the data for a single SNP
@@ -17,7 +17,12 @@ class SNP:
                 self.max_len=len(self.alleles[i])
         if self.max_len>1:
             self.ptype="indel"
-    
+
+        haplo_chars=snp_split[5:]
+        haplos=array.array('B',[0])*len(haplo_chars)
+        
+        
+
     def add_allele(self,new_alleles):
         for new_allele in new_alleles:
             if new_allele=="-":
@@ -73,8 +78,6 @@ class Bam_scanner:
         self.printstats = True
         
         self.num_reads=0
-
-        ### Initialize the indel tracking dictionary
         
         self.pos=self.cur_read.pos
         self.chr_num=self.cur_read.tid
@@ -82,11 +85,14 @@ class Bam_scanner:
         self.max_window=max_window
                 
         self.num_reads=0
+
         ### Initialize the read tracking tables
         self.read_table=[[] for x in range(self.max_window)]
         
         ### Initialize the SNP and indel tracking tables
         self.switch_chr()
+        
+        ### fill all tables
         self.fill_table()
         
 
@@ -98,7 +104,7 @@ class Bam_scanner:
             self.pos=self.cur_read.pos
             self.init_snp_table()
             #self.num_reads+=1000
-        while self.cur_read.pos<self.pos+self.max_window:
+        while self.cur_read.tid == self.chr_num and self.cur_read.pos<(self.pos+self.max_window):
             self.num_reads+=1
             self.read_table[self.cur_read.pos % self.max_window].append(self.cur_read)
             try:
@@ -107,17 +113,18 @@ class Bam_scanner:
                 self.empty_table()
                 self.end_of_file=True
                 return()
-            if self.cur_read.tid != self.chr_num:
-                self.empty_table()
-                self.chr_num=self.cur_read.tid
-                try:
-                    self.chr_name=self.bamfile.getrname(self.chr_num)
-                except:
-                    sys.stderr.write("Problem with tid: "+str(self.chr_num))
-                    self.skip_chr()
-                self.pos=self.cur_read.pos
-                self.switch_chr()
-                self.fill_table()
+
+        if self.cur_read.tid != self.chr_num:
+            self.empty_table()
+            self.chr_num=self.cur_read.tid
+            try:
+                self.chr_name=self.bamfile.getrname(self.chr_num)
+            except:
+                sys.stderr.write("Problem with tid: "+str(self.chr_num)+"\n")
+                self.skip_chr()
+            self.pos=self.cur_read.pos
+            self.switch_chr()
+            self.fill_table()
 
     # Switches to looking for SNPs on the next chromosome
     def switch_chr(self):
@@ -200,7 +207,7 @@ class Bam_scanner:
         try:
             self.chr_name=self.bamfile.getrname(self.chr_num)
         except:
-            sys.stderr.write("Problem with tid: "+str(self.chr_num))
+            sys.stderr.write("Problem with tid: "+str(self.chr_num)+"\n")
             self.skip_chr()
 
     # Processes all reads that map to the current position and removes them from the read table
@@ -266,9 +273,10 @@ class Bam_scanner:
                         for seq1 in seq1s:
                             for seq2 in seq2s:
                                 if not first:
-                                    loc_line="%i:%s:%i:%i" % (self.remap_num,self.chr_name,read.pos,num_seqs-1)
+                                    left_pos=min(read.pos,pair_read.pos)
+                                    right_pos=max(read.pos,pair_read.pos)
+                                    loc_line="%i:%s:%i:%i:%i" % (self.remap_num,self.chr_name,left_pos,right_pos,num_seqs-1)
                                     self.fastqs[0].write("@%s\n%s\n+%s\n%s\n"%(loc_line,seq1,loc_line,read.qual))
-                                    loc_line="%i:%s:%i:%i" % (self.remap_num,self.chr_name,pair_read.pos,num_seqs-1)
                                     self.fastqs[1].write("@%s\n%s\n+%s\n%s\n"%(loc_line,self.reverse_complement(seq2),loc_line,pair_read.qual))
                                 first=False
                         self.remap_num+=1
@@ -283,6 +291,7 @@ class Bam_scanner:
     def check_for_snps(self,read,start_dist):
         indx=read.pos % self.max_window
         p=0
+        num_snps=0
         seg_len=start_dist
         seqs=[read.seq]
         if start_dist>0:
@@ -292,16 +301,21 @@ class Bam_scanner:
             if seg_len>self.max_window:
                 sys.stderr.write("Segment distance (from read pair and junction separation) is too large. A read has been thrown out. Consider increasing the max window size.\n")
                 return([])
-            if cigar[0]==0:
-                for i in range(cigar[1]):  #if it is a match alignment to the reference genome
+            if cigar[0] == 4: #if CIGAR indicates a soft-clipping
+                p=p+cigar[1]
+            elif cigar[0] == 0: #if CIGAR indicates a match alignment to the reference genome
+                for i in range(cigar[1]):  
                     if len(self.indel_table[indx])==0:
                         snp=self.snp_table[indx]
                         if snp!=0:
+                            num_snps+=1
+                            if num_snps>10: #If there are more than 10 snps overlapping, throw out the read to prevent memory blow-up
+                                return([])
                             init_seqs=list(seqs)
                             for seq in init_seqs:
                                 matches=0
-                                if seq[p] not in snp.alleles:
-                                    sys.stderr.write(str(start_dist)+" "+seq[p]+"  "+str(snp.alleles)+"\n")
+                                #if seq[p] not in snp.alleles:
+                                #    sys.stderr.write(str(start_dist)+" "+seq[p]+"  "+str(snp.alleles)+"\n")
                                 for geno in snp.alleles:
                                     if seq[p]==geno:
                                         matches+=1
@@ -324,13 +338,12 @@ class Bam_scanner:
             else: #if there is a non-N/M in the read CIGAR, throw out the read
                 self.toss+=1
                 return([])
-        #sys.stderr.write(str(len(seqs))+" "+str(p)+"\n")
+                
         if len(seqs)==1:
             self.nosnp+=1
         else:
             self.remap+=1
         return seqs
-
     # Shifts the SNP table over one position and makes sure that indels are not lost
     def shift_SNP_table(self):             
         ### Current slot to fill is the position + max_window - 1

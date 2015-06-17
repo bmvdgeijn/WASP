@@ -93,23 +93,22 @@ the [1000 Genomes website](http://www.1000genomes.org/data#DataAccess).
 
 ##  Workflow
 
-An example workflow is provided in the file
-`../example_workflow.sh`. This workflow uses example data under the
-directory `../example_data`.
+An example workflow is provided in [example_workflow.sh](../example_workflow.sh)
+script. This workflow uses data in the [example_data directory](../example_data).
 
 Some of the input files that we used for our paper can be downloaded from 
 [here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/). 
 
 The following steps can be used to generate input files and run the
 Combined Haplotype Test. The examples given below use the example
-data files that are provided in the `../example_data` directory.
+data files that are provided in the [example_data](../example_data) directory.
 
 
 ### Step 1
 
 Map reads to the genome, and filter them to correct for mapping
-bias. This procedure is described by the README in the mapping
-directory.
+bias. This procedure is described by the [README in the mapping
+directory](../mapping/README.md).
 
 ### Step 2
 

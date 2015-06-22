@@ -160,3 +160,21 @@ python CHT/combined_test.py --min_as_counts 10 \
        $CHT_IN_FILE $OUT_FILE
 
 
+#
+# Optionally, principcal component loadings can be used as covariates
+# by the CHT. An example of how to perform PCA and obtain principal
+# component loadings is provided in the file example_data/H3K27ac/get_PCs.R
+# Note that we only recommend using PCs as covariates in when sample
+# sizes are fairly large (e.g. > 30 individuals).
+#
+# Example of how to get PC loadings
+#   Rscript  example_data/H3K27ac/get_PCs.R > example_data/H3K27ac/pcs.txt
+#
+# Using the first 2 PC loadings in the CHT:
+#   OUT_FILE=example_data/H3K27ac/cht_results.PCs.txt
+#   python CHT/combined_test.py --min_as_counts 10 \
+#         --bnb_disp example_data/H3K27ac/cht_bnb_coef.txt \
+#         --as_disp example_data/H3K27ac/cht_as_coef.txt \
+#         --num_pcs 2 --pc_file example_data/H3K27ac/pcs.txt \
+#         $CHT_IN_FILE $OUT_FILE 
+#

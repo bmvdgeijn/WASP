@@ -168,7 +168,7 @@ python CHT/combined_test.py --min_as_counts 10 \
 # sizes are fairly large (e.g. > 30 individuals).
 #
 # Example of how to get PC loadings
-#   Rscript --vanilla < example_data/H3K27ac/get_PCs.R > example_data/H3K27ac/pcs.txt
+#   Rscript  example_data/H3K27ac/get_PCs.R > example_data/H3K27ac/pcs.txt
 #
 # Using the first 2 PC loadings in the CHT:
 #   OUT_FILE=example_data/H3K27ac/cht_results.PCs.txt

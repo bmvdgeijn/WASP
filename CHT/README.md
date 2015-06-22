@@ -316,12 +316,12 @@ following columns:
 Prior to running the CHT, we recommend updating the heterozygote
 probabilities for the target SNPs using all of the available reads for
 each individual. This is done using the script
-``update_het_probs.py`` as described in Step 8 above.
+``update_het_probs.py`` as described in [Step 8](https://github.com/bmvdgeijn/WASP/tree/master/CHT#step-8).
 
 We also recommend correcting read depths based on the fraction of
 reads that fall within peaks for each sample and the GC content of
 each region. This is done using the script ``update_total_depth.py``
-as described in Step 7 above.
+as described in [Step 7](https://github.com/bmvdgeijn/WASP/tree/master/CHT#step-7).
 
 
 ## Choosing dispersion parameters
@@ -332,7 +332,7 @@ each region when the CHT is run. The other two parameters are
 estimated across all regions, and can be considered
 hyperparameters. They are estimated before running the CHT using the
 scripts `fit_as_coefficients.py` and `fit_bnb_coefficients.py` as
-described in Step 9 above.
+described in [Step 9](https://github.com/bmvdgeijn/WASP/tree/master/CHT#step-9).
 
 We suggest running the CHT on permuted data and visualizing the
 results with a quantile-quantile plot to ensure that the test is
@@ -343,6 +343,28 @@ overdispersion parameters or adjust the p-values according to the
 permuted distribution. One of the command line options (`-s`) runs the
 test on permuted genotypes.
 
+
+## Using Principal Components as Covariates (optional)
+
+The CHT allows principal componant loadings to be included as covariates in
+the Beta-Negative-Binomial part of the model. 
+An example of how to perform PCA and obtain principal component loadings is 
+provided in the file `example_data/H3K27ac/get_PCs.R`
+
+*Note*: we only recommend using PCs as covariates in when sample
+sizes are fairly large (e.g. > 30 individuals).
+
+The following example shows how the first 2 PCs can be used as covariates (replaces
+[Step 10](https://github.com/bmvdgeijn/WASP/tree/master/CHT#step-10) above):
+
+    Rscript  example_data/H3K27ac/get_PCs.R > example_data/H3K27ac/pcs.txt
+
+    python CHT/combined_test.py --min_as_counts 10 \
+        --bnb_disp example_data/H3K27ac/cht_bnb_coef.txt \
+        --as_disp example_data/H3K27ac/cht_as_coef.txt \
+        --num_pcs 2 --pc_file example_data/H3K27ac/pcs.txt \
+        example_data/H3K27ac/cht_input_files.txt \
+        example_data/H3K27ac/cht_results.PCs.txt
 
 ## Contact
 

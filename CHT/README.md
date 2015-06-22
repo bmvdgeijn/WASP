@@ -346,7 +346,7 @@ test on permuted genotypes.
 
 ## Using Principal Components as Covariates (optional)
 
-The CHT allows principal componant loadings to be included as covariates
+The CHT allows principal componant loadings to be included as covariates in
 the Beta-Negative-Binomial part of the model. 
 An example of how to perform PCA and obtain principal component loadings is 
 provided in the file `example_data/H3K27ac/get_PCs.R`

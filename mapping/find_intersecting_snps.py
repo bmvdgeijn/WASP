@@ -273,7 +273,7 @@ class Bam_scanner:
                         first=True
                         for seq1 in seq1s:
                             for seq2 in seq2s:
-                                if not first:
+                                if first:
                                     left_pos=min(read.pos,pair_read.pos)
                                     right_pos=max(read.pos,pair_read.pos)
                                     loc_line="%i:%s:%i:%i:%i" % (self.remap_num,self.chr_name,left_pos,right_pos,num_seqs-1)

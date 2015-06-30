@@ -1,0 +1,10 @@
+example_data/H3K27ac/haplotype_read_counts.18505.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.18507.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.18508.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.18516.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.18522.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.19141.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.19193.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.19204.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.19238.adjusted.hetp.txt.gz
+example_data/H3K27ac/haplotype_read_counts.19239.adjusted.hetp.txt.gz

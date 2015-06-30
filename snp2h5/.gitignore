@@ -1,0 +1,5 @@
+vcf2h5
+snp2h5
+fasta2h5
+*.o
+*.os

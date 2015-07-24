@@ -1,9 +1,9 @@
-import sys
-import pysam
-import gzip
 import argparse
-import array
+import gzip
+import sys
 
+import array
+import pysam
 
 class SNP:
     """SNP objects hold data for a single SNP"""
@@ -50,22 +50,116 @@ class SNP:
                 i += 1
         self.alleles.append("")
 
-        
-
 class BamScanner:
-    """Class to keep track of all the information read in from the bamfile/snpfile"""
+    """
+    Class to keep track of all the information read in from the bamfile/snpfile.
+    """
 
-    
-    def __init__(self, is_paired_end, max_window, file_name, keep_file_name, remap_name,
-                 remap_num_name, fastq_names, snp_dir):
-        """Constructor: opens files, creates initial table"""
+    def __init__(self, is_paired_end, max_window, file_name, keep_file_name,
+                 remap_name, remap_num_name, fastq_names, snp_dir):
+        """
+        Constructor: opens files, creates initial table.
+        
+        Attributes
+        ----------
+
+        is_paired_end : boolean
+            Boolean indicating whether input data are paired end.
+
+        snp_dir : str
+            Path to directory that contains gzipped SNP files (one per
+            chromosome).
+
+        bamfile : pysam.Samfile
+            Input bam file that we are reading.
+
+        keep_bam : pysam.Samfile
+            Output bam file of reads that do not overlap SNPs.
+
+        remap_bam : pysam.Samfile
+            Output bam file of reads that do overlap SNPs and need to be
+            remapped.
+
+        remap_num_file : gzip.GzipFile
+            File to write XXX to.
+
+        fastqs : list
+            List of gzip.GzipFile objects for the different fastqs that will
+            contain the reads to remap.
+
+        read_table : list
+            List of lists. Sublist i contains the reads whose positions are
+            [real read position] % max_window.
+
+        cur_read : pysam.XXX
+            Current read from the bam file.
+
+        end_of_file : boolean
+            Boolean indicating whether we've reached the end of the bam file.
+
+        remap_num : int
+            A counter for the number of reads to be remapped. This starts at one
+            and is incremented when a read (pair) is written to the fastq
+            file(s).
+
+        ref_match : int
+            This is incremented everytime a read sequence matches a SNP
+            genotype. Note that a particular read sequence can be looked at
+            multiple times if it has multiple SNPs, so this is somewhat hard to
+            interpret.
+
+        alt_match : int
+            This is initialized but not used anywhere.
+
+        no_match : int
+            This is incremented everytime a read sequence doesn't matche a SNP
+            genotype. Note that a particular read sequence can be looked at
+            multiple times if it has multiple SNPs, so this is somewhat hard to
+            interpret.
+
+        toss : int
+            Number of reads tossed.
+
+        nosnp : int
+            Number of reads with no SNPs.
+
+        remap : int
+            Number of reads to remap.
+
+        tot : int
+            I think this is total number of reads, although it is only
+            incremented in empty_slot_single(self) so it doesn't seem to be
+            fully implemented right now.
+
+        printstats : boolean
+            Boolean for some print statements, currently not used.
+
+        num_reads : int
+            Number of reads for a given window that we have read but not yet
+            written. This number is incremented when we read in a read and
+            decremented when we pop a read out of the read table.
+
+        pos : int
+
+
+        chr_num : int
+
+
+        chr_name : str
+
+
+        max_window : int
+
+
+        """
         
         self.is_paired_end = is_paired_end
         
         # Read in all input files and create output files
         self.snp_dir = snp_dir
         self.bamfile = pysam.Samfile(file_name,"rb")
-        self.keep_bam = pysam.Samfile(keep_file_name, "wb", template=self.bamfile)
+        self.keep_bam = pysam.Samfile(keep_file_name, "wb",
+                                      template=self.bamfile)
         self.remap_bam = pysam.Samfile(remap_name, "wb", template=self.bamfile)
         self.remap_num_file = gzip.open(remap_num_name, "w")
         self.fastqs = [gzip.open(fqn,"w") for fqn in fastq_names]
@@ -93,26 +187,23 @@ class BamScanner:
         self.chr_name = self.bamfile.getrname(self.cur_read.tid)
         self.max_window = max_window
                 
-        self.num_reads = 0
-
-        ### Initialize the read tracking tables
+        # Initialize the read tracking tables.
         self.read_table = [[] for x in range(self.max_window)]
         
-        ### Initialize the SNP and indel tracking tables
+        # Initialize the SNP and indel tracking tables.
         self.switch_chr()
         
-        ### fill all tables
+        # Fill all tables.
         self.fill_table()
         
-
-
     def fill_table(self): 
-        """fills the table of reads starting from the current position
-        and extending for the next <max_window> base pairs"""
+        """Fills the table of reads starting from the current position
+        and extending for the next <max_window> base pairs."""
         
         if self.end_of_file:
             return()
             
+        # For first read we need to set self.pos and initialize the SNP table.
         if self.num_reads == 0:
             self.pos = self.cur_read.pos
             self.init_snp_table()
@@ -241,7 +332,7 @@ class BamScanner:
             self.tot += 1
             read = self.read_table[cur_slot].pop()
             self.num_reads -= 1
-            seqs = self.check_for_snps(read,0)
+            seqs = self.check_for_snps(read, 0)
             num_seqs = len(seqs)
             if (num_seqs == 0) or (num_seqs > 10):
                 continue
@@ -293,8 +384,8 @@ class BamScanner:
                 if self.read_table[pair_slot][indx].qname.split(":")[-1] == read.qname.split(":")[-1]:
                     pair_read = self.read_table[pair_slot].pop(indx)
                     self.num_reads -= 1
-                    seq1s = self.check_for_snps(read,0)
-                    seq2s = self.check_for_snps(pair_read,read.mpos-read.pos)
+                    seq1s = self.check_for_snps(read, 0)
+                    seq2s = self.check_for_snps(pair_read, read.mpos - read.pos)
                     num_seqs = len(seq1s)*len(seq2s)
                     if (num_seqs == 0) or (num_seqs > 32):
                         break
@@ -327,22 +418,68 @@ class BamScanner:
         
         self.pos += 1
         self.shift_SNP_table()
-        
 
+    def check_for_snps(self, read, start_dist):
+        """
+        Checks a single aligned read for overlapping SNPs and creates
+        alternative sequences for remapping.
 
-    def check_for_snps(self,read,start_dist):
-        """Checks a single aligned read for overlapping SNPs and 
-        created alternative sequences for remapping"""
+        Parameters
+        ----------
+        read : XXX
+            Read to check for SNPs in.
+
+        start_dist : int
+            I think this is the distance from the current position of the
+            BamScanner to the start of the read.
+
+        Returns
+        -------
+        seqs : list
+            List of read sequences. This first entry is the read sequence from
+            the bam file. Any subsequent sequences are the read sequence from
+            the bam file except one base that overlapped a SNP is switched to
+            the other allele. If the list is empty, the read overlaps an indel
+            or has a CIGAR character besides N or M so we throw it out.
+        """
         indx = read.pos % self.max_window
+        # p keeps track of the number of read bases we've already analyzed. When
+        # p = length of the read, we are done with this read.
         p = 0
+        # num_snps is the number of SNPs in this read.
         num_snps = 0
+        # I think seg_len is the distance from the current position of the
+        # BamScanner to where we are 
         seg_len = start_dist
         seqs = [read.seq]
         if start_dist > 0:
+            # has_junc indicates whether the read has an N in the CIGAR although
+            # this doesn't seem to be used anywhere.
             has_junc = False
+        # read.cigar is a list of tuples. Each tuple has two entries. The first
+        # entry specifies the character in the cigar and the second entry
+        # specifies the length of that character. The values are
+        # M       BAM_CMATCH      0
+        # I       BAM_CINS        1
+        # D       BAM_CDEL        2
+        # N       BAM_CREF_SKIP   3
+        # S       BAM_CSOFT_CLIP  4
+        # H       BAM_CHARD_CLIP  5
+        # P       BAM_CPAD        6
+        # =       BAM_CEQUAL      7
+        # X       BAM_CDIFF       8
+        # So a tuple (0, 5) means five matches and (4, 2) means a soft clip of
+        # two.
+
+        # We'll go through each cigar tuple one at a time.
         for cigar in read.cigar:
             seg_len += cigar[1]
+            # Check whether this cigar segment is longer than the max window.
+            # This generally happens if there is a junction read longer than the
+            # max window.
             if seg_len > self.max_window:
+                #TODO: count the occurrences of this error and just report at
+                # the end.
                 sys.stderr.write("Segment distance (from read pair and junction separation) "
                                  "is too large. A read has been thrown out. Consider increasing "
                                  "the max window size.\n")
@@ -352,18 +489,20 @@ class BamScanner:
                 # CIGAR indicates a soft-clipping
                 p = p + cigar[1]
             elif cigar[0] == 0:
-                # CIGAR indicates a match alignment to the reference genome
+                # CIGAR indicates a match alignment to the reference genome.
+                # Since there is a match, let's go through each matched base and
+                # see whether it contains a SNP.
                 for i in range(cigar[1]):  
                     if len(self.indel_table[indx]) == 0:
                         snp = self.snp_table[indx]
                         if snp != 0:
                             num_snps += 1
                             if num_snps > 10:
-                                # If there are more than 10 snps overlapping, 
-                                # throw out the read to prevent memory blow-up
+                                # If there are more than 10 snps overlapping,
+                                # throw out the read to prevent memory blow-up.
+                                # TODO: should we increment self.toss here?
                                 return([])
-                            init_seqs = list(seqs)
-                            for seq in init_seqs:
+                            for seq in list(seqs):
                                 matches = 0
 
                                 for geno in snp.alleles:
@@ -378,18 +517,18 @@ class BamScanner:
                                 else:
                                     self.ref_match += 1
                     else:
-                        # it's an indel, throw it out
-                        self.toss+=1
+                        # It's an indel, throw it out.
+                        self.toss += 1
                         return([])
-                    indx=(indx+1) % self.max_window
-                    p+=1
+                    indx = (indx + 1) % self.max_window
+                    p += 1
             elif cigar[0] == 3:
-                # skipped in the reference genome (splice junction)
+                # Skipped in the reference genome (splice junction).
                 indx = (indx + cigar[1]) % self.max_window
                 has_junc = True
             else:
-                # there is a non-N/M in the read CIGAR--throw out the read
-                self.toss+=1
+                # There is a non-N/M in the read CIGAR--throw out the read.
+                self.toss += 1
                 return([])
                 
         if len(seqs) == 1:
@@ -397,8 +536,6 @@ class BamScanner:
         else:
             self.remap += 1
         return seqs
-
-    
     
     def shift_SNP_table(self):             
         """Shifts the SNP table over one position and makes sure that
@@ -522,5 +659,5 @@ def main():
     
     sys.stderr.write("Finished!\n")
 
-main()
-
+if __name__ == '__main__':
+    main()

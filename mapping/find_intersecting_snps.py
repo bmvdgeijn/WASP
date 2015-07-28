@@ -8,6 +8,33 @@ import pysam
 class SNP:
     """SNP objects hold data for a single SNP"""
     def __init__(self, snp_line):
+        """
+        Initialize SNP object.
+        
+        Parameters:
+        -----------
+
+        snp_line : str
+            Line from SNP file.
+
+        Attributes:
+        -----------
+
+        pos : int
+            Genomic position of SNP.
+
+        alleles : list
+            List of two alleles.
+
+        ptype : str
+            Type of polymorphism (snp or indel). If there are multiple alleles
+            and one is an indel, ptype will be "indel". If the alleles are all
+            single nucleotide variants, ptype will be "snp".
+
+        max_len : int
+            Maximum allele length. If greater than one, implies an insertion.
+
+        """
         snp_split = snp_line.strip().split()
         self.pos = int(snp_split[0]) - 1
         self.alleles = [snp_split[1], snp_split[2]]
@@ -24,12 +51,22 @@ class SNP:
         if self.max_len > 1:
             self.ptype = "indel"
         
-        
     def add_allele(self, new_alleles):
+        """
+        Add new alleles for a snp or indel.
+        
+        Parameters:
+        -----------
+
+        new_alleles : str
+            List of alleles (each allele is a string like "A").
+
+        """
         for new_allele in new_alleles:
             if new_allele == "-":
                 self.ptype = "indel"
                 new_allele = ""
+            # Only add the new allele if it doesn't already exist.
             if not (new_allele in self.alleles):
                 self.alleles.append(new_allele)
                 if len(new_allele) > self.max_len:
@@ -39,6 +76,9 @@ class SNP:
             self.ptype = "indel"
 
     def shift_indel(self):
+        """
+        Currently not used anywhere.
+        """
         self.pos += 1
         self.max_len -= 1
         i = 0
@@ -60,8 +100,8 @@ class BamScanner:
         """
         Constructor: opens files, creates initial table.
         
-        Attributes
-        ----------
+        Attributes:
+        -----------
 
         is_paired_end : boolean
             Boolean indicating whether input data are paired end.
@@ -139,17 +179,23 @@ class BamScanner:
             written. This number is incremented when we read in a read and
             decremented when we pop a read out of the read table.
 
-        pos : int
+        cur_snp : SNP
+            The current SNP to be or being parsed. 
 
+        pos : int
+            The current genomic position we are analyzing.
 
         chr_num : int
-
+            Bam file ID number of the current chromosome we are analyzing.
 
         chr_name : str
-
+            Name of the current chromosome we are analyzing.
 
         max_window : int
-
+            Size of the window in base pairs to process reads. All of the reads
+            and SNPs within max_window base pairs are processed at once. Any
+            junction-spanning reads (i.e. with N in the cigar) that extend
+            outside of the window are thrown out.
 
         """
         
@@ -181,6 +227,8 @@ class BamScanner:
         self.printstats = True
         
         self.num_reads = 0
+
+        self.cur_snp = None
         
         self.pos = self.cur_read.pos
         self.chr_num = self.cur_read.tid
@@ -197,9 +245,13 @@ class BamScanner:
         self.fill_table()
         
     def fill_table(self): 
-        """Fills the table of reads starting from the current position
-        and extending for the next <max_window> base pairs."""
-        
+        """
+        Fills the table of reads starting from the current position and
+        extending for the next <max_window> base pairs. The read table is a
+        list of lists of length max_window. If the position of the current read
+        is 100, the first sublist contains all of the reads at position 100, the
+        next sublist contains all of the reads at position 101, etc.
+        """
         if self.end_of_file:
             return()
             
@@ -213,14 +265,16 @@ class BamScanner:
           (self.cur_read.pos < (self.pos + self.max_window)):
             self.num_reads += 1
             self.read_table[self.cur_read.pos % self.max_window].append(self.cur_read)
-            
+           
+            # Get a new read and check for the end of the file. 
             try:
                 self.cur_read = self.bamfile.next()
             except:
                 self.empty_table()
                 self.end_of_file = True
                 return()
-
+        
+        # Check to see if we've come across a new chromosome.
         if self.cur_read.tid != self.chr_num:
             self.empty_table()
             self.chr_num = self.cur_read.tid
@@ -235,7 +289,7 @@ class BamScanner:
 
 
     def switch_chr(self):
-        """Switches to looking for SNPs on next chromosome"""
+        """Switches to looking for SNPs on next chromosome."""
         chr_match = False
         while not chr_match and not self.end_of_file:
             try:
@@ -251,18 +305,32 @@ class BamScanner:
         self.end_of_snp_file = False
         self.get_next_snp()
 
-    # Initializes the SNP table
     def init_snp_table(self):
-        # create an empty SNP table
+        """
+        Creates an empty SNP table starting from the position of the current
+        and extending max_window base pairs. The SNP table is max_window long
+        and has a zero if there are no variants overlapping a position or
+        contains a SNP object if there is variant that overlaps a given
+        position. 
+        
+        Also creates an indel table which is a list of lists of length
+        max_window.
+
+        Also creates an indel dict which is a dict whose keys are genomic
+        positions and whose values are SNP objects whose ptype is indel.
+        """
+        # Number of SNPs in this table. I think this is total number of
+        # different alleles across the whole table.
         self.num_snps = 0
         self.indel_dict = {}
         self.snp_table = [0 for x in range(self.max_window)]
         self.indel_table = [[] for x in range(self.max_window)]
-        # skips SNPs that are upstream of the current read
-        while not self.end_of_snp_file and self.cur_snp.pos<self.pos:
+        # Get SNPs in this window but skip SNPs that are upstream of the current
+        # read.
+        while not self.end_of_snp_file and self.cur_snp.pos < self.pos:
             self.get_next_snp()
 
-        # adds SNPs downstream of the current read and within the current window
+        # Add SNPs downstream of the current read and within the current window.
         while not self.end_of_snp_file and (self.cur_snp.pos < self.pos + self.max_window):
             if self.cur_snp.ptype == "snp":
                 self.add_snp()
@@ -273,15 +341,25 @@ class BamScanner:
         #sys.stderr.write(str(self.num_snps)+"\n")
 
     def add_snp(self):
+        """
+        Add a SNP to the SNP table. If the SNP table has a zero at this
+        position, the SNP object will replace the zero. If the SNP table
+        already has a SNP object at this position, the SNP will be added as new
+        alleles. 
+        """
         cur_pos = self.cur_snp.pos % self.max_window
         if self.snp_table[cur_pos] == 0:
             self.num_snps += 1
             self.snp_table[cur_pos] = self.cur_snp
         elif isinstance(self.snp_table[cur_pos], SNP):
             self.snp_table[cur_pos].add_allele(self.cur_snp.alleles)     
-
             
     def add_indel(self):
+        """
+        Add an indel to the indel table and indel dict. If there is already an
+        indel in the indel dict at this position, add the alleles from cur_snp.
+        TODO: Finish figuring out what's going on at the end of this method.
+        """
         position = self.cur_snp.pos
         if self.indel_dict.has_key(position):
             start = self.indel_dict[position].max_len
@@ -295,19 +373,18 @@ class BamScanner:
             self.indel_table[(self.cur_snp.pos + i) % self.max_window].append(position)
             i += 1
 
-
     def get_next_snp(self):
-        """goes to read in next SNP or signals end of file"""
+        """Read in next SNP or signal end of file."""
         snp_line = self.snpfile.readline()
         if snp_line:
             self.cur_snp = SNP(snp_line)
         else:
             self.end_of_snp_file = True
 
-
     def skip_chr(self):
-        """Skips all of the reads coming from this chromosome and moves on to the next
-        Used if the SNP file can't be located"""
+        """Skips all of the reads from the chromosome of the current read and
+        moves on to the next chromosome. Used if the SNP file can't be
+        located."""
         while self.cur_read.tid == self.chr_num:
             try:
                 self.cur_read = self.bamfile.next()
@@ -322,7 +399,6 @@ class BamScanner:
         except:
             sys.stderr.write("Problem with tid: " + str(self.chr_num) + "\n")
             self.skip_chr()
-
 
     def empty_slot_single(self):
         """Processes all reads that map to the current position and
@@ -351,10 +427,7 @@ class BamScanner:
         #    sys.stderr.write(str(self.tot)+" "+str(self.nosnp)+" "+str(self.remap)+" "+str(self.toss)+"\n")
         #    self.printstats = False
         #sys.stderr.write(str(self.ref_match)+" "+str(self.alt_match)+" "+str(self.no_match)+"\n")
-        self.pos += 1
         self.shift_SNP_table()
-        
-
 
     def empty_slot_paired(self):
         """Processes all reads that map to the current position and
@@ -416,7 +489,6 @@ class BamScanner:
                     # stop searching for the pair since it was found
                     break
         
-        self.pos += 1
         self.shift_SNP_table()
 
     def check_for_snps(self, read, start_dist):
@@ -426,7 +498,7 @@ class BamScanner:
 
         Parameters
         ----------
-        read : XXX
+        read : pysam.AlignedRead
             Read to check for SNPs in.
 
         start_dist : int
@@ -510,7 +582,8 @@ class BamScanner:
                                         matches += 1
                                         for alt_geno in snp.alleles:
                                             if not alt_geno == geno:
-                                                new_seq = seq[:p] + alt_geno + seq[p+1:]
+                                                new_seq = (seq[:p] + alt_geno +
+                                                           seq[p+1:])
                                                 seqs.append(new_seq)
                                 if matches == 0:
                                     self.no_match += 1
@@ -539,8 +612,10 @@ class BamScanner:
     
     def shift_SNP_table(self):             
         """Shifts the SNP table over one position and makes sure that
-        indels are not lost"""
+        indels are not lost."""
         
+        self.pos += 1
+
         # Current slot to fill is the position + max_window - 1
         cur_slot=(self.pos-1) % self.max_window
 
@@ -560,7 +635,7 @@ class BamScanner:
             self.num_snps -= 1
         self.snp_table[cur_slot] = 0
 
-        #### See if there is a SNP overlapping the current spot
+        # See if there is a SNP overlapping the current spot.
         while not self.end_of_snp_file and self.pos + self.max_window-1 > self.cur_snp.pos:
             sys.stderr.write(str(self.num_snps) + " " + str(self.pos) + " " + 
                              str(self.cur_snp.pos)+" !!!\n")
@@ -575,7 +650,6 @@ class BamScanner:
                 if not self.cur_snp.pos in self.indel_table[cur_slot]:
                     self.indel_table[cur_slot].append(cur_snp.pos)
             self.get_next_snp()
-
 
     def empty_table(self):
         """Completely empties the read_table by repeatedly calling
@@ -604,7 +678,6 @@ class BamScanner:
         for letter in read:
             reverse = self.complement(letter)+reverse
         return reverse
-
     
 def main():
     parser = argparse.ArgumentParser()
@@ -642,6 +715,9 @@ def main():
                           sort_file_name, keep_file_name, remap_name, 
                           remap_num_name, fastq_names, snp_dir)
     
+    # TODO: Wrap stuff below in a function or method.
+    # TODO: Necessary to call fill_table here? Called with bam_data is
+    # initialized.
     bam_data.fill_table()
     
     #i=0

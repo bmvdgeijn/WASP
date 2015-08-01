@@ -7,6 +7,7 @@ import pysam
 
 class SNP:
     """SNP objects hold data for a single SNP"""
+
     def __init__(self, snp_line):
         """
         Initialize SNP object.
@@ -58,10 +59,13 @@ class SNP:
         Parameters:
         -----------
 
-        new_alleles : str
+        new_alleles : list
             List of alleles (each allele is a string like "A").
 
         """
+        # If a string is passed, each element of the string will be added as an
+        # allele.
+        assert type(new_alleles) is list
         for new_allele in new_alleles:
             if new_allele == "-":
                 self.ptype = "indel"
@@ -140,7 +144,7 @@ class BamScanner:
         remap_num : int
             A counter for the number of reads to be remapped. This starts at one
             and is incremented when a read (pair) is written to the fastq
-            file(s).
+            file(s). TODO: Is this supposed to start at one?
 
         ref_match : int
             This is incremented everytime a read sequence matches a SNP
@@ -320,7 +324,7 @@ class BamScanner:
         positions and whose values are SNP objects whose ptype is indel.
         """
         # Number of SNPs in this table. I think this is total number of
-        # different alleles across the whole table.
+        # different alleles across the whole table. I'm not exactly sure.
         self.num_snps = 0
         self.indel_dict = {}
         self.snp_table = [0 for x in range(self.max_window)]
@@ -358,7 +362,6 @@ class BamScanner:
         """
         Add an indel to the indel table and indel dict. If there is already an
         indel in the indel dict at this position, add the alleles from cur_snp.
-        TODO: Finish figuring out what's going on at the end of this method.
         """
         position = self.cur_snp.pos
         if self.indel_dict.has_key(position):
@@ -368,13 +371,20 @@ class BamScanner:
             self.indel_dict[position] = self.cur_snp
             start = 0
         end = self.indel_dict[position].max_len
+        # max_len is the length of the longest allele for an indel and
+        # "position" is the genomic position of this indel. If the indel_dict
+        # already has an indel at this genomic position, we will append
+        # "position" to all of the positions/sublists in indel_table beyond the
+        # lenght of the indel that already exists. If there isn't already an
+        # indel in indel_table at this "position", we'll append "position" to
+        # all of the sublists in indel_table that are spanned by the indel.
         i = start
         while (i < end) and ((self.cur_snp.pos + i) < (self.pos + self.max_window)):
             self.indel_table[(self.cur_snp.pos + i) % self.max_window].append(position)
             i += 1
 
     def get_next_snp(self):
-        """Read in next SNP or signal end of file."""
+        """Read in next SNP (and set self.cur_snp) or signal end of file."""
         snp_line = self.snpfile.readline()
         if snp_line:
             self.cur_snp = SNP(snp_line)
@@ -716,7 +726,7 @@ def main():
                           remap_num_name, fastq_names, snp_dir)
     
     # TODO: Wrap stuff below in a function or method.
-    # TODO: Necessary to call fill_table here? Called with bam_data is
+    # TODO: Necessary to call fill_table here? Called when bam_data is
     # initialized.
     bam_data.fill_table()
     

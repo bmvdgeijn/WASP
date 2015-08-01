@@ -1,4 +1,4 @@
-import sys, pysam, gzip, pdb, argparse, array
+import sys, pysam, gzip, pdb, argparse, array, copy
 #from pympler import asizeof
 
 #### Class to hold the data for a single SNP
@@ -50,21 +50,46 @@ class SNP:
 #### Class to keep track of all the information read in from the bamfile/snpfile        
 class Bam_scanner:
     # Constructor: opens files, creates initial table
-    def __init__(self,is_paired_end,max_window,file_name,keep_file_name,remap_name,remap_num_name,fastq_names,snp_dir):
+    def __init__(self,
+                 is_paired_end,
+                 max_window,
+                 file_name,
+                 keep_file_name,
+                 remap_name,
+                 remap_num_name,
+                 fastq_names,
+                 snp_dir,
+                 max_depth,
+                 chrm=None,
+                 c_pos=0,
+                 c_pos_count=0):
+
         self.is_paired_end=is_paired_end
         
         ### Read in all input files and create output files
         self.snp_dir=snp_dir
-        self.bamfile=pysam.Samfile(file_name,"rb")
-        self.keep_bam=pysam.Samfile(keep_file_name,"wb",template=self.bamfile)
-        self.remap_bam=pysam.Samfile(remap_name,"wb",template=self.bamfile)
+        
+        ### Added class variables to store chromosome ID and 
+        ### max depth value
+        self.chrm=chrm
+        self.max_depth=max_depth
+
+        if chrm != None:
+            self.bamfile=pysam.Samfile(file_name,"rb").fetch("chr" + str(self.chrm))
+        else:   
+            self.bamfile=pysam.Samfile(file_name,"rb")
+
+        self.keep_bam=pysam.Samfile(keep_file_name,"wb",template=pysam.Samfile(file_name,"rb"))
+        self.remap_bam=pysam.Samfile(remap_name,"wb",template=pysam.Samfile(file_name,"rb"))
         self.remap_num_file=gzip.open(remap_num_name,"w")
         self.fastqs=[gzip.open(fqn,"w") for fqn in fastq_names]
+
         try:
             self.cur_read=self.bamfile.next()
         except:
             sys.stderr.write("No lines available for input")
             return()
+        
         self.end_of_file=False
 
         self.remap_num=1
@@ -81,7 +106,13 @@ class Bam_scanner:
         
         self.pos=self.cur_read.pos
         self.chr_num=self.cur_read.tid
-        self.chr_name=self.bamfile.getrname(self.cur_read.tid)
+
+        ### Logic to set chromosome value.        
+        if self.chrm == None:
+            self.chr_name=self.bamfile.getrname(self.cur_read.tid)
+        else:
+            self.chr_name= "chr" + str(self.chrm)
+        
         self.max_window=max_window
                 
         self.num_reads=0
@@ -94,19 +125,40 @@ class Bam_scanner:
         
         ### fill all tables
         self.fill_table()
-        
+    
 
     # fills the table of reads starting from the current position and extending for the next <max_window> base pairs
     def fill_table(self):
+
         if self.end_of_file:
             return()
+        
         if self.num_reads==0:
             self.pos=self.cur_read.pos
             self.init_snp_table()
             #self.num_reads+=1000
+
+        # Track the number of reads in read table
+        local_read_count = 0
         while self.cur_read.tid == self.chr_num and self.cur_read.pos<(self.pos+self.max_window):
+            
+            ### If total number of reads in read table ard greater 
+            ### than the max depth value no more reads are added 
+            ### until reads are flushed from the table.
+            local_read_count += 1
+            if local_read_count > self.max_depth:
+                print 'skipping reads:', self.chr_num, self.cur_read.tid
+                try:
+                    self.cur_read=self.bamfile.next()
+                except:
+                    self.empty_table()
+                    self.end_of_file=True
+                    return()
+                continue
+
             self.num_reads+=1
             self.read_table[self.cur_read.pos % self.max_window].append(self.cur_read)
+            
             try:
                 self.cur_read=self.bamfile.next()
             except:
@@ -115,13 +167,16 @@ class Bam_scanner:
                 return()
 
         if self.cur_read.tid != self.chr_num:
+        
             self.empty_table()
             self.chr_num=self.cur_read.tid
+        
             try:
                 self.chr_name=self.bamfile.getrname(self.chr_num)
             except:
                 sys.stderr.write("Problem with tid: "+str(self.chr_num)+"\n")
                 self.skip_chr()
+            
             self.pos=self.cur_read.pos
             self.switch_chr()
             self.fill_table()
@@ -129,11 +184,13 @@ class Bam_scanner:
     # Switches to looking for SNPs on the next chromosome
     def switch_chr(self):
         chr_match=False
+        
         while not chr_match and not self.end_of_file:
+            
             try:
                 self.snpfile = gzip.open("%s/%s.snps.txt.gz"%(self.snp_dir,self.chr_name))
                 sys.stderr.write("Starting on chromosome "+self.chr_name+"\n")
-                chr_match=True
+                chr_match=True    
             except:
                 sys.stderr.write("SNP file for chromosome "+self.chr_name+" is not found. Skipping these reads.\n")
                 self.skip_chr()
@@ -314,8 +371,8 @@ class Bam_scanner:
                             init_seqs=list(seqs)
                             for seq in init_seqs:
                                 matches=0
-                                #if seq[p] not in snp.alleles:
-                                #    sys.stderr.write(str(start_dist)+" "+seq[p]+"  "+str(snp.alleles)+"\n")
+                                # if seq[p] not in snp.alleles:
+                                #     sys.stderr.write(str(start_dist))
                                 for geno in snp.alleles:
                                     if seq[p]==geno:
                                         matches+=1
@@ -408,35 +465,66 @@ class Bam_scanner:
         return reverse
 
 def main():
+
+    # Setup options
     parser=argparse.ArgumentParser()
+    
+    # Define flags
     parser.add_argument("-p", action='store_true', dest='is_paired_end', default=False)
     parser.add_argument("-m", action='store', dest='max_window', type=int, default=100000)
+    parser.add_argument("-c", dest='chrm', type=int, action='store', default=None)
+    parser.add_argument("-d", dest='max_depth', type=int, action='store', default=250000)
+    
+    # Define positional arguments
     parser.add_argument("infile", action='store')
     parser.add_argument("snp_dir", action='store')
     
+    # Define variables
     options=parser.parse_args()
     infile=options.infile
+    chrm=options.chrm
     snp_dir=options.snp_dir
     name_split=infile.split(".")
     
+    # Setup outfile prefix 
     if len(name_split)>1:
         pref=".".join(name_split[:-1])
     else:
         pref=name_split[0]
 
-    pysam.sort(infile,pref+".sort")
+    if chrm != None:
+        pref+= ".chr" + str(chrm)
 
-    sort_file_name=pref+".sort.bam"
+    # Check if input is sorted. 
+    if 'sort' not in infile:
+        pysam.sort(infile,pref+".sort")
+        sort_file_name=pref+".sort.bam"
+    else:
+        sort_file_name = infile
+
+    # Create output files
     keep_file_name=pref+".keep.bam"
     remap_name=pref+".to.remap.bam"
     remap_num_name=pref+".to.remap.num.gz"
+
 
     if options.is_paired_end:
         fastq_names=[pref+".remap.fq1.gz",pref+".remap.fq2.gz"]
     else:
         fastq_names=[pref+".remap.fq.gz"]
 
-    bam_data=Bam_scanner(options.is_paired_end,options.max_window,sort_file_name,keep_file_name,remap_name,remap_num_name,fastq_names,snp_dir)
+    # Setup Bam data
+    bam_data=Bam_scanner(options.is_paired_end, 
+                         options.max_window,
+                         sort_file_name,
+                         keep_file_name,
+                         remap_name,
+                         remap_num_name,
+                         fastq_names,
+                         snp_dir,
+                         options.max_depth,
+                         chrm)
+
     bam_data.fill_table()
     #i=0
     while not bam_data.end_of_file:
@@ -445,13 +533,25 @@ def main():
             #sys.stderr.write(str(asizeof.asizeof(bam_data))+"\t"+str(asizeof.asizeof(bam_data.snp_table))+"\t"+str(asizeof.asizeof(bam_data.read_table))+"\t"+str(bam_data.num_reads)+"\t"+str(bam_data.num_snps)+"\n")
             #sys.stderr.write(str(asizeof.asizeof(bam_data))+"\t"+str(bam_data.num_reads)+"\t"+str(bam_data.num_snps)+"\t"+str(len(bam_data.indel_dict))+"\n")
             #i=0
+
         if options.is_paired_end:
             bam_data.empty_slot_paired()
+        
         else:
             bam_data.empty_slot_single()
+
         bam_data.fill_table()
     
     sys.stderr.write("Finished!\n")
 
 main()
+
+
+
+
+
+
+
+
+
 

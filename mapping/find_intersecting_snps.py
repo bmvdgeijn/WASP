@@ -413,6 +413,9 @@ def main():
     parser.add_argument("-p", action='store_true', dest='is_paired_end', 
                         default=False, help=('Indicates that reads are '
                                              'paired-end (default is single).'))
+    parser.add_argument("-s", action='store_true', dest='is_sorted', 
+                        default=False, help=('Indicates that the input bam file'
+                                             ' is sorted (default is False).'))
     mdefault = 100000
     mhelp = ('Changes the maximum window to search for SNPs.  The default is '
              '{:,} base pairs.  Reads or read pairs that span more than this '
@@ -440,6 +443,10 @@ def main():
         pref=".".join(name_split[:-1])
     else:
         pref=name_split[0]
+
+    if not options.is_sorted:
+        infile = pref + ".sort")
+        pysam.sort(infile, pref+".sort")
    
     keep_file_name=pref+".keep.bam"
     remap_name=pref+".to.remap.bam"

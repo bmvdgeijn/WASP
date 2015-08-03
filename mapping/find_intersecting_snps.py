@@ -165,10 +165,14 @@ class BamScanner:
             Number of reads tossed.
 
         nosnp : int
-            Number of reads with no SNPs.
+            Number of reads with no SNPs. If one read in a read pair has a SNP
+            and the other doesn't, both "nosnp" and "remap" (below) will be
+            incremented by one.
 
         remap : int
-            Number of reads to remap.
+            Number of reads to remap. If one read in a read pair has a SNP and
+            the other doesn't, both "nosnp" and "remap" (below) will be
+            incremented by one.
 
         tot : int
             I think this is total number of reads, although it is only
@@ -182,6 +186,10 @@ class BamScanner:
             Number of reads for a given window that we have read but not yet
             written. This number is incremented when we read in a read and
             decremented when we pop a read out of the read table.
+
+        window_too_small : int
+            The number of reads thrown out because their CIGAR contained a run
+            of N's longer than max_window.
 
         cur_snp : SNP
             The current SNP to be or being parsed. 
@@ -228,6 +236,8 @@ class BamScanner:
         self.nosnp = 0
         self.remap = 0
         self.tot = 0
+        self.window_too_small = 0
+
         self.printstats = True
         
         self.num_reads = 0
@@ -247,7 +257,7 @@ class BamScanner:
         
         # Fill all tables.
         self.fill_table()
-        
+     
     def fill_table(self): 
         """
         Fills the table of reads starting from the current position and
@@ -433,15 +443,11 @@ class BamScanner:
                                                 self.chr_name, read.pos,num_seqs-1)
                     self.fastqs[0].write("@%s\n%s\n+%s\n%s\n" % (loc_line, seq, loc_line,read.qual))
                 self.remap_num += 1
-        #if self.printstats: 
-        #    sys.stderr.write(str(self.tot)+" "+str(self.nosnp)+" "+str(self.remap)+" "+str(self.toss)+"\n")
-        #    self.printstats = False
-        #sys.stderr.write(str(self.ref_match)+" "+str(self.alt_match)+" "+str(self.no_match)+"\n")
         self.shift_SNP_table()
 
     def empty_slot_paired(self):
         """Processes all reads that map to the current position and
-        removes them from the read table Treats reads as paired-end"""
+        removes them from the read table. Treats reads as paired-end."""
         
         cur_slot = self.pos % self.max_window
 
@@ -461,9 +467,6 @@ class BamScanner:
             # Find the slot the matching read is in
             pair_slot = pair_pos % self.max_window
             for indx in range(len(self.read_table[pair_slot])):
-
-                #if self.read_table[pair_slot][indx].qname==read.qname:
-                # for testing purposes???
                 if self.read_table[pair_slot][indx].qname.split(":")[-1] == read.qname.split(":")[-1]:
                     pair_read = self.read_table[pair_slot].pop(indx)
                     self.num_reads -= 1
@@ -482,7 +485,7 @@ class BamScanner:
                         first = True
                         for seq1 in seq1s:
                             for seq2 in seq2s:
-                                if first:
+                                if not first:
                                     left_pos = min(read.pos,pair_read.pos)
                                     right_pos = max(read.pos,pair_read.pos)
                                     loc_line = "%i:%s:%i:%i:%i" % (self.remap_num, self.chr_name, 
@@ -496,7 +499,7 @@ class BamScanner:
                                 first = False
                         self.remap_num += 1
 
-                    # stop searching for the pair since it was found
+                    # Stop searching for the pair since it was found.
                     break
         
         self.shift_SNP_table()
@@ -562,9 +565,10 @@ class BamScanner:
             if seg_len > self.max_window:
                 #TODO: count the occurrences of this error and just report at
                 # the end.
-                sys.stderr.write("Segment distance (from read pair and junction separation) "
-                                 "is too large. A read has been thrown out. Consider increasing "
-                                 "the max window size.\n")
+                # sys.stderr.write("Segment distance (from read pair and junction separation) "
+                #                  "is too large. A read has been thrown out. Consider increasing "
+                #                  "the max window size.\n")
+                self.window_too_small += 1
                 return([])
 
             if cigar[0] == 4:
@@ -683,12 +687,37 @@ class BamScanner:
         else:
             return(letter)
 
-    def reverse_complement(self,read):
-        reverse = ""
-        for letter in read:
-            reverse = self.complement(letter)+reverse
-        return reverse
+    def reverse_complement(self, read):
+        # reverse = ""
+        # for letter in read:
+        #     reverse = self.complement(letter) + reverse
+        # return reverse
+        reverse = [self.complement(letter) for letter in list(read)]
+        reverse.reverse()
+        return ''.join(reverse)
     
+    def run(self):
+        """Iterate through bam and SNP files and write output files."""
+        self.fill_table()
+        while not self.end_of_file:
+            if self.is_paired_end:
+                self.empty_slot_paired()
+            else:
+                self.empty_slot_single()
+            self.fill_table()
+        
+        sys.stderr.write(
+            'Segment distance (from read pair and junction separation) was too '
+            'large for {:,} reads so those reads have been thrown out. '
+            'Consider increasing the max window '
+            'size.\n'.format(self.window_too_small)
+        )
+        sys.stderr.write("Finished!\n")
+        self.keep_bam.close()
+        self.remap_bam.close()
+        self.remap_num_file.close()
+        [x.close() for x in self.fastqs]
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", action='store_true', 
@@ -724,26 +753,7 @@ def main():
     bam_data = BamScanner(options.is_paired_end, options.max_window, 
                           sort_file_name, keep_file_name, remap_name, 
                           remap_num_name, fastq_names, snp_dir)
-    
-    # TODO: Wrap stuff below in a function or method.
-    # TODO: Necessary to call fill_table here? Called when bam_data is
-    # initialized.
-    bam_data.fill_table()
-    
-    #i=0
-    while not bam_data.end_of_file:
-        #i+=1
-        #if i>50000:
-            #sys.stderr.write(str(asizeof.asizeof(bam_data))+"\t"+str(asizeof.asizeof(bam_data.snp_table))+"\t"+str(asizeof.asizeof(bam_data.read_table))+"\t"+str(bam_data.num_reads)+"\t"+str(bam_data.num_snps)+"\n")
-            #sys.stderr.write(str(asizeof.asizeof(bam_data))+"\t"+str(bam_data.num_reads)+"\t"+str(bam_data.num_snps)+"\t"+str(len(bam_data.indel_dict))+"\n")
-            #i=0
-        if options.is_paired_end:
-            bam_data.empty_slot_paired()
-        else:
-            bam_data.empty_slot_single()
-        bam_data.fill_table()
-    
-    sys.stderr.write("Finished!\n")
+    bam_data.run()
 
 if __name__ == '__main__':
     main()

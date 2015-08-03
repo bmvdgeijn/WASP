@@ -657,10 +657,10 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
     gzf = util_must_gzopen(args->input_files[i], "rb");
 
     /* set gzip buffer size to 128k (131072 bytes) */
-    if(gzbuffer(gzf, 131072) == -1) {
-      my_err("%s:%d: failed to set gzbuffer size\n",
-	     __FILE__, __LINE__);
-    }
+    /* if(gzbuffer(gzf, 131072) == -1) { */
+    /*   my_err("%s:%d: failed to set gzbuffer size\n", */
+    /* 	     __FILE__, __LINE__); */
+    /* } */
 
     set_file_info(gzf, args, &file_info, NULL, impute_info);
     
@@ -760,10 +760,10 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	gzf = util_must_gzopen(hap_files[i], "rb");
       
 	/* set gzip buffer size to 128k (131072 bytes) */
-	if(gzbuffer(gzf, 131072) == -1) {
-	  my_err("%s:%d: failed to set gzbuffer size\n",
-		 __FILE__, __LINE__);
-	}
+	/* if(gzbuffer(gzf, 131072) == -1) { */
+	/*   my_err("%s:%d: failed to set gzbuffer size\n", */
+	/* 	 __FILE__, __LINE__); */
+	/* } */
 	  
 	fprintf(stderr, "parsing file and writing to HDF5 files\n");
 
@@ -875,10 +875,10 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
     gzf = util_must_gzopen(args->input_files[i], "rb");
 
     /* set gzip buffer size to 128k (131072 bytes) */
-    if(gzbuffer(gzf, 131072) == -1) {
-      my_err("%s:%d: failed to set gzbuffer size\n",
-	     __FILE__, __LINE__);
-    }
+    /* if(gzbuffer(gzf, 131072) == -1) { */
+    /*   my_err("%s:%d: failed to set gzbuffer size\n", */
+    /* 	     __FILE__, __LINE__); */
+    /* } */
 
     set_file_info(gzf, args, &file_info, vcf, NULL);
     

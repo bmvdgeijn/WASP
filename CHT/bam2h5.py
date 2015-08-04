@@ -262,6 +262,14 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             # spliced read, skip over this region of genome
             genome_start_idx += op_len
             is_split = True
+        elif op == BAM_CSOFT_CLIP:
+            # end of read is soft-clipped, which means it is 
+            # present in read, but not used in alignment
+            read_start_idx += op_len
+        elif op == BAM_CHARD_CLIP:
+            # end of read is hard-clipped, so not present
+            # in read and not used in alignment
+            pass
         else:
             sys.stderr.write("skipping because contains CIGAR code %s "
                              " which is not currently implemented" % 

@@ -705,13 +705,14 @@ class BamScanner:
             else:
                 self.empty_slot_single()
             self.fill_table()
-        
-        sys.stderr.write(
-            'Segment distance (from read pair and junction separation) was too '
-            'large for {:,} reads so those reads have been thrown out. '
-            'Consider increasing the max window '
-            'size.\n'.format(self.window_too_small)
-        )
+     
+        if self.window_too_small > 0:
+            sys.stderr.write(
+                'Segment distance (from read pair and junction separation) was '
+                'too large for {:,} reads so those reads have been thrown out. '
+                'Consider increasing the max window '
+                'size.\n'.format(self.window_too_small)
+            )
         sys.stderr.write("Finished!\n")
         self.keep_bam.close()
         self.remap_bam.close()
@@ -719,13 +720,31 @@ class BamScanner:
         [x.close() for x in self.fastqs]
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-p", action='store_true', 
-                        dest='is_paired_end', default=False)
-    parser.add_argument("-m", action='store', 
-                        dest='max_window', type=int, default=100000)
-    parser.add_argument("infile", action='store')
-    parser.add_argument("snp_dir", action='store')
+    parser=argparse.ArgumentParser()
+    parser.add_argument("-p", action='store_true', dest='is_paired_end', 
+                        default=False, help=('Indicates that reads are '
+                                             'paired-end (default is single).'))
+    parser.add_argument("-s", action='store_true', dest='is_sorted', 
+                        default=False, help=('Indicates that the input bam file'
+                                             ' is coordinate sorted (default '
+                                             'is False).'))
+    mdefault = 100000
+    mhelp = ('Changes the maximum window to search for SNPs.  The default is '
+             '{:,} base pairs.  Reads or read pairs that span more than this '
+             'distance (usually due to splice junctions) will be thrown out. '
+             'Increasing this window allows for longer junctions, but may '
+             'increase run time and memory requirements.'.format(mdefault))
+    parser.add_argument("-m", action='store', dest='max_window', type=int, 
+                        default=mdefault, help=mhelp)
+    parser.add_argument("infile", action='store', help=("Coordinate sorted bam "
+                        "file."))
+    snp_dir_help = ('Directory containing the SNPs segregating within the '
+                    'sample in question (which need to be checked for '
+                    'mappability issues).  This directory should contain '
+                    'sorted files of SNPs separated by chromosome and named: '
+                    'chr<#>.snps.txt.gz. These files should contain 3 columns: '
+                    'position RefAllele AltAllele')
+    parser.add_argument("snp_dir", action='store', help=snp_dir_help)
     
     options = parser.parse_args()
     infile = options.infile
@@ -737,7 +756,9 @@ def main():
     else:
         pref = name_split[0]
 
-    pysam.sort(infile, pref+".sort")
+    if not options.is_sorted:
+        pysam.sort(infile, pref + ".sort")
+        infile = pref + ".sort"
 
     sort_file_name = pref + ".sort.bam"
     keep_file_name = pref + ".keep.bam"

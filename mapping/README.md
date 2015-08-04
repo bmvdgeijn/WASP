@@ -86,8 +86,6 @@ retain the read with the highest score (which usually matches the reference). We
 #### Usage:
 	python rmdup.py <sorted.input.bam> <output.bam>
 	
-	
-	
+## Testing
 
-
-
+To run the tests, execute `py.test` from within this directory.

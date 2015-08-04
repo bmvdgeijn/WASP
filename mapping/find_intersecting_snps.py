@@ -486,22 +486,15 @@ class BamScanner:
                         for seq1 in seq1s:
                             for seq2 in seq2s:
                                 if not first:
-                                    left_pos = min(read.pos,pair_read.pos)
-                                    right_pos = max(read.pos,pair_read.pos)
-                                    loc_line = "%i:%s:%i:%i:%i" % (self.remap_num, self.chr_name, 
-                                                                   left_pos, right_pos, num_seqs-1)
-                                    self.fastqs[0].write("@%s\n%s\n+%s\n%s\n" % 
-                                                         (loc_line, seq1, loc_line, read.qual))
-                                    
-                                    self.fastqs[1].write("@%s\n%s\n+%s\n%s\n" % 
-                                                         (loc_line, self.reverse_complement(seq2),
-                                                          loc_line, pair_read.qual))
-                                first = False
-                        self.remap_num += 1
-
+                                    left_pos=min(read.pos, pair_read.pos)
+                                    right_pos=max(read.pos, pair_read.pos)
+                                    loc_line="%i:%s:%i:%i:%i" % (self.remap_num,self.chr_name,left_pos,right_pos,num_seqs-1)
+                                    self.fastqs[0].write("@%s\n%s\n+%s\n%s\n"%(loc_line,seq1,loc_line,read.qual))
+                                    self.fastqs[1].write("@%s\n%s\n+%s\n%s\n"%(loc_line,self.reverse_complement(seq2),loc_line,pair_read.qual))
+                                first=False
+                        self.remap_num+=1
                     # Stop searching for the pair since it was found.
-                    break
-        
+                    break 
         self.shift_SNP_table()
 
     def check_for_snps(self, read, start_dist):

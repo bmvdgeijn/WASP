@@ -73,13 +73,12 @@ def run(orig_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
     correct = 0
     end_of_file = False
     
-    import pdb
-    pdb.set_trace()
+    # import pdb
+    # pdb.set_trace()
     while (not end_of_file and map_indx < len(correct_maps) and 
            line_num <= correct_maps[-1]):
-        if line_num < correct_maps[map_indx]:
-            if orig_num == correct:
-                keep_bam.write(orig_read)
+        if line_num == correct_maps[map_indx]:
+            keep_bam.write(orig_read)
             # If the data is paired end, write out the paired read.
             if is_paired_end:
                 try:
@@ -87,22 +86,45 @@ def run(orig_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
                 except:
                     sys.stderr.write("File ended unexpectedly (no pair found).")
                     exit()
-                if orig_num == correct:
-                    keep_bam.write(orig_read)
-            
+                keep_bam.write(orig_read)
             line_num += 1
-            correct = 0
             try:
                 orig_read = orig_bam.next()
                 orig_num = int(orig_num_file.readline().strip())
             except:
                 end_of_file = True
-        elif line_num == correct_maps[map_indx]:
-            correct += 1
+        # elif line_num == correct_maps[map_indx]:
+        elif line_num < correct_maps[map_indx]:
             map_indx += 1
         else:
             sys.stderr.write("There was a problem with the index sorting\n.")
             exit()
+        # if line_num < correct_maps[map_indx]:
+        #     if orig_num == correct:
+        #         keep_bam.write(orig_read)
+        #     # If the data is paired end, write out the paired read.
+        #     if is_paired_end:
+        #         try:
+        #             orig_read = orig_bam.next()
+        #         except:
+        #             sys.stderr.write("File ended unexpectedly (no pair found).")
+        #             exit()
+        #         if orig_num == correct:
+        #             keep_bam.write(orig_read)
+        #     
+        #     line_num += 1
+        #     correct = 0
+        #     try:
+        #         orig_read = orig_bam.next()
+        #         orig_num = int(orig_num_file.readline().strip())
+        #     except:
+        #         end_of_file = True
+        # elif line_num == correct_maps[map_indx]:
+        #     correct += 1
+        #     map_indx += 1
+        # else:
+        #     sys.stderr.write("There was a problem with the index sorting\n.")
+        #     exit()
 
 def main():
     import argparse

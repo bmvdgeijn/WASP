@@ -247,7 +247,7 @@ class TestBamScanner:
         
         cleanup()
 
-    def test_2015_06_18_bug(self):
+    def test_issue_18(self):
         """
         This was reported as a bug because one read pair that overlaps one SNP
         was resulting in multiple pairs of reads in the fastq files. However, it
@@ -255,14 +255,14 @@ class TestBamScanner:
         """
         is_paired_end = True
         max_window = 100000
-        file_name = 'test_data/2015_06_18_bug.bam'
+        file_name = 'test_data/issue_18.bam'
         pref = 'test_data/test_paired'
         keep_file_name = pref + ".keep.bam"
         remap_name = pref + ".to.remap.bam"
         remap_num_name = pref + ".to.remap.num.gz"
         fastq_names = [pref + ".remap.fq1.gz",
                        pref + ".remap.fq2.gz"]
-        snp_dir = 'test_data/2015_06_18_bug_snps'
+        snp_dir = 'test_data/issue_18_snps'
         bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
                         remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
@@ -303,5 +303,3 @@ class TestBamScanner:
             assert lines[i] == qual
 
         cleanup()
-
-# TODO: Add in the read pairs that I think are causing bugs.

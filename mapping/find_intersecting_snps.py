@@ -352,8 +352,6 @@ class BamScanner:
                 self.add_indel()
             self.get_next_snp()
         
-        #sys.stderr.write(str(self.num_snps)+"\n")
-
     def add_snp(self):
         """
         Add a SNP to the SNP table. If the SNP table has a zero at this
@@ -429,19 +427,29 @@ class BamScanner:
             read = self.read_table[cur_slot].pop()
             self.num_reads -= 1
             seqs = self.check_for_snps(read, 0)
+            # num_seqs it the numbers of different sequences for this read which
+            # includes the original sequence as well as the different sequences
+            # with alternate alleles swapped in.
             num_seqs = len(seqs)
             if (num_seqs == 0) or (num_seqs > 10):
                 continue
             if (num_seqs == 1):
                 self.keep_bam.write(read)
             else:
-                self.remap_num_file.write("%i\n" % (num_seqs-1))
+                self.remap_num_file.write("%i\n" % (num_seqs - 1))
                 self.remap_num_file.flush()
                 self.remap_bam.write(read)
                 for seq in seqs[1:]:
-                    loc_line = "%i:%s:%i:%i" % (self.remap_num, 
-                                                self.chr_name, read.pos,num_seqs-1)
-                    self.fastqs[0].write("@%s\n%s\n+%s\n%s\n" % (loc_line, seq, loc_line,read.qual))
+                    loc_line = "%i:%s:%i:%i" % (
+                        self.remap_num, 
+                        self.chr_name, 
+                        read.pos,
+                        num_seqs - 1)
+                    self.fastqs[0].write("@%s\n%s\n+%s\n%s\n" % (
+                        loc_line, 
+                        seq, 
+                        loc_line,
+                        read.qual))
                 self.remap_num += 1
         self.shift_SNP_table()
 
@@ -486,11 +494,24 @@ class BamScanner:
                         for seq1 in seq1s:
                             for seq2 in seq2s:
                                 if not first:
-                                    left_pos=min(read.pos, pair_read.pos)
-                                    right_pos=max(read.pos, pair_read.pos)
-                                    loc_line="%i:%s:%i:%i:%i" % (self.remap_num,self.chr_name,left_pos,right_pos,num_seqs-1)
-                                    self.fastqs[0].write("@%s\n%s\n+%s\n%s\n"%(loc_line,seq1,loc_line,read.qual))
-                                    self.fastqs[1].write("@%s\n%s\n+%s\n%s\n"%(loc_line,self.reverse_complement(seq2),loc_line,pair_read.qual))
+                                    left_pos = min(read.pos, pair_read.pos)
+                                    right_pos = max(read.pos, pair_read.pos)
+                                    loc_line="%i:%s:%i:%i:%i" % (
+                                        self.remap_num,
+                                        self.chr_name,
+                                        left_pos,
+                                        right_pos,
+                                        num_seqs - 1)
+                                    self.fastqs[0].write("@%s\n%s\n+%s\n%s\n" % (
+                                        loc_line,
+                                        seq1,
+                                        loc_line,
+                                        read.qual))
+                                    self.fastqs[1].write("@%s\n%s\n+%s\n%s\n" % (
+                                        loc_line,
+                                        self.reverse_complement(seq2),
+                                        loc_line,
+                                        pair_read.qual))
                                 first=False
                         self.remap_num+=1
                     # Stop searching for the pair since it was found.
@@ -556,11 +577,6 @@ class BamScanner:
             # This generally happens if there is a junction read longer than the
             # max window.
             if seg_len > self.max_window:
-                #TODO: count the occurrences of this error and just report at
-                # the end.
-                # sys.stderr.write("Segment distance (from read pair and junction separation) "
-                #                  "is too large. A read has been thrown out. Consider increasing "
-                #                  "the max window size.\n")
                 self.window_too_small += 1
                 return([])
 

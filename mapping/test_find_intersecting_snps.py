@@ -303,5 +303,3 @@ class TestBamScanner:
             assert lines[i] == qual
 
         cleanup()
-
-# TODO: Add in the read pairs that I think are causing bugs.

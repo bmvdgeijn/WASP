@@ -20,25 +20,33 @@ def run(orig_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
     remap_read = remap_bam.next()
     
     while not end_of_file:
-        # The read names consist of four or five parts (depending on single or
-        # paired end data) separated by colons. The first part is the remap
-        # number. The first read pair from the input file to be remapped is 1,
-        # the second read pair is 2, etc. The second part is the chromosome
-        # name. The third part is the alignment position of the original read
-        # pair. The last part is the number of alternative sequences for the
-        # read pair (i.e. the number of new sequences with swapped alleles we
-        # have to map to see if they match with the alignment of the original
-        # sequence).  Note that if a read pair overlaps multiple SNPs and has
-        # multiple alternate sequences, each of those alternate sequences will
-        # have the exact same read name.
+        """
+        The read names in the fastq files for remapping consist of four or
+        five parts (depending on single (1:chr1:763045:1) or paired end data
+        (1:chr1:763006:763045:3)) separated by colons. The first part is the
+        remap number. The first read or read pair from the input file to be
+        remapped is 1, the second read pair is 2, etc. The second part is the
+        chromosome name. The third part is the alignment position of the
+        original read pair. If paired end data, the third part is the
+        alignment position of the left read (relative to the reference) and
+        the fourth part is the position of the right read. This is
+        irrespective of which read is R1 and R2. The left reads are written
+        into the R1 fastq file and the right reads are written into the R2
+        fastq file. The last part is the number of alternative sequences for
+        the read pair (i.e. the number of new sequences with swapped alleles
+        we have to map to see if they match with the alignment of the original
+        sequence). Note that if a read pair overlaps multiple SNPs and has
+        multiple alternate sequences, each of those alternate sequences will
+        have the exact same read name.
+        """
+
         chrm = remap_read.qname.strip().split(":")[1]
         
         if remap_read.is_reverse:
-            # TODO: This works when you have paired end data but I feel like
-            # this could be a problem for single end data. If the read was
-            # mapped to the reverse strand its position would be compared to the
-            # number of alternative sequences.
-            pos = int(remap_read.qname.strip().split(":")[3])
+            if is_paired_end:
+                pos = int(remap_read.qname.strip().split(":")[3])
+            else:
+                pos = int(remap_read.qname.strip().split(":")[2])
         else:
             pos = int(remap_read.qname.strip().split(":")[2])
         read_num = int(remap_read.qname.strip().split(":")[0])

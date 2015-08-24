@@ -1,12 +1,12 @@
-def run(orig_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
+def run(to_remap_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
     import gzip
     import sys
 
     import pysam
 
-    orig_bam = pysam.Samfile(orig_bam, "rb")
+    to_remap_bam = pysam.Samfile(to_remap_bam, "rb")
     remap_bam = pysam.Samfile(remap_bam, "rb")
-    keep_bam = pysam.Samfile(keep_bam, "wb", template=orig_bam)
+    keep_bam = pysam.Samfile(keep_bam, "wb", template=to_remap_bam)
     orig_num_file = gzip.open(orig_num_file)
 
     # correct_maps is a list of read pairs that mapped correctly. The read pair
@@ -71,7 +71,7 @@ def run(orig_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
 
     # Pull out original aligned reads if all of the alternatives mapped
     # correctly.
-    orig_read = orig_bam.next()
+    orig_read = to_remap_bam.next()
     # I believe orig_num is the number of different read pairs generated from
     # the original read pair (depends on number of alleles it overlapped).
     orig_num = int(orig_num_file.readline().strip())
@@ -90,14 +90,14 @@ def run(orig_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
             # If the data is paired end, write out the paired read.
             if is_paired_end:
                 try:
-                    orig_read = orig_bam.next()
+                    orig_read = to_remap_bam.next()
                 except:
                     sys.stderr.write("File ended unexpectedly (no pair found).")
                     exit()
                 keep_bam.write(orig_read)
             line_num += 1
             try:
-                orig_read = orig_bam.next()
+                orig_read = to_remap_bam.next()
                 orig_num = int(orig_num_file.readline().strip())
             except:
                 end_of_file = True
@@ -113,7 +113,7 @@ def run(orig_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
         #     # If the data is paired end, write out the paired read.
         #     if is_paired_end:
         #         try:
-        #             orig_read = orig_bam.next()
+        #             orig_read = to_remap_bam.next()
         #         except:
         #             sys.stderr.write("File ended unexpectedly (no pair found).")
         #             exit()
@@ -123,7 +123,7 @@ def run(orig_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
         #     line_num += 1
         #     correct = 0
         #     try:
-        #         orig_read = orig_bam.next()
+        #         orig_read = to_remap_bam.next()
         #         orig_num = int(orig_num_file.readline().strip())
         #     except:
         #         end_of_file = True
@@ -151,7 +151,7 @@ def main():
     
     options = parser.parse_args()
     
-    run(options.orig_bam, options.remap_bam, options.keep_bam,
+    run(options.to_remap_bam, options.remap_bam, options.keep_bam,
         options.orig_num_file, options.is_paired_end)
 
 if __name__ == '__main__':

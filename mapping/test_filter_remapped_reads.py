@@ -278,3 +278,29 @@ class TestRun:
         assert len(lines) == 2
 
         cleanup()
+
+class TestCLI:
+    def test_simple_single_cli(self):
+        is_paired_end = False
+        max_window = 100000
+        pref = 'test_data/test_single'
+        file_name = pref + ".sort.bam"
+        keep_file_name = pref + ".keep.bam"
+        remap_name = pref + ".to.remap.bam"
+        remap_num_name = pref + ".to.remap.num.gz"
+        fastq_names = [pref + ".remap.fq.gz"]
+        snp_dir = 'test_data/snps'
+        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs.run()
+
+        keep_bam = pref + '_filtered.bam'
+        c = ('python filter_remapped_reads.py {} {} {} {}'.format(
+            remap_name, 'test_data/test_single.remapped.bam', keep_bam,
+            remap_num_name))
+        subprocess.check_call(c, shell=True)
+
+        lines = read_bam(keep_bam)
+        assert len(lines) == 1
+
+        cleanup()

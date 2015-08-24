@@ -303,3 +303,37 @@ class TestBamScanner:
             assert lines[i] == qual
 
         cleanup()
+
+class TestCLI:
+    def test_simple_single_cli(self):
+        """This test is to make sure the cli functions."""
+        pref = 'test_data/test_single'
+        c = ('python find_intersecting_snps.py {}.sort.bam '
+             'test_data/snps'.format(pref))
+        subprocess.check_call(c, shell=True)
+
+        # file_name = pref + ".sort.bam"
+        # keep_bam = pref + '_filtered.bam'
+        # run(remap_name, 'test_data/test_single.remapped.bam', keep_bam,
+        #     remap_num_name, is_paired_end)
+
+        # lines = read_bam(keep_bam)
+        # assert len(lines) == 1
+
+        seq = ('CATCAAGCCAGCCTTCCGCTCCTTGAAGCTGGTCTCCACACAGTGCTGGTTCCGTCACCCCC'
+               'TCCCAAGGAAGTAGGTCTGAGCAGCTTGTCCTGGCTGT')
+        qual = ('BBBBBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
+                'FFFFFBFF<FFFFFFFFFBFFFFFFFFFFFFFFFFFFF')
+        with gzip.open('test_data/test_single.sort.remap.fq.gz') as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 4
+        assert lines[1] == seq
+        assert lines[3] == qual
+
+        # Verify to.remap bam is the same as the input bam file.
+        old_lines = read_bam('test_data/test_single.sort.sort.bam')
+        new_lines = read_bam('test_data/test_single.sort.to.remap.bam')
+        assert old_lines == new_lines
+        
+        cleanup()
+

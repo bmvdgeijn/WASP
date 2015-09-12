@@ -9,10 +9,15 @@ def run(to_remap_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
     keep_bam = pysam.Samfile(keep_bam, "wb", template=to_remap_bam)
     orig_num_file = gzip.open(orig_num_file)
 
-    # correct_maps is a list of read pairs that mapped correctly. The read pair
-    # is represented by its number (which is the order that it was seen in the
-    # original input bam file and also the first number in the its new read
-    # name, e.g. the 42 in @42:chr1:14536:1.
+    # correct_maps is a list of reads that mapped correctly. The read is
+    # is represented by its "ID number" (which is the order that it was seen in
+    # the original input bam file and also the first number in its new read
+    # name, e.g. the 42 in @42:chr1:14536:1). For paired end, both reads will
+    # have the same ID number. This means that the first read pair will have ID
+    # number 1, the second will be 2, and so on. For a read or read pair to be
+    # remapped correctly, the ID number X of that read/read pair should show up
+    # N amount of times in correct_maps where N is the value in orig_num_file at
+    # line X (one-based).
     correct_maps = []
     end_of_file = False
     
@@ -66,73 +71,86 @@ def run(to_remap_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
             end_of_file = True
     
     correct_maps.sort()
-    sys.stderr.write('{:,} reads remapped to the correct position\n'.format(
-        len(correct_maps)))
 
     # Pull out original aligned reads if all of the alternatives mapped
     # correctly.
     orig_read = to_remap_bam.next()
-    # I believe orig_num is the number of different read pairs generated from
-    # the original read pair (depends on number of alleles it overlapped).
+    # orig_num is the number of different reads generated from the original read
+    # (pair) (depends on number of alleles it overlapped). For paired end data,
+    # this is number is at least two (one for each read) and will always be a
+    # multiple of two.
     orig_num = int(orig_num_file.readline().strip())
+    # Line number of the remap_bam file (if single end data) or read pair
+    # number if paired end data.
     line_num = 1
     
+    # Index for walking through correct_maps.
     map_indx = 0
+    # Number of correctly mapped reads for the current read (pair).
     correct = 0
+    # Total number of correctly mapped read (pairs).
+    total_correct = 0
     end_of_file = False
-    
-    # import pdb
+   
+    # The idea here is that we will walk through remap_bam and check to see
+    # whether all of the possible reads spawned from the original read (pair)
+    # were mapped consistently with the original read (pair). Since correct_maps
+    # is sorted, it should look something like [1, 1, 2, 2, 3, 3, 3, 3, ...].
+    # If this example is for paired end data, this would mean that two reads
+    # from the first pair mapped correctly, two reads from the second read pair
+    # mapped correctly, four reads from the third read pair mapped correctly,
+    # and so on. If the number of reads that mapped correctly for a given ID
+    # number is equal to the corresponding orig_num, then everything is
+    # consistent and we keep the read pair. For instance, in the example above,
+    # correct_maps starts out with [1, 1]. This means that we have two correctly
+    # mapped reads for the read pair with ID number 1 (the first read pair). If
+    # the number on the first line of orig_num_file is 2, then we keep the read
+    # pair because both reads mapped correctly. If the first number of
+    # orig_num_file was 4, then we wouldn't keep the first read pair because
+    # two of the reads didn't map correctly.
+    import pdb
     # pdb.set_trace()
-    while (not end_of_file and map_indx < len(correct_maps) and 
-           line_num <= correct_maps[-1]):
-        if line_num == correct_maps[map_indx]:
-            keep_bam.write(orig_read)
-            # If the data is paired end, write out the paired read.
-            if is_paired_end:
-                try:
-                    orig_read = to_remap_bam.next()
-                except:
-                    sys.stderr.write("File ended unexpectedly (no pair found).")
-                    exit()
+    while (not end_of_file and 
+           (map_indx < len(correct_maps)) and 
+           (line_num <= correct_maps[-1])):
+        if line_num != correct_maps[map_indx]:
+            # If we saw the correct number of remaps for the last read, we can
+            # keep it.
+            if correct == orig_num:
+                total_correct += 1
                 keep_bam.write(orig_read)
+                # If the data is paired end, write out the paired read.
+                if is_paired_end:
+                    try:
+                        orig_read = to_remap_bam.next()
+                    except:
+                        sys.stderr.write("File ended unexpectedly (no pair found).")
+                        exit()
+                    keep_bam.write(orig_read)
+            else:
+                second_read = to_remap_bam.next()
+
+            orig_read = to_remap_bam.next()
+            orig_num = int(orig_num_file.readline().strip())
             line_num += 1
+            correct = 0
+        else:
+            correct += 1
+            map_indx += 1
+
+    if correct == orig_num:
+        total_correct += 1
+        keep_bam.write(orig_read)
+        # If the data is paired end, write out the paired read.
+        if is_paired_end:
             try:
                 orig_read = to_remap_bam.next()
-                orig_num = int(orig_num_file.readline().strip())
             except:
-                end_of_file = True
-        # elif line_num == correct_maps[map_indx]:
-        elif line_num < correct_maps[map_indx]:
-            map_indx += 1
-        else:
-            sys.stderr.write("There was a problem with the index sorting\n.")
-            exit()
-        # if line_num < correct_maps[map_indx]:
-        #     if orig_num == correct:
-        #         keep_bam.write(orig_read)
-        #     # If the data is paired end, write out the paired read.
-        #     if is_paired_end:
-        #         try:
-        #             orig_read = to_remap_bam.next()
-        #         except:
-        #             sys.stderr.write("File ended unexpectedly (no pair found).")
-        #             exit()
-        #         if orig_num == correct:
-        #             keep_bam.write(orig_read)
-        #     
-        #     line_num += 1
-        #     correct = 0
-        #     try:
-        #         orig_read = to_remap_bam.next()
-        #         orig_num = int(orig_num_file.readline().strip())
-        #     except:
-        #         end_of_file = True
-        # elif line_num == correct_maps[map_indx]:
-        #     correct += 1
-        #     map_indx += 1
-        # else:
-        #     sys.stderr.write("There was a problem with the index sorting\n.")
-        #     exit()
+                sys.stderr.write("File ended unexpectedly (no pair found).")
+                exit()
+            keep_bam.write(orig_read)
+    sys.stderr.write('{:,} read (pair)s remapped to the correct position\n'.format(
+        total_correct))
 
 def main():
     import argparse

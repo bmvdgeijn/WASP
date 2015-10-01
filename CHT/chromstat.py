@@ -2,8 +2,6 @@
 import sys
 import numpy as np
 
-import genome.db
-
 
 class ChromStats(object):
     def __init__(self):

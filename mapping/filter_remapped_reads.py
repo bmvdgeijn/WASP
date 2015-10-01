@@ -128,7 +128,11 @@ def run(to_remap_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
                         exit()
                     keep_bam.write(orig_read)
             else:
-                second_read = to_remap_bam.next()
+                try:
+                    second_read = to_remap_bam.next()
+                except:
+                    end_of_file=True
+                    break
 
             orig_read = to_remap_bam.next()
             orig_num = int(orig_num_file.readline().strip())

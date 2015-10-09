@@ -108,8 +108,6 @@ def run(to_remap_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
     # pair because both reads mapped correctly. If the first number of
     # orig_num_file was 4, then we wouldn't keep the first read pair because
     # two of the reads didn't map correctly.
-    import pdb
-    # pdb.set_trace()
     while (not end_of_file and 
            (map_indx < len(correct_maps)) and 
            (line_num <= correct_maps[-1])):
@@ -130,8 +128,11 @@ def run(to_remap_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
             else:
                 second_read = to_remap_bam.next()
 
-            orig_read = to_remap_bam.next()
-            orig_num = int(orig_num_file.readline().strip())
+            try:
+                orig_read = to_remap_bam.next()
+                orig_num = int(orig_num_file.readline().strip())
+            except StopIteration:
+                end_of_file = True
             line_num += 1
             correct = 0
         else:

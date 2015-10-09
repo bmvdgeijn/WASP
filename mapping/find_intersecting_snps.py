@@ -764,12 +764,14 @@ def main():
         pref = ".".join(name_split[:-1])
     else:
         pref = name_split[0]
-
+    
     if not options.is_sorted:
         pysam.sort(infile, pref + ".sort")
         infile = pref + ".sort"
+        sort_file_name = pref + ".sort.bam"
+    else:
+        sort_file_name = infile
 
-    sort_file_name = pref + ".sort.bam"
     keep_file_name = pref + ".keep.bam"
     remap_name = pref + ".to.remap.bam"
     remap_num_name = pref + ".to.remap.num.gz"

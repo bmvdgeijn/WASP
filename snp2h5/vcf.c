@@ -141,9 +141,11 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
   /* get index of GT token in format string*/
   gt_idx = get_format_index(vcf_info->format, "GT");
   if(gt_idx == -1) {
-    my_err("%s:%d: VCF format string does not specify GT token, "
-	   "cannot obtain haplotypes: '%s'", __FILE__, __LINE__,
-	   vcf_info->format);
+    my_err("%s:%d: VCF format string does not specify GT token "
+	   "so cannot obtain haplotypes. Format string: '%s'.\n"
+	   "To use this file, you must run snp2h5 without "
+	   "the --haplotype option.",
+	   __FILE__, __LINE__, vcf_info->format);
   }
   
   expect_haps = vcf_info->n_samples * 2;
@@ -228,8 +230,11 @@ void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
   /* get index of GL token in format string*/
   gl_idx = get_format_index(vcf_info->format, "GL");
   if(gl_idx == -1) {
-    my_err("%s:%d: VCF format string does not specify GL token, cannot "
-	   "obtain genotype probabilities", __FILE__, __LINE__);
+    my_err("%s:%d: VCF format string does not specify GL token so cannot "
+	   "obtain genotype probabilities. Format string: '%s'.\n"
+	   "To use this file, you must run snp2h5 without "
+	   "the --geno_prob option.", __FILE__, __LINE__,
+	   vcf_info->format);
   }
 
   n_geno_probs = 0;

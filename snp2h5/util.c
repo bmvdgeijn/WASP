@@ -150,7 +150,16 @@ long util_gzcount_lines(gzFile gzf) {
     }
   }
 
-  if(gzseek(gzf, 0L, SEEK_SET) != 0) {
+  /**
+   * Note: 10/12/2015. There appears to be a bug in gzseek in windows
+   * such that it does not work on an uncompessed stream. Switching
+   * to gzrewind instead...
+   */
+  /*  if(gzseek(gzf, 0L, SEEK_SET) != 0) {
+   *my_err("%s:%d: could not rewind filehandle", __FILE__, __LINE__);
+   *}
+   */
+  if(gzrewind(gzf) != 0) {
     my_err("%s:%d: could not rewind filehandle", __FILE__, __LINE__);
   }
 

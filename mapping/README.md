@@ -49,7 +49,11 @@ Use find_intersecting_snps.py to identify reads that may have mapping biases
 
 Step 3
 -----
-Map the input.remap.fq.gz using the same mapping choices as before
+Map the input.remap.fq.gz using the same mapping arguments used in Step 1. Note that 
+the arguments should be exactly the same as those in Step 1 EXCEPT for arguments that 
+directly modify the reads that are used by the aligner. For example the read trimming 
+arguments to bowtie (e.g. -3 and -5 arguments) should be used in Step 1 ONLY because
+they modify the reads that are output by the bowtie.
 
 #### Example:
 	tophat --no-coverage-search -o ${LANE_NAME}_out_remap hg18_norand ${LANE_NAME}_out/accepted_hits.quality.remap.fq.gz

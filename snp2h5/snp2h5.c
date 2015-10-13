@@ -471,13 +471,13 @@ void close_h5vector(H5VectorInfo *info) {
  * sets attributes such as number of samples in FileInfo structure,
  * and advances file handle to end of header
  */
-void set_file_info(gzFile gzf, Arguments *args, FileInfo *file_info,
+void set_file_info(gzFile gzf, char *filename, Arguments *args, FileInfo *file_info,
 		   VCFInfo *vcf, ImputeInfo *impute_info) {
   long n_col;
   
   /* count total number lines in file, this tells us number of records */
   fprintf(stderr, "counting lines in file\n");
-  file_info->n_lines = util_gzcount_lines(gzf);
+  file_info->n_lines = util_count_lines(filename);
   fprintf(stderr, "  total lines: %ld\n", file_info->n_lines);
 
   if(args->format == FORMAT_VCF) {
@@ -655,14 +655,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
     /* open file, count number of lines */
     fprintf(stderr, "reading from file %s\n", imp_files[i]);
     gzf = util_must_gzopen(args->input_files[i], "rb");
-
-    /* set gzip buffer size to 128k (131072 bytes) */
-    /* if(gzbuffer(gzf, 131072) == -1) { */
-    /*   my_err("%s:%d: failed to set gzbuffer size\n", */
-    /* 	     __FILE__, __LINE__); */
-    /* } */
-
-    set_file_info(gzf, args, &file_info, NULL, impute_info);
+    set_file_info(gzf, args->input_files[i], args, &file_info, NULL, impute_info);
     
     /* initialize output files and memory to hold genotypes,
      * haplotypes, etc
@@ -874,13 +867,7 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
     fprintf(stderr, "reading from file %s\n", args->input_files[i]);
     gzf = util_must_gzopen(args->input_files[i], "rb");
 
-    /* set gzip buffer size to 128k (131072 bytes) */
-    /* if(gzbuffer(gzf, 131072) == -1) { */
-    /*   my_err("%s:%d: failed to set gzbuffer size\n", */
-    /* 	     __FILE__, __LINE__); */
-    /* } */
-
-    set_file_info(gzf, args, &file_info, vcf, NULL);
+    set_file_info(gzf, args->input_files[i], args, &file_info, vcf, NULL);
     
     /* initialize output files and memory to hold genotypes,
      * haplotypes, etc

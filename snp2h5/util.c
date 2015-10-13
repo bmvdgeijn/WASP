@@ -128,6 +128,29 @@ void util_fwrite_line_subset(FILE *input_fh, FILE *output_fh,
 
 
 
+
+/**
+ * Counts number of newline characters in file with provided path
+ */
+long util_count_lines(const char *filename) {
+  char c;
+  long line_count;
+  gzFile gzf;
+
+  gzf = util_must_gzopen(filename, "rb");
+
+  line_count = 0;
+  while((c = gzgetc(gzf)) != EOF) {
+    if(c == '\n') {
+      line_count += 1;
+    }
+  }
+  
+  gzclose(gzf);
+
+  return line_count;
+}
+
 /**
  * Counts the number of '\n' characters in the provided gzipped file.
  * The gzFile is rewound to the beginning of the file before and after the count of
@@ -136,9 +159,8 @@ void util_fwrite_line_subset(FILE *input_fh, FILE *output_fh,
 long util_gzcount_lines(gzFile gzf) {
   char c;
   long line_count;
-  size_t len;
 
-  if(gzseek(gzf, 0L, SEEK_SET) != 0) {
+  if(gzrewind(gzf) != 0) {
     my_err("%s:%d: could not rewind filehandle", __FILE__, __LINE__);
   }
 
@@ -150,15 +172,7 @@ long util_gzcount_lines(gzFile gzf) {
     }
   }
 
-  /**
-   * Note: 10/12/2015. There appears to be a bug in gzseek in windows
-   * such that it does not work on an uncompessed stream. Switching
-   * to gzrewind instead...
-   */
-  /*  if(gzseek(gzf, 0L, SEEK_SET) != 0) {
-   *my_err("%s:%d: could not rewind filehandle", __FILE__, __LINE__);
-   *}
-   */
+
   if(gzrewind(gzf) != 0) {
     my_err("%s:%d: could not rewind filehandle", __FILE__, __LINE__);
   }

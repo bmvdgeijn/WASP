@@ -48,7 +48,9 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
   char *line, *cur, *token;
   int tok_num;
   int n_fix_header;
-  const char delim[] = " \t";
+  
+  /* const char delim[] = " \t"; */
+  const char delim[] = "\t";
 
   n_fix_header = sizeof(vcf_fix_headers) / sizeof(const char *);
 
@@ -134,7 +136,9 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
   static int warn_phase = TRUE;
   long expect_haps, n_haps;
   char gt_str[VCF_MAX_FORMAT];
-  char delim[] = " \t";
+  
+  /* char delim[] = " \t"; */
+  char delim[] = "\t";
   char inner_delim[] = ":";
   char *inner_cur, *tok, *inner_tok;
 
@@ -217,7 +221,8 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 
 void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
 		      char *cur) {
-  char delim[] = " \t";
+  /* char delim[] = " \t"; */
+  char delim[] = "\t";
   char inner_delim[] = ":";
   char *tok, *inner_tok, *inner_cur;
   char gtype[VCF_MAX_FORMAT];
@@ -322,7 +327,13 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   char *cur, *token;
   int n_fix_header, ref_len, alt_len;
   size_t tok_num;
-  const char delim[] = " \t";
+
+  /* Used to allow space or tab delimiters here but now only allow tab. 
+   * This is because VCF specification indicates that fields should be tab-delimited, 
+   * and occasionally some fields contain spaces.
+   */
+  /* const char delim[] = " \t";*/
+  const char delim[] = "\t";
 
   n_fix_header = sizeof(vcf_fix_headers) / sizeof(const char *);
 

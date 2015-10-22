@@ -211,8 +211,12 @@ def get_sam_iter(samfile, chrom):
             sam_iter = samfile.fetch(reference=chrom_name,
                                      start=1, end=chrom.length)
         except ValueError:
+            # fetch can fail because chromosome is missing or because
+            # BAM has not been indexed
             sys.stderr.write("WARNING: %s does not exist in BAM file, "
-                             "skipping chromosome\n" % chrom_name)
+                             "or BAM file has not been indexed (use 'samtools index' to "
+                             "index BAM files before running bam2h5.py)."
+                             " Skipping chromosome\n" % chrom_name)
             sam_iter = iter([])
 
     return sam_iter

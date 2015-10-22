@@ -140,7 +140,9 @@ ommitted if GC-content correction is not used.
 
 Extract read counts from BAM files (from Step 1) and write them to
 HDF5 files using the [bam2h5.py](README.bam2h5.md) program.  This must
-be done for each sample/individual in the dataset.
+be done for each sample/individual in the dataset. Note that BAM files
+must be sorted and indexed (e.g. using `samtools sort` and `samtools index`) 
+before bam2h5.py can be run.
 
     python CHT/bam2h5.py --chrom example_data/chromInfo.hg19.txt \
 	      --snp_index example_data/snp_index.h5 \

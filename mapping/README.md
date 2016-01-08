@@ -78,8 +78,13 @@ Use filter_remapped_reads.py to retrieve reads that remapped correctly
 	filter_remapped_reads.py ${LANE_NAME}_out/accepted_hits.quality.to.remap.bam ${LANE_NAME}_out_remap/accepted_hits.quality.bam ${LANE_NAME}.remap.keep.bam ${LANE_NAME}_out/accepted_hits.quality.to.remap.num.gz
 
 At the end of the pipeline, ${LANE_NAME}.keep.bam and ${LANE_NAME}.remap.keep.bam 
-can be merged for a complete set of mappability filtered aligned reads
-	
+can be merged for a complete set of mappability filtered aligned reads. The merged
+file should then be sorted and indexed:
+
+	samtools merge ${LANE_NAME}.keep.merged.bam ${LANE_NAME}.keep.bam ${LANE_NAME}.remap.keep.bam
+	samtools sort ${LANE_NAME}.keep.merged.bam ${LANE_NAME}.keep.merged.sorted
+	samtools index ${LANE_NAME}.keep.merged.sorted.bam
+
 
 Step 5 (Optional)
 ------
@@ -88,7 +93,10 @@ Filter duplicate reads. Programs such as samtools rmdup introduce bias when they
 retain the read with the highest score (which usually matches the reference). We provide a script rmdup.py which performs unbiased removal of duplicate reads. The script discards duplicate reads at random (independent of their score). The input BAM or SAM file must be sorted.
 
 #### Usage:
+	# for single end reads:
 	python rmdup.py <sorted.input.bam> <output.bam>
+	# for paired-end reads:
+	python rmdup_pe.py <sorted.input.bam> <output.bam>
 	
 ## Testing
 

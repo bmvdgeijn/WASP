@@ -718,10 +718,10 @@ class BamScanner:
         if self.window_too_small > 0:
             sys.stderr.write(
                 'Segment distance (from read pair and junction separation) was '
-                'too large for {:,} reads so those reads have been thrown out. '
+                'too large for %d reads so those reads have been thrown out. '
                 'Consider increasing the max window '
-                'size.\n'.format(self.window_too_small)
-            )
+                'size.\n' % self.window_too_small)
+
         sys.stderr.write("Finished!\n")
         self.keep_bam.close()
         self.remap_bam.close()
@@ -739,10 +739,10 @@ def main():
                                              'is False).'))
     mdefault = 100000
     mhelp = ('Changes the maximum window to search for SNPs.  The default is '
-             '{:,} base pairs.  Reads or read pairs that span more than this '
+             '%d base pairs.  Reads or read pairs that span more than this '
              'distance (usually due to splice junctions) will be thrown out. '
              'Increasing this window allows for longer junctions, but may '
-             'increase run time and memory requirements.'.format(mdefault))
+             'increase run time and memory requirements.' % mdefault)
     parser.add_argument("-m", action='store', dest='max_window', type=int, 
                         default=mdefault, help=mhelp)
     parser.add_argument("infile", action='store', help=("Coordinate sorted bam "

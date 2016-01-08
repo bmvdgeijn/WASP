@@ -154,8 +154,8 @@ def run(to_remap_bam, remap_bam, keep_bam, orig_num_file, is_paired_end):
                 sys.stderr.write("File ended unexpectedly (no pair found).")
                 exit()
             keep_bam.write(orig_read)
-    sys.stderr.write('{:,} read (pair)s remapped to the correct position\n'.format(
-        total_correct))
+    sys.stderr.write('%d read (pair)s remapped to the correct position\n' %
+                     total_correct)
 
 def main():
     import argparse

@@ -36,13 +36,16 @@ Use find_intersecting_snps.py to identify reads that may have mapping biases
 
 #### Output:
 	input.sort.bam - Sorted bamfile of the original input
-	input.keep.bam - bamfile with reads that did not intersect SNPs and therefore can 
+	input.keep.bam - bamfile with reads that did not intersect SNPs or indels and therefore can 
 	   be kept without remapping
-	input.to.remap.bam - bamfile with original reads that need to be remapped
-	input.to.remap.num.gz - matched lines with the input.to.remap.bam that 
-	   indicate the number of variants of the original read that must be remapped
-	input.remap.fq.gz - fastq file containing the new variants to remap will be 
-	   .fq1.gz and .fq2.gz if the paired end option is used
+	input.to.remap.bam - bamfile with original reads that overlapped SNPs that need to be remapped
+	input.to.remap.num.gz - the number of variants of the original read that must be remapped
+	input.remap.fq.gz - fastq file containing the reads with the new variants to remap. If the 
+	    paired-end option is used two files ending with .fq1.gz and .fq2.gz will be output.
+	    
+	Note: Reads that overlap indels are currently excluded and will not be present in any of the 'remap' files
+	or the input.keep.bam file. For this reason the total number of reads will not add up to the number of reads in
+	the input.sort.bam file.
 
 #### Example:
 	python find_intersecting_snps.py ${LANE_NAME}_out/accepted_hits.quality.bam SNP_files/

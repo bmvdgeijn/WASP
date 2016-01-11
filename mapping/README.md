@@ -44,8 +44,8 @@ Use find_intersecting_snps.py to identify reads that may have mapping biases
 	    paired-end option is used two files ending with .fq1.gz and .fq2.gz will be output.
 	    
 	Note: Reads that overlap indels are currently excluded and will not be present in any of the 'remap' files
-	or the input.keep.bam file. For this reason the total number of reads will not add up to the number of reads in
-	the input.sort.bam file.
+	or the input.keep.bam file. For this reason the total number of reads will not add up to the 
+	number of reads provided in the input.sort.bam file.
 
 #### Example:
 	python find_intersecting_snps.py ${LANE_NAME}_out/accepted_hits.quality.bam SNP_files/

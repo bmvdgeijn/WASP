@@ -138,9 +138,9 @@ def get_at_gc_count(seq_h5, chrm, start, end):
         at_count += counts[ord("A")]
     if len(counts) >= ord("T"):
         at_count += counts[ord("T")]
-    if len(counts >= ord("G")):
+    if len(counts) >= ord("G"):
         gc_count += counts[ord("G")]
-    if len(counts >= ord("C")):
+    if len(counts) >= ord("C"):
         gc_count += counts[ord("C")]
     
     return at_count, gc_count

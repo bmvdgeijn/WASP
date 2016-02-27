@@ -13,7 +13,8 @@
 import sys
 import os
 import argparse
-
+import subprocess
+import pysam
 
 
 def parse_options():
@@ -51,24 +52,24 @@ def parse_options():
                         help="Path to the input fastq file",
                         required=True)
     
-    parser.add_argument("--fastq2", dest="fastq2",
+    parser.add_argument("--fastq2", dest="fastq2", default=None,
                         help="Path to the second fastq file (optional: "
                         "only required if paired-end reads are used)",
                         required=False)
     
     parser.add_argument("--output_dir", dest="output_dir",
-                        help="Path to output directory where files "
-                        "are written",
+                        help="Path to directory to write output files "
+                        "to",
                         required=True)
 
     parser.add_argument("snp_files", nargs="+",
                         help="Files containing SNPs that need to be "
                         "checked for mappability issues. The SNP files "
-                        "may be in impute2, VCF, or 3 column text file format. "
-                        "Each chromosome must have a single file and the "
-                        "filename must contain the name of the chromosome. "
-                        "The 3 column format is <position> <RefAllele> "
-                        "<AltAllele>", required=True)
+                        "may be in impute2, VCF, or 3 column text file "
+                        "format. Each chromosome must have a single file "
+                        "and the filename must contain the name of the "
+                        "chromosome. The 3 column text file format is: "
+                        "<position> <RefAllele> <AltAllele>")
     
     return parser.parse_args()
 
@@ -88,7 +89,7 @@ class InputOutputPaths(object):
             self.input_fastq2 = options.fastq2
             self.prefix2 = self.get_prefix(options.fastq2)            
         else:
-            self.input_fastq1 = None
+            self.input_fastq2 = None
             self.prefix2 = None
             
         self.output_dir = options.output_dir
@@ -105,6 +106,7 @@ class InputOutputPaths(object):
         
         # output from first mapping step
         self.output_bam = self.output_dir + self.prefix1 + ".bam"
+        self.sorted_output_bam = self.output_dir + self.prefix1 + ".sort.bam"
         
         # bam files partitioned by whether they need to be remapped or not
         self.to_keep_bam = self.output_dir + self.prefix1 + ".to_keep.bam"
@@ -130,41 +132,33 @@ class InputOutputPaths(object):
                                   ".merged_to_keep.bam"
 
         
-    def get_prefix(self, filename):
-        """returns prefix of filename by stripping off
-        .gz and .fastq postfixes"""
-        tokens = options.fastq1.split(".")
+    def get_prefix(self, path):
+        """returns filename prefix by stripping off leading directories as 
+        well as .gz and .fastq postfixes"""
+
+        dirs = path.split("/")
+        filename = dirs[-1]
+        
+        tokens = filename.split(".")
         if tokens[-1] == "gz":
             tokens.pop()
         if tokens[-1] in ["fastq", "FASTQ", "fq", "FQ"]:
             tokens.pop()
+        
 
         return ".".join(tokens)
 
         
             
-            
-
-            
-            
-            
-        
-
-    
-
-
-
-    
     
 
 def get_map_commands(options):
-    """Takes map and (optional) remap comamnds specified by command line args,
+    """Takes map and (optional) remap commands specified by command line args,
     and checks if they are files. If they are files, the contents
     of the files are returned, otherwise the specified string is returned.
     If no --remap_command argument is provided, the --map_command argument
     is used in its place.
-    """
-    
+    """    
     map1_arg = options.map_command
 
     if options.remap_command:
@@ -176,7 +170,7 @@ def get_map_commands(options):
     map_args = [map1_arg, map2_arg]
     map_cmds = []
 
-    for i in range(len(map_cmds)):
+    for i in range(len(map_args)):
         map_arg = map_args[i]
         
         if os.path.exists(map_arg):
@@ -193,26 +187,137 @@ def get_map_commands(options):
             map_cmds.append(map_arg)
 
     return map_cmds
+
+
+def perform_first_mapping(paths, map_command):    
+    # step 1 - performing mapping using user-provided mapping command
+    cmd1 = map_command.replace("FASTQ1", paths.input_fastq1)
+
+    if "FASTQ2" in map_command:
+        if paths.input_fastq2 is None:
+            raise ValueError("cannot determine path for FASTQ2 in "
+                             "mapping command because --fastq2 option "
+                             "not specified")
+        cmd1 = cmd1.replace("FASTQ2", paths.input_fastq2)
+
+
+    cmd1 = cmd1.replace("OUTPUT_BAM", paths.output_bam)
+
+    sys.stderr.write("running command: %s\n" % cmd1)
+    
+    subprocess.check_call(cmd1, shell="True")
+
+    # check that output was written to correct place by command
+    if not os.path.exists(paths.output_bam):
+        raise ValueError("output BAM file '%s' was not created by "
+                         "mapping command %s" % (paths.output_bam, cmd1))
+
+    return cmd1
+        
+
+def find_intersecting_snps(options, paths):
+    # TODO: Need to change this so that the
+    # find_intersecting_snps.py can be called directly as python module.
+    # However the script needs to be refactored, so in the meantime
+    # shell out call it
+    args = []
+
+    # is this paired end?
+    if paths.input_fastq2:
+        args.append("-p")
+
+    # we already sorted input
+    args.append("-s")
+
+    # input BAM file
+    args.append(paths.sorted_output_bam)
+
+    # TODO: for now just figure out what snp dir is,
+    # eventually allow for list of named files instead?
+    tokens = options.snp_files[0].split("/")
+    snp_dir = "/".join(tokens[:-1])
+    
+    # path to SNPs file
+    args.append(snp_dir)
+
+    cmd = "python mapping/find_intersecting_snps.py " + " ".join(args)
+    sys.stderr.write("running command: %s\n" % cmd)
+    
+    subprocess.check_call(cmd, shell=True)
+
+    
+def sort_bam(input_bam, output_prefix):
+    """Calls samtools sort on input_bam filename and writes to
+    output_bam"""
+
+    output_bam = output_prefix + ".sort.bam"
+    
+    # first try new way of using samtools sort
+    failed = False
+    cmd = "samtools sort -o " + output_bam + " " + input_bam
+    sys.stderr.write("running command: %s\n" % cmd)
+    try:
+        subprocess.check_call(cmd, shell=True)
+    except Exception as e:
+        sys.stderr.write("samtools sort command failed:\n%s\n" %
+                         str(e))
+        failed = True
+    if not os.path.exists(output_bam):
+        sys.stderr.write("output file %s does not exist\n" % output_bam)
+        failed = True
+        
+    if failed:
+        # OLD way of calling samtools (changed in newer versions)
+        sys.stderr.write("samtools sort command failed, trying old samtools "
+                         "syntax\n")
+        
+        cmd = "samtools sort " + input_bam + " " + output_prefix
+        sys.stderr.write("running command: %s\n" % cmd)
+
+        try:
+            subprocess.check_call(cmd, shell=True)
+        except Exception as e:
+            sys.stderr.write("samtools sort command failed:\n%s\n" %
+                             str(e))
+            exit(1)
+        
+        if not os.path.exists(paths.sorted_output_bam):
+            raise IOError("Failed to create sorted BAM file '%s'" %
+                          paths.sorted_output_bam)
     
 
-
-def get_paths(options, map_command1, map_command2):
     
 
 
 def main():
     options = parse_options()
 
+    paths = InputOutputPaths(options)
+
+    ## TODO: could check all paths for whether they exist
+    ## here to avoid crashing at later step
+    
     map_command1, map_command2 = get_map_commands(options)
     
-    # step 1 - performing mapping using user-provided mapping command
+    sys.stderr.write("map_command1: %s\nmap_command2: %s\n" %
+                     (map_command1, map_command2))
+
+    # step 1 - perform first mapping: all reads
+    sys.stderr.write("== step 1: performing first mapping\n")
+    perform_first_mapping(paths, map_command1)
     
     # step 2 - sort BAM file containing mapped reads
+    sys.stderr.write("== step 2: sorting BAM file\n")
+    sort_bam(paths.output_bam, paths.output_dir + paths.prefix1)
+    
     
     # step 3 - find intersecting SNPs and partition BAM file into
     # reads that overlap SNPs and reads that do not
-
+    sys.stderr.write("== step 3: finding intersecting SNPs\n")
+    find_intersecting_snps(options, paths)
+    
     # step 4 - remap reads that overlap SNPs
+    sys.stderr.write("== step 4: remapping reads that overlap SNPs\n")
 
     # step 5 - sort BAM file containing remapped reads
 

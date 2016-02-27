@@ -251,6 +251,10 @@ class BamScanner:
                 
         # Initialize the read tracking tables.
         self.read_table = [[] for x in range(self.max_window)]
+        self.indel_dict = {}
+        self.snp_table = [0 for x in range(self.max_window)]
+        self.indel_table = [[] for x in range(self.max_window)]                
+        self.end_of_snp_file = False
         
         # Initialize the SNP and indel tracking tables.
         self.switch_chr()
@@ -306,14 +310,15 @@ class BamScanner:
         """Switches to looking for SNPs on next chromosome."""
         chr_match = False
         while not chr_match and not self.end_of_file:
+            filename = "%s/%s.snps.txt.gz" % (self.snp_dir, self.chr_name)
             try:
-                self.snpfile = gzip.open("%s/%s.snps.txt.gz" 
-                                         % (self.snp_dir,self.chr_name))
+                self.snpfile = gzip.open(filename)
                 sys.stderr.write("Starting on chromosome " + self.chr_name+"\n")
                 chr_match = True
             except:
-                sys.stderr.write("SNP file for chromosome " + 
-                                 self.chr_name + " is not found. Skipping these reads.\n")
+                sys.stderr.write("SNP file for chromosome %s not found: %s\n"
+                                 "Skipping these reads.\n" %
+                                 (self.chr_name, filename))
                 self.skip_chr()
         
         self.end_of_snp_file = False
@@ -333,6 +338,9 @@ class BamScanner:
         Also creates an indel dict which is a dict whose keys are genomic
         positions and whose values are SNP objects whose ptype is indel.
         """
+
+        sys.stderr.write("initializing SNP table")
+        
         # Number of SNPs in this table. I think this is total number of
         # different alleles across the whole table. I'm not exactly sure.
         self.num_snps = 0

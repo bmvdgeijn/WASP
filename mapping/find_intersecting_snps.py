@@ -467,12 +467,17 @@ class BamScanner:
         
         cur_slot = self.pos % self.max_window
 
+        
         # While there are reads in this slot...
         while len(self.read_table[cur_slot]) > 0:
+            sys.stderr.write("current slot: %d\n" % cur_slot)
+
             # Pop the first read in the slot
             read = self.read_table[self.pos % self.max_window].pop()
             self.num_reads -= 1
 
+            sys.stderr.write("read: %s\n" % repr(read))
+            
             # Figure out the matching read position
             pair_chr_num = read.rnext 
             pair_pos = read.mpos 
@@ -482,6 +487,7 @@ class BamScanner:
 
             # Find the slot the matching read is in
             pair_slot = pair_pos % self.max_window
+            
             for indx in range(len(self.read_table[pair_slot])):
                 if self.read_table[pair_slot][indx].qname.split(":")[-1] == read.qname.split(":")[-1]:
                     pair_read = self.read_table[pair_slot].pop(indx)
@@ -549,6 +555,8 @@ class BamScanner:
             the other allele. If the list is empty, the read overlaps an indel
             or has a CIGAR character besides N or M so we throw it out.
         """
+        sys.stderr.write("checking read for SNP overlap\n")
+        
         indx = read.pos % self.max_window
         # p keeps track of the number of read bases we've already analyzed. When
         # p = length of the read, we are done with this read.
@@ -597,6 +605,7 @@ class BamScanner:
                 # see whether it contains a SNP.
                 for i in range(cigar[1]):  
                     if len(self.indel_table[indx]) == 0:
+                        # sys.stderr.write("READ overlaps SNP\n")
                         snp = self.snp_table[indx]
                         if snp != 0:
                             num_snps += 1
@@ -621,6 +630,7 @@ class BamScanner:
                                 else:
                                     self.ref_match += 1
                     else:
+                        # sys.stderr.write("READ overlaps INDEL\n")
                         # It's an indel, throw it out.
                         self.toss += 1
                         return([])

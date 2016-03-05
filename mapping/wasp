@@ -16,6 +16,8 @@ import argparse
 import subprocess
 import pysam
 
+import filter_remapped_reads
+
 
 def parse_options():
     parser = argparse.ArgumentParser()
@@ -102,22 +104,27 @@ class InputOutputPaths(object):
                           self.output_dir)
 
         if not os.path.isdir(self.output_dir):
-            raise IOError("specified output dir is a directory")
+            raise IOError("specified output dir is not a directory")
         
         # output from first mapping step
         self.output_bam = self.output_dir + self.prefix1 + ".bam"
         self.sorted_output_bam = self.output_dir + self.prefix1 + ".sort.bam"
         
         # bam files partitioned by whether they need to be remapped or not
-        self.to_keep_bam = self.output_dir + self.prefix1 + ".to_keep.bam"
-        self.to_remap_bam = self.output_dir + self.prefix1 + ".to_remap.bam"
+        self.to_keep_bam = self.output_dir + self.prefix1 + ".sort.keep.bam"
+        self.to_remap_bam = self.output_dir + self.prefix1 + \
+                            ".sort.to.remap.bam"
+        self.to_remap_num = self.output_dir + self.prefix1 + \
+                            ".sort.to.remap.num.gz"
         
-        self.to_remap_fq1 = self.output_dir + self.prefix1 + ".to_remap1.fq"
+        self.to_remap_fastq1 = self.output_dir + self.prefix1 + \
+                               ".sort.remap.fq1.gz"
 
         if self.prefix2:
-            self.to_remap_fq2 = self.output_dir + self.prefix2 + ".to_remap2.fq"
+            self.to_remap_fastq2 = self.output_dir + \
+                                   self.prefix1 + ".sort.remap.fq2.gz"
         else:
-            self.to_remap_fq2 = None
+            self.to_remap_fastq2 = None
 
         # bam files that are remapped
         self.remapped_bam = self.output_dir + self.prefix1 + ".remapped.bam"
@@ -131,6 +138,68 @@ class InputOutputPaths(object):
         self.merged_to_keep_bam = self.output_dir + self.prefix1 + \
                                   ".merged_to_keep.bam"
 
+        self.sorted_merged_to_keep_bam = self.output_dir + self.prefix1 + \
+                                         ".merged_to_keep.sort.bam"
+
+
+    def get_output_files(self):
+        """Returns list of output files"""
+        out_files =  [self.output_bam, self.sorted_output_bam,
+                      self.to_keep_bam, self.to_remap_bam, self.to_remap_num,
+                      self.to_remap_fastq1, self.remapped_bam,
+                      self.remapped_to_keep_bam, self.merged_to_keep_bam,
+                      self.sorted_merged_to_keep_bam]
+
+        if self.to_remap_fastq2:
+            out_files.append(self.to_remap_fastq2)
+
+        return sorted(out_files)
+
+    def get_input_files(self):
+        """Returns list of input files"""
+        in_files = [self.input_fastq1]
+        if self.input_fastq2:
+            in_files.append(self.input_fastq2)
+
+        return sorted(in_files)
+
+    
+    def get_temp_files(self):
+        """Returns list of output files that are temporary"""
+        tmp_files = [self.output_bam, self.sorted_output_bam,
+                     self.to_keep_bam, self.to_remap_bam, self.to_remap_num,
+                     self.to_remap_fastq1, self.remapped_bam,
+                     self.remapped_to_keep_bam, self.merged_to_keep_bam]
+
+        if self.to_remap_fastq2:
+            tmp_files.append(self.to_remap_fastq2)
+
+        return sorted(tmp_files)
+
+    def remove_output_files(self):
+        """removes all output files that currently exist"""
+        for out_file in self.get_output_files():
+            if os.path.exists(out_file):
+                sys.stderr.write("removing output file: %s\n" % out_file)
+                os.unlink(out_file)
+                
+
+
+    def write_filenames(self, fh):
+        out_files = self.get_output_files()
+        input_files = self.get_input_files()
+        tmp_files = set(self.get_temp_files())
+
+        fh.write("== Input Files ==\n")
+        for in_file in input_files:
+            fh.write("  %s\n" % in_file)
+        fh.write("== Output Files (* temporary) ==\n")
+        for out_file in out_files:
+            if out_file in tmp_files:
+                fh.write("  %s *\n" % out_file)
+            else:
+                fh.write("  %s\n" % out_file)
+        
         
     def get_prefix(self, path):
         """returns filename prefix by stripping off leading directories as 
@@ -145,7 +214,6 @@ class InputOutputPaths(object):
         if tokens[-1] in ["fastq", "FASTQ", "fq", "FQ"]:
             tokens.pop()
         
-
         return ".".join(tokens)
 
         
@@ -189,31 +257,61 @@ def get_map_commands(options):
     return map_cmds
 
 
-def perform_first_mapping(paths, map_command):    
+def perform_first_mapping(paths, map_command):
+    """Performs initial mapping of reads"""
+    
     # step 1 - performing mapping using user-provided mapping command
-    cmd1 = map_command.replace("FASTQ1", paths.input_fastq1)
+    cmd = map_command.replace("FASTQ1", paths.input_fastq1)
 
     if "FASTQ2" in map_command:
         if paths.input_fastq2 is None:
             raise ValueError("cannot determine path for FASTQ2 in "
                              "mapping command because --fastq2 option "
                              "not specified")
-        cmd1 = cmd1.replace("FASTQ2", paths.input_fastq2)
+        cmd = cmd.replace("FASTQ2", paths.input_fastq2)
 
 
-    cmd1 = cmd1.replace("OUTPUT_BAM", paths.output_bam)
+    cmd = cmd.replace("OUTPUT_BAM", paths.output_bam)
 
-    sys.stderr.write("running command: %s\n" % cmd1)
+    sys.stderr.write("running command: %s\n" % cmd)
     
-    subprocess.check_call(cmd1, shell="True")
+    subprocess.check_call(cmd, shell="True")
 
     # check that output was written to correct place by command
     if not os.path.exists(paths.output_bam):
         raise ValueError("output BAM file '%s' was not created by "
-                         "mapping command %s" % (paths.output_bam, cmd1))
+                         "mapping command %s" % (paths.output_bam, cmd))
 
-    return cmd1
-        
+    return cmd
+
+
+def remap_reads(paths, map_command):
+    """Performs remapping of subset of reads"""
+    # step 1 - performing mapping using user-provided mapping command
+    cmd = map_command.replace("FASTQ1", paths.to_remap_fastq1)
+
+    if "FASTQ2" in map_command:
+        if paths.to_remap_fastq2 is None:
+            raise ValueError("cannot determine path for FASTQ2 in "
+                             "mapping command because --fastq2 option "
+                             "not specified")
+        cmd = cmd.replace("FASTQ2", paths.to_remap_fastq2)
+
+    cmd = cmd.replace("OUTPUT_BAM", paths.remapped_bam)
+
+    sys.stderr.write("running command: %s\n" % cmd)
+    
+    subprocess.check_call(cmd, shell="True")
+
+    # check that output was written to correct place by command
+    if not os.path.exists(paths.remapped_bam):
+        raise ValueError("output BAM file '%s' was not created by "
+                         "mapping command %s" % (paths.remapped_bam, cmd))
+
+    return cmd
+    
+    
+
 
 def find_intersecting_snps(options, paths):
     # TODO: Need to change this so that the
@@ -240,11 +338,47 @@ def find_intersecting_snps(options, paths):
     # path to SNPs file
     args.append(snp_dir)
 
-    cmd = "python mapping/find_intersecting_snps.py " + " ".join(args)
+    cmd = "python find_intersecting_snps.py " + " ".join(args)
     sys.stderr.write("running command: %s\n" % cmd)
     
     subprocess.check_call(cmd, shell=True)
 
+
+def filter_reads(options, paths):
+    ### TOOD: Need to change this to call filter_remapped_reads.py directly
+    ### as python module.
+
+    is_paired_end = True if paths.input_fastq2 else False
+    
+    filter_remapped_reads.run(paths.to_remap_bam, paths.remapped_bam,
+                              paths.remapped_to_keep_bam, paths.to_remap_num,
+                              is_paired_end)
+    
+
+
+def merge_bams(options, paths):
+    """Merges the remapped and original set of reads that did not 
+    need to be remapped"""
+
+    # merge the bam files
+    args = ["samtools", "merge", paths.merged_to_keep_bam,
+            paths.to_keep_bam, paths.remapped_to_keep_bam]
+    cmd = " ".join(args)
+    sys.stderr.write("running command: %s\n" % cmd)
+    subprocess.check_call(cmd, shell=True)
+
+    # sort the merged bam
+    sort_bam(paths.merged_to_keep_bam, paths.output_dir + paths.prefix1 +
+             ".merged_to_keep")
+
+    # index the merged bam
+    args = ["samtools", "index", paths.sorted_merged_to_keep_bam]
+    cmd = " ".join(args)
+    sys.stderr.write("running command: %s\n" % cmd)
+    subprocess.check_call(cmd, shell=True)
+    
+    
+    
     
 def sort_bam(input_bam, output_prefix):
     """Calls samtools sort on input_bam filename and writes to
@@ -294,6 +428,9 @@ def main():
 
     paths = InputOutputPaths(options)
 
+    paths.write_filenames(sys.stderr)
+    paths.remove_output_files()
+
     ## TODO: could check all paths for whether they exist
     ## here to avoid crashing at later step
     
@@ -310,7 +447,6 @@ def main():
     sys.stderr.write("== step 2: sorting BAM file\n")
     sort_bam(paths.output_bam, paths.output_dir + paths.prefix1)
     
-    
     # step 3 - find intersecting SNPs and partition BAM file into
     # reads that overlap SNPs and reads that do not
     sys.stderr.write("== step 3: finding intersecting SNPs\n")
@@ -318,15 +454,23 @@ def main():
     
     # step 4 - remap reads that overlap SNPs
     sys.stderr.write("== step 4: remapping reads that overlap SNPs\n")
-
+    remap_reads(paths, map_command2)
+    
     # step 5 - sort BAM file containing remapped reads
+    sys.stderr.write("== step 5: sorting remapped reads\n")
+    sort_bam(paths.remapped_bam, paths.output_dir + paths.prefix1 + ".remapped")
 
     # step 6 - filter remapped reads that do not map to same location
+    sys.stderr.write("== step 6: filtering remapped reads\n")
+    filter_reads(options, paths)
 
     # step 7 - merge filtered reads with reads that did not overlap SNPs
-
-    # step 8 (optional) - remove duplicate reads
+    sys.stderr.write("== step 7: merging bam files\n")
+    merge_bams(options, paths)
     
+    # step 8 (optional) - remove duplicate reads
+    # TODO: remove duplicate reads
+    # TODO: remove temporary files
                         
 
 

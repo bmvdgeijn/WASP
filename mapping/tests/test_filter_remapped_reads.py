@@ -3,8 +3,14 @@ import gzip
 import os
 import subprocess
 
-from find_intersecting_snps import *
-from filter_remapped_reads import *
+import sys
+
+
+sys.path.append("../")
+
+from mapping.filter_remapped_reads import *
+from mapping.find_intersecting_snps import *
+
 
 def read_bam(bam):
     """
@@ -343,7 +349,7 @@ class TestCLI:
         bs.run()
 
         keep_bam = pref + '_filtered.bam'
-        c = ('python filter_remapped_reads.py {} {} {} {}'.format(
+        c = ('python ../filter_remapped_reads.py {} {} {} {}'.format(
             remap_name, 'test_data/test_single.remapped.bam', keep_bam,
             remap_num_name))
         subprocess.check_call(c, shell=True)

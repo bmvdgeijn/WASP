@@ -2,8 +2,13 @@ import glob
 import gzip
 import os
 import subprocess
+import sys
 
-from find_intersecting_snps import *
+sys.path.append("../")
+
+from mapping.filter_remapped_reads import *
+from mapping.find_intersecting_snps import *
+
 
 def read_bam(bam):
     """
@@ -308,7 +313,7 @@ class TestCLI:
     def test_simple_single_cli(self):
         """This test is to make sure the cli functions."""
         pref = 'test_data/test_single'
-        c = ('python find_intersecting_snps.py {}.sort.bam '
+        c = ('python ../find_intersecting_snps.py {}.sort.bam '
              'test_data/snps'.format(pref))
         subprocess.check_call(c, shell=True)
 

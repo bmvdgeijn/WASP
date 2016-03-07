@@ -8,8 +8,9 @@ import sys
 
 sys.path.append("../")
 
-from mapping.filter_remapped_reads import *
-from mapping.find_intersecting_snps import *
+import mapping.filter_remapped_reads as filter_remapped_reads
+import mapping.find_intersecting_snps as find_intersecting_snps
+
 
 
 def read_bam(bam):
@@ -39,13 +40,13 @@ class TestRun:
         remap_num_name = pref + ".to.remap.num.gz"
         fastq_names = [pref + ".remap.fq.gz"]
         snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs = find_intersecting_snps.BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                                               remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
 
         keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_single.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
+        filter_remapped_reads.run(remap_name, 'test_data/test_single.remapped.bam', keep_bam,
+                                  remap_num_name, is_paired_end)
 
         lines = read_bam(keep_bam)
         assert len(lines) == 1
@@ -63,13 +64,13 @@ class TestRun:
         fastq_names = [pref + ".remap.fq1.gz",
                        pref + ".remap.fq2.gz"]
         snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs = find_intersecting_snps.BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                                               remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
         
         keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_paired.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
+        filter_remapped_reads.run(remap_name, 'test_data/test_paired.remapped.bam', keep_bam,
+                                  remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
         assert len(lines) == 2
@@ -88,12 +89,12 @@ class TestRun:
         remap_num_name = pref + ".to.remap.num.gz"
         fastq_names = [pref + ".remap.fq.gz"]
         snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs = find_intersecting_snps.BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                                               remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
         
         keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_single_unmapped.remapped.bam', keep_bam,
+        filter_remapped_reads.run(remap_name, 'test_data/test_single_unmapped.remapped.bam', keep_bam,
             remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
@@ -114,12 +115,12 @@ class TestRun:
         fastq_names = [pref + ".remap.fq1.gz",
                        pref + ".remap.fq2.gz"]
         snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs = find_intersecting_snps.BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                                               remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
         
         keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_paired_unmapped.remapped.bam', keep_bam,
+        filter_remapped_reads.run(remap_name, 'test_data/test_paired_unmapped.remapped.bam', keep_bam,
             remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
@@ -140,13 +141,13 @@ class TestRun:
         remap_num_name = pref + ".to.remap.num.gz"
         fastq_names = [pref + ".remap.fq.gz"]
         snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs = find_intersecting_snps.BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                                               remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
         
         keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_single_reverse.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
+        filter_remapped_reads.run(remap_name, 'test_data/test_single_reverse.remapped.bam', keep_bam,
+                                  remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
         assert len(lines) == 1
@@ -168,13 +169,13 @@ class TestRun:
         fastq_names = [pref + ".remap.fq1.gz",
                        pref + ".remap.fq2.gz"]
         snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs = find_intersecting_snps.BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                                               remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
         
         keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_paired_reverse.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
+        filter_remapped_reads.run(remap_name, 'test_data/test_paired_reverse.remapped.bam', keep_bam,
+                                  remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
         assert len(lines) == 2
@@ -191,105 +192,20 @@ class TestRun:
         remap_num_name = pref + ".to.remap.num.gz"
         fastq_names = [pref + ".remap.fq.gz"]
         snp_dir = 'test_data/two_snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs = find_intersecting_snps.BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                                               remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
 
         keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_two_snps_single.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
+        filter_remapped_reads.run(remap_name, 'test_data/test_two_snps_single.remapped.bam', keep_bam,
+                                  remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
         assert len(lines) == 1
 
         cleanup()
 
-    # def test_two_snps_paired(self):
-    #     # TODO: The remapped bam file should have six entries, only has two.
-    #     is_paired_end = True
-    #     max_window = 100000
-    #     pref = 'test_data/test_paired'
-    #     file_name = pref + ".sort.bam"
-    #     keep_file_name = pref + ".keep.bam"
-    #     remap_name = pref + ".to.remap.bam"
-    #     remap_num_name = pref + ".to.remap.num.gz"
-    #     fastq_names = [pref + ".remap.fq1.gz",
-    #                    pref + ".remap.fq2.gz"]
-    #     snp_dir = 'test_data/two_snps'
-    #     bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-    #                     remap_name, remap_num_name, fastq_names, snp_dir)
-    #     bs.run()
-    #     
-    #     keep_bam = pref + '_filtered.bam'
-    #     run(remap_name, 'test_data/test_two_snps_paired.remapped.bam', keep_bam,
-    #         remap_num_name, is_paired_end)
-
-    #     lines = read_bam(keep_bam)
-    #     assert len(lines) == 2
-
-    #     cleanup()
-
-    # def test_issue_18(self):
-    #     """
-    #     This was reported as a bug because one read pair that overlaps one SNP
-    #     was resulting in multiple pairs of reads in the fastq files. However, it
-    #     is not a bug because the reads overlap and both reads overlap the SNP.
-    #     """
-    #     # TODO: The remapped bam file does not correspond to the input bam file.
-    #     is_paired_end = True
-    #     max_window = 100000
-    #     file_name = 'test_data/issue_18.bam'
-    #     pref = 'test_data/test_paired'
-    #     keep_file_name = pref + ".keep.bam"
-    #     remap_name = pref + ".to.remap.bam"
-    #     remap_num_name = pref + ".to.remap.num.gz"
-    #     fastq_names = [pref + ".remap.fq1.gz",
-    #                    pref + ".remap.fq2.gz"]
-    #     snp_dir = 'test_data/issue_18_snps'
-    #     bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-    #                     remap_name, remap_num_name, fastq_names, snp_dir)
-    #     bs.run()
-    #     
-    #     keep_bam = pref + '_filtered.bam'
-    #     run(remap_name, 'test_data/test_issue_18.remapped.bam', keep_bam,
-    #         remap_num_name, is_paired_end)
-
-    #     lines = read_bam(keep_bam)
-    #     assert len(lines) == 2
-
-    #     cleanup()
-    # 
-    # def test_issue_23(self):
-    #     """
-    #     This was reported as a bug because WASP said the read pair mapped
-    #     correctly yet wasn't written to the output file.
-    #     """
-    #     # TODO: I think the test above was copied down but the test for but the
-    #     # test for issue 23 was not implemented. Maybe I accidentally copied
-    #     # over it at some point.
-    #     is_paired_end = True
-    #     max_window = 100000
-    #     file_name = 'test_data/issue_18.bam'
-    #     pref = 'test_data/test_paired'
-    #     keep_file_name = pref + ".keep.bam"
-    #     remap_name = pref + ".to.remap.bam"
-    #     remap_num_name = pref + ".to.remap.num.gz"
-    #     fastq_names = [pref + ".remap.fq1.gz",
-    #                    pref + ".remap.fq2.gz"]
-    #     snp_dir = 'test_data/issue_18_snps'
-    #     bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-    #                     remap_name, remap_num_name, fastq_names, snp_dir)
-    #     bs.run()
-    #     
-    #     keep_bam = pref + '_filtered.bam'
-    #     run(remap_name, 'test_data/test_issue_18.remapped.bam', keep_bam,
-    #         remap_num_name, is_paired_end)
-
-    #     lines = read_bam(keep_bam)
-    #     assert len(lines) == 2
-
-    #     cleanup()
-    
+        
     def test_bad_first_paired(self):
         """Test whether the correct read pairs are output if the first read pair
         is incorrectly remapped."""
@@ -298,7 +214,8 @@ class TestRun:
         remapped_bam = 'test_data/bad_first_paired/bad_first_remapped.bam' 
         remap_num_name = 'test_data/bad_first_paired/bad_first.to.remap.num.gz'
         is_paired_end = True
-        run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
+
+        filter_remapped_reads.run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
         assert len(lines) == 6
@@ -313,7 +230,8 @@ class TestRun:
         remapped_bam = 'test_data/bad_middle_paired/bad_middle_remapped.bam' 
         remap_num_name = 'test_data/bad_middle_paired/bad_middle.to.remap.num.gz'
         is_paired_end = True
-        run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
+
+        filter_remapped_reads.run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
         assert len(lines) == 6
@@ -326,7 +244,8 @@ class TestRun:
         remapped_bam = 'test_data/bad_last_paired/bad_last_remapped.bam' 
         remap_num_name = 'test_data/bad_last_paired/bad_last.to.remap.num.gz'
         is_paired_end = True
-        run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
+        
+        filter_remapped_reads.run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
         
         lines = read_bam(keep_bam)
         assert len(lines) == 6
@@ -344,8 +263,8 @@ class TestCLI:
         remap_num_name = pref + ".to.remap.num.gz"
         fastq_names = [pref + ".remap.fq.gz"]
         snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
+        bs = find_intersecting_snps.BamScanner(is_paired_end, max_window, file_name, keep_file_name,
+                                               remap_name, remap_num_name, fastq_names, snp_dir)
         bs.run()
 
         keep_bam = pref + '_filtered.bam'

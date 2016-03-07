@@ -746,15 +746,32 @@ class BamScanner:
         self.remap_num_file.close()
         [x.close() for x in self.fastqs]
 
-def main():
+
+
+
+def run(is_paired_end, max_window, sort_file_name, keep_file_name, remap_name,
+        remap_num_name, fastq_names, snp_dir):
+
+    bam_data = BamScanner(is_paired_end, max_window, 
+                          sort_file_name, keep_file_name, remap_name, 
+                          remap_num_name, fastq_names, snp_dir)
+    bam_data.run()
+
+    
+
+
+def parse_options():
     parser=argparse.ArgumentParser()
+
     parser.add_argument("-p", action='store_true', dest='is_paired_end', 
-                        default=False, help=('Indicates that reads are '
-                                             'paired-end (default is single).'))
+                        default=False, help=("Indicates that reads are paired-end "
+                                             "(default is single)."))
+    
     parser.add_argument("-s", action='store_true', dest='is_sorted', 
                         default=False, help=('Indicates that the input bam file'
                                              ' is coordinate sorted (default '
                                              'is False).'))
+    
     mdefault = 100000
     mhelp = ('Changes the maximum window to search for SNPs.  The default is '
              '%d base pairs.  Reads or read pairs that span more than this '
@@ -763,17 +780,25 @@ def main():
              'increase run time and memory requirements.' % mdefault)
     parser.add_argument("-m", action='store', dest='max_window', type=int, 
                         default=mdefault, help=mhelp)
-    parser.add_argument("infile", action='store', help=("Coordinate sorted bam "
-                        "file."))
-    snp_dir_help = ('Directory containing the SNPs segregating within the '
-                    'sample in question (which need to be checked for '
-                    'mappability issues).  This directory should contain '
-                    'sorted files of SNPs separated by chromosome and named: '
-                    'chr<#>.snps.txt.gz. These files should contain 3 columns: '
-                    'position RefAllele AltAllele')
-    parser.add_argument("snp_dir", action='store', help=snp_dir_help)
     
-    options = parser.parse_args()
+    parser.add_argument("infile", action='store',
+                        help="Coordinate sorted bam file.")
+
+    parser.add_argument("snp_dir", action='store', 
+                        help=('Directory containing the SNPs segregating within the '
+                              'sample in question (which need to be checked for '
+                              'mappability issues).  This directory should contain '
+                              'sorted files of SNPs separated by chromosome and named: '
+                              'chr<#>.snps.txt.gz. These files should contain 3 columns: '
+                              'position RefAllele AltAllele'))
+    
+    return parser.parse_args()
+
+
+
+        
+def main():
+    options = parse_options()
     infile = options.infile
     snp_dir = options.snp_dir
     name_split = infile.split(".")
@@ -800,10 +825,10 @@ def main():
     else:
         fastq_names = [pref + ".remap.fq.gz"]
 
-    bam_data = BamScanner(options.is_paired_end, options.max_window, 
-                          sort_file_name, keep_file_name, remap_name, 
-                          remap_num_name, fastq_names, snp_dir)
-    bam_data.run()
+    run(options.is_paired_end, options.max_window, sort_file_name, keep_file_name, remap_name,
+        remap_num_name, fastq_names, snp_dir)
+    
+        
 
 if __name__ == '__main__':
     main()

@@ -69,7 +69,7 @@ def parse_options():
                         "checked for mappability issues. The SNP files "
                         "may be in impute2, VCF, or 3 column text file "
                         "format. Each chromosome must have a single file "
-                        "and the filename must contain the name of the "
+                        "and the filenames must contain the name of the "
                         "chromosome. The 3 column text file format is: "
                         "<position> <RefAllele> <AltAllele>")
     

@@ -5,6 +5,9 @@ import sys
 import array
 import pysam
 
+
+MAX_WINDOW_DEFAULT = 100000
+
 class SNP:
     """SNP objects hold data for a single SNP"""
 
@@ -728,36 +731,10 @@ class BamScanner:
         self.remap_num_file.close()
         [x.close() for x in self.fastqs]
 
-def main():
-    parser=argparse.ArgumentParser()
-    parser.add_argument("-p", action='store_true', dest='is_paired_end', 
-                        default=False, help=('Indicates that reads are '
-                                             'paired-end (default is single).'))
-    parser.add_argument("-s", action='store_true', dest='is_sorted', 
-                        default=False, help=('Indicates that the input bam file'
-                                             ' is coordinate sorted (default '
-                                             'is False).'))
-    mdefault = 100000
-    mhelp = ('Changes the maximum window to search for SNPs.  The default is '
-             '%d base pairs.  Reads or read pairs that span more than this '
-             'distance (usually due to splice junctions) will be thrown out. '
-             'Increasing this window allows for longer junctions, but may '
-             'increase run time and memory requirements.' % mdefault)
-    parser.add_argument("-m", action='store', dest='max_window', type=int, 
-                        default=mdefault, help=mhelp)
-    parser.add_argument("infile", action='store', help=("Coordinate sorted bam "
-                        "file."))
-    snp_dir_help = ('Directory containing the SNPs segregating within the '
-                    'sample in question (which need to be checked for '
-                    'mappability issues).  This directory should contain '
-                    'sorted files of SNPs separated by chromosome and named: '
-                    'chr<#>.snps.txt.gz. These files should contain 3 columns: '
-                    'position RefAllele AltAllele')
-    parser.add_argument("snp_dir", action='store', help=snp_dir_help)
-    
-    options = parser.parse_args()
-    infile = options.infile
-    snp_dir = options.snp_dir
+
+
+def main(infile, snp_dir, max_window=MAX_WINDOW_DEFAULT,
+         is_paired_end=False, is_sorted=False):
     name_split = infile.split(".")
     
     if len(name_split) > 1:
@@ -765,7 +742,7 @@ def main():
     else:
         pref = name_split[0]
     
-    if not options.is_sorted:
+    if not is_sorted:
         pysam.sort(infile, pref + ".sort")
         infile = pref + ".sort"
         sort_file_name = pref + ".sort.bam"
@@ -776,16 +753,59 @@ def main():
     remap_name = pref + ".to.remap.bam"
     remap_num_name = pref + ".to.remap.num.gz"
 
-    if options.is_paired_end:
+    if is_paired_end:
         fastq_names = [pref + ".remap.fq1.gz",
                        pref + ".remap.fq2.gz"]
     else:
         fastq_names = [pref + ".remap.fq.gz"]
 
-    bam_data = BamScanner(options.is_paired_end, options.max_window, 
+    bam_data = BamScanner(is_paired_end, max_window, 
                           sort_file_name, keep_file_name, remap_name, 
                           remap_num_name, fastq_names, snp_dir)
     bam_data.run()
 
+
+
+
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("-p", "--paired_end",
+                        action='store_true',
+                        dest='is_paired_end', default=False,
+                        help=('Indicates that reads are '
+                              'paired-end (default is single).'))
+    
+    parser.add_argument("-s", "--sorted",
+                        action='store_true', dest='is_sorted',  default=False,
+                        help=('Indicates that the input bam file'
+                              ' is coordinate sorted (default is False)'))
+
+
+    mhelp = ('Changes the maximum window to search for SNPs.  The default is '
+             '%d base pairs.  Reads or read pairs that span more than this '
+             'distance (usually due to splice junctions) will be thrown out. '
+             'Increasing this window allows for longer junctions, but may '
+             'increase run time and memory requirements.' % MAX_WINDOW_DEFAULT)
+    parser.add_argument("-m", "--max_window",
+                        action='store', dest='max_window', type=int, 
+                        default=MAX_WINDOW_DEFAULT, help=mhelp)
+    
+    parser.add_argument("infile", action='store', help=("Coordinate sorted bam "
+                        "file."))
+    snp_dir_help = ('Directory containing the SNPs segregating within the '
+                    'sample in question (which need to be checked for '
+                    'mappability issues).  This directory should contain '
+                    'sorted files of SNPs separated by chromosome and named: '
+                    'chr<#>.snps.txt.gz. These files should contain 3 columns: '
+                    'position RefAllele AltAllele')
+    
+    parser.add_argument("snp_dir", action='store', help=snp_dir_help)
+
+    options = parser.parse_args()
+        
+    main(options.infile, options.snp_dir,
+         max_window=options.max_window,
+         is_paired_end=options.is_paired_end,
+         is_sorted=options.is_sorted)
+    

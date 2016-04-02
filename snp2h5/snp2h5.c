@@ -29,6 +29,8 @@
 #define SNP_INDEX_DATATYPE H5T_NATIVE_LONG
 
 #define SNP_INDEX_NONE -1
+#define GENO_PROB_DEFAULT_VAL -1.0
+#define HAPLOTYPE_DEFAULT_VAL -1
 
 #define FORMAT_VCF 1
 #define FORMAT_IMPUTE 2
@@ -77,7 +79,6 @@ typedef struct {
   hid_t dataset_prop; /* dataset properties list */
   hid_t file_dataspace; /* dataspace describing file layout */
   hid_t dataset;        /* dataset */
-
   hid_t datatype; /* float, int8, etc */
 
   hsize_t len; /* number of columns */
@@ -629,6 +630,8 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
   char **hap_files;
   int n_imp_files;
   int n_hap_files;
+  long missing_geno_probs;
+  long n_haplotype_row;
 
   impute_info = impute_info_new();
   
@@ -665,6 +668,15 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
       init_h5matrix(gprob_info, file_info.n_row,
 		    file_info.n_geno_prob_col,
 		    GENO_PROB_DATATYPE, chrom->name);
+
+      /* fill H5Matrix with default values for genotype probabilities */
+      for(j = 0; j < file_info.n_geno_prob_col; j++) {
+	geno_probs[j] = GENO_PROB_DEFAULT_VAL;
+      }
+      for(j = 0; j < file_info.n_row; j++) {
+	write_h5matrix_row(gprob_info, j, geno_probs);
+      }
+
     } else {
       geno_probs = NULL;
     }
@@ -748,7 +760,16 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	init_h5matrix(haplotype_info, file_info.n_row,
 		      file_info.n_haplotype_col,
 		      HAPLOTYPE_DATATYPE, chrom->name);
-      
+
+
+	/* fill H5Matrix with default values for haplotypes */
+	for(j = 0; j < file_info.n_haplotype_col; j++) {
+	  haplotypes[j] = HAPLOTYPE_DEFAULT_VAL;
+	}
+	for(j = 0; j < file_info.n_row; j++) {
+	  write_h5matrix_row(haplotype_info, j, haplotypes);
+	}
+
 	fprintf(stderr, "reading from file %s\n", hap_files[i]);
 	gzf = util_must_gzopen(hap_files[i], "rb");
       
@@ -761,7 +782,8 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	fprintf(stderr, "parsing file and writing to HDF5 files\n");
 
 	int line_num = 0;
-	long missing = 0;
+	n_haplotype_row = 0;
+	missing_geno_probs = 0;
 	while(impute_read_line(gzf, impute_info, &snp,
 			       NULL, haplotypes) != -1) {
 
@@ -777,17 +799,16 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	     * genotype file. 
 	     */
 	    
-	    if(!missing) {
+	    if(!missing_geno_probs) {
 	      my_warn("%s:%d: SNP %s as position %ld is present in "
 		      "impute2_haps file but not in impute2 file\n",
 		      __FILE__, __LINE__, snp.name, snp.pos);
 	    }
 
-	    missing += 1;
-
-	    
+	    missing_geno_probs += 1;
 	  } else {
 	    write_h5matrix_row(haplotype_info, row, haplotypes);
+	    n_haplotype_row += 1;
 	  }
 
 	  line_num += 1;
@@ -798,12 +819,24 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	}
 	
 	fprintf(stderr, "\n");
-	if(missing) {
+	if(missing_geno_probs) {
+	  /* there were missing entries in geno_probs file */
 	  my_warn("%s:%d: %ld SNPs were present in "
 		  "impute2_haps file but not in impute2 file\n",
-		  __FILE__, __LINE__, missing);
+		  __FILE__, __LINE__, missing_geno_probs);
 	}
 
+	if(n_haplotype_row < file_info.n_row) {
+	  /* there were missing entries in haplotype file */
+	  my_warn("%s:%d: %ld SNPs were present in "
+		  "impute file but not in impute2_haps file\n",
+		  __FILE__, __LINE__, file_info.n_row - n_haplotype_row);
+	}
+	if(n_haplotype_row > file_info.n_row) {
+	  my_warn("%s:%d: there were duplicate SNP entries in "
+		  "impute2_haps file\n", __FILE__, __LINE__);
+	}
+	
 	
 	gzclose(gzf);
 

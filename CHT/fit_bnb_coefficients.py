@@ -83,7 +83,7 @@ def open_input_files(in_filename):
     in_file.close()
     
     if len(infiles) == 0:
-        sys.stderr.write("no input files specified in file '%s'\n" % options.infile_list)
+        sys.stderr.write("no input files specified in file '%s'\n" % in_filename)
         exit(2)
 
     return infiles
@@ -109,6 +109,23 @@ def parse_options():
     parser.add_argument("--skip", action='store', dest='skip',
                         type=int, default=0,
                         help="skip n test region between each one used for fitting")
+
+    
+    parser.add_argument("--sample", type=int, default=10000,
+                        help="Randomly sample this many test regions from "
+                        "the total set when fitting. This is set to 10,000 "
+                        "by default to speed up the fitting procedure. To disable "
+                        "sampling, set to 0 (--sample 0), or use the --no_sample option")
+
+    parser.add_argument("--no_sample", action="store_true", dest="no_sample",
+                        default=False)
+
+    
+    options = parser.parse_args()
+
+    if options.no_sample or options.sample < 0:
+        # do not perform sampling
+        options.sample = 0
 
     return parser.parse_args()
 
@@ -167,11 +184,22 @@ def read_counts(options):
     count_matrix = np.array(count_matrix, dtype=int)
     expected_matrix = np.array(expected_matrix, dtype=np.float64)
 
-    # sys.stderr.write(str(count_matrix[:10,])+"\n")
-    # sys.stderr.write(str(expected_matrix[:10,])+"\n")
-    # sys.stderr.write(str(expected_matrix.shape))
-    # sys.stderr.write(str(count_matrix.shape))
+    sys.stderr.write("count_matrix dimension: %s\n" % str(count_matrix.shape))
+    sys.stderr.write("expect_matrix dimension: %s\n" % str(expected_matrix.shape))
 
+    nrow = count_matrix.shape[0]
+    if (options.sample > 0) and (options.sample < count_matrix.shape):
+        # randomly sample subset of rows without replacement
+        sys.stderr.write("randomly sampling %d target regions\n" % options.sample)
+        samp_index = np.arange(nrow)
+        np.random.shuffle(samp_index)
+        samp_index = samp_index[:options.sample]
+        count_matrix = count_matrix[samp_index,]
+        expected_matrix = expected_matrix[samp_index,]
+        
+        sys.stderr.write("new count_matrix dimension: %s\n" % str(count_matrix.shape))
+        sys.stderr.write("new expect_matrix dimension: %s\n" % str(expected_matrix.shape))
+    
     return count_matrix, expected_matrix
 
 
@@ -179,6 +207,7 @@ def main():
     options = parse_options()
 
     # read input data
+    sys.stderr.write("reading input data\n")
     count_matrix, expected_matrix = read_counts(options)
     
     old_ll = np.float64(1000000000000000000000000)

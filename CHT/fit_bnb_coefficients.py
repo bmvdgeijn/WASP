@@ -22,7 +22,7 @@ from scipy.optimize import *
 from scipy.special import gammaln
 from scipy.special import betaln
 import scipy.stats
-
+import time
 import numpy as np
 
 
@@ -66,10 +66,11 @@ def open_input_files(in_filename):
     for line in in_file:
         # open each input file and read first line
         filename = line.rstrip()
-        sys.stderr.write(filename+"\n")
-        if not filename or not os.path.exists(filename) or not os.path.isfile(filename):
-            sys.stderr.write("input file '%s' does not exist or is not a regular file\n" 
-                             % in_file)
+        sys.stderr.write(" " + filename + "\n")
+        if (not filename) or (not os.path.exists(filename)) or \
+           (not os.path.isfile(filename)):
+            sys.stderr.write("input file '%s' does not exist or is not a "
+                             "regular file\n" % in_file)
             exit(2)
         if filename.endswith(".gz"):
             f = gzip.open(filename)
@@ -90,7 +91,32 @@ def open_input_files(in_filename):
 
 
 def parse_options():
-    parser=argparse.ArgumentParser()
+
+    default_sample = 10000
+    
+    parser=argparse.ArgumentParser(description="This program estimates the "
+                                   "genome-wide dispersion parameters for "
+                                   "the read depth (beta-negative binomial, BNB) part "
+                                   "of the combined haplotype test. These "
+                                   "parameter estimates are not required "
+                                   "for the allele-specific (beta-binomial) part "
+                                   "of the test."
+                                   "This program uses an iterative "
+                                   "maximum likelihood approach to estimate "
+                                   "parameters. To speed up parameter estimation "
+                                   "a subset of test regions are randomly "
+                                   "selected from the input file. By default %d"
+                                   " regions are selected. At the end of each "
+                                   "iteration, the current parameter estimates "
+                                   "are written to stdout and to the "
+                                   "specified output file. "
+                                   "If you are tired of waiting for the "
+                                   "program to converge, these intermediate "
+                                   "estimates can be used before the program "
+                                   "has finished running." % default_sample)
+
+                                   
+
     
     parser.add_argument("infile_list", action='store', default=None)
     
@@ -109,15 +135,17 @@ def parse_options():
     parser.add_argument("--skip", action='store', dest='skip',
                         type=int, default=0,
                         help="skip n test region between each one used for fitting")
-
     
-    parser.add_argument("--sample", type=int, default=10000,
-                        help="Randomly sample this many test regions from "
-                        "the total set when fitting. This is set to 10,000 "
-                        "by default to speed up the fitting procedure. To disable "
-                        "sampling, set to 0 (--sample 0), or use the --no_sample option")
+    parser.add_argument("--sample", type=int, default=default_sample,
+                        help="Randomly sample a specified number of test "
+                        "regions from the total set to speed up the "
+                        "estimation procedure. This is set to %d "
+                        "by default. To "
+                        "disable sampling, set this to 0 (--sample 0), or use "
+                        "the --no_sample option" % default_sample)
 
     parser.add_argument("--no_sample", action="store_true", dest="no_sample",
+                        help="Disable random sampling of test regions",
                         default=False)
 
     
@@ -209,52 +237,45 @@ def main():
     # read input data
     sys.stderr.write("reading input data\n")
     count_matrix, expected_matrix = read_counts(options)
-    
+
+    gene_fits = [np.float64(0.005)] * count_matrix.shape[0]
+    mean_fits = [np.float64(1)] * count_matrix.shape[0]
+    gw_fits = [np.float64(100)] * count_matrix.shape[1]
+
     old_ll = np.float64(1000000000000000000000000)
-    best_start = -1
-    gene_fit_starts = (0.01, 0.005)
 
-    # first interaction to get initial parameter estimates
-    for i in range(len(gene_fit_starts)):
-        sys.stderr.write("iteration 0\n")
-        gene_fits = [np.float64(gene_fit_starts[i])] * count_matrix.shape[0]
-        mean_fits = [np.float64(1)] * count_matrix.shape[0]
-        gw_fits = [np.float64(100)] * count_matrix.shape[1]
-
-        sys.stderr.write("fitting genome-wide overdispersion params\n")
-        gw_fits, fit_ll = get_gw_overdisp(count_matrix, expected_matrix,
-                                          gw_fits, gene_fits, mean_fits)
-
-        sys.stderr.write("fitting per-region overdiserpersion params\n")
-        gene_fits, mean_fits, fit_ll = get_gene_overdisp(count_matrix, expected_matrix,
-                                                         gw_fits, gene_fits, mean_fits)
-
-        if fit_ll < old_ll:
-            old_ll = fit_ll
-            best_start = gw_fits
-
-    gw_fits = best_start
-    
-    # subsequent interations to refine parameter estimates
-    iteration=1
+    # iteratively search for maximum likelihood parameter estimates
+    iteration = 1
     while True:
         sys.stderr.write("\niteration %d\n" % iteration)
         
         # first fit over dispersion params for each region
         sys.stderr.write("fitting per-region overdispersion params\n")
+        t1 = time.time()
         gene_fits, mean_fits, fit_ll = \
           get_gene_overdisp(count_matrix, expected_matrix,
                             gw_fits, gene_fits, mean_fits)
-
+        time_taken = time.time() - t1
+        sys.stderr.write("time: %.2fs\n" % time_taken)
+        # sys.stderr.write("mean(gene_fits): %g\n" % np.mean(gene_fits))
+        # sys.stderr.write("min(gene_fits): %g\n" % np.min(gene_fits))
+        # sys.stderr.write("max(gene_fits): %g\n" % np.max(gene_fits))
+        
         # then fit genome-wide overdispersion params for each individual
         sys.stderr.write("fitting genome-wide overdispersion params\n")
+        t1 = time.time()
         gw_fits, fit_ll = get_gw_overdisp(count_matrix, expected_matrix,
                                           gw_fits, gene_fits, mean_fits)
-        
+        time_taken = time.time() - t1
+        sys.stderr.write("time: %.2fs\n" % time_taken)
         sys.stderr.write("LL=-%f\n" % fit_ll)
+        gw_str = ", ".join("%.2f" % x for x in gw_fits)
+        sys.stderr.write("current genome-wide overdispersion param estimates:\n"
+                         "  [%s]\n" % gw_str)
 
-        # write estimates to outfile each iteration (this way outfile is written even if 
-        # optimization terminated by user)
+
+        # write estimates to outfile each iteration
+        # (this way outfile is written even if optimization terminated by user)
         outfile = open(options.outfile, "w")
         for i in gw_fits:
             outfile.write("%f\n" % i)
@@ -274,36 +295,47 @@ def get_gene_overdisp(count_matrix, expected_matrix,
                       gw_fits, gene_fits, mean_fits, iteration=0):
     fit_ll = 0
     for gene_indx in range(count_matrix.shape[0]):
-        mean_fits[gene_indx] = fmin(mean_like, mean_fits[gene_indx], 
-                                    args=(count_matrix[gene_indx,:],
-                                         expected_matrix[gene_indx,:],
-                                         gw_fits, gene_fits[gene_indx]),
-                                         disp=False, maxfun=5000, xtol=1e-6)[0]
+        cur_like = mean_like(mean_fits[gene_indx],
+                             count_matrix[gene_indx,:],
+                             expected_matrix[gene_indx,:],
+                             gw_fits, gene_fits[gene_indx])
         
-        starts = [np.float64(gene_fits[gene_indx]),
-                  np.float64(0.05), np.float64(0.001)]
-        
-        best_par = np.float64(gene_fits[gene_indx])
-        
-        best_like = gene_like(gene_fits[gene_indx], count_matrix[gene_indx,:],
-                              expected_matrix[gene_indx,:], gw_fits, mean_fits[gene_indx])
-        
-        for start in starts:
-            cur_par = fmin(gene_like, [start], 
-                           args=(count_matrix[gene_indx,:],
-                                 expected_matrix[gene_indx,:],
-                                 gw_fits,mean_fits[gene_indx]),
-                                 disp=False,maxfun=5000,xtol=1e-6)[0]
-            
-            cur_like = gene_like(cur_par, count_matrix[gene_indx,:],
-                                 expected_matrix[gene_indx,:], gw_fits,
-                                 mean_fits[gene_indx])
-            
-            if cur_like < best_like:
-                best_par = cur_par
+        res = minimize_scalar(mean_like,
+                              args=(count_matrix[gene_indx,:],
+                                    expected_matrix[gene_indx,:],
+                                    gw_fits, gene_fits[gene_indx]),
+                              tol=1e-6,
+                              method="Brent", options={'xtol' : 1e-9})
+
+        like_diff = cur_like - res.fun
+        if like_diff >= 0.0:
+            # update parameter
+            mean_fits[gene_indx] = res.x
+        else:
+            # likelihood got worse indicating failed to converge,
+            # do not accept new param value
+            pass
+
+        cur_like = gene_like(gene_fits[gene_indx], count_matrix[gene_indx,:],
+                             expected_matrix[gene_indx,:], gw_fits,
+                             mean_fits[gene_indx])
+
+        res = minimize_scalar(gene_like,
+                              args=(count_matrix[gene_indx,:],
+                                    expected_matrix[gene_indx,:],
+                                    gw_fits, mean_fits[gene_indx]),
+                              tol=1e-6,
+                              method="Brent", options={'xtol' : 1e-9})
+
+        like_diff = cur_like - res.fun
+        if like_diff >= 0.0:
+            # update parameter
+            gene_fits[gene_indx] = res.x
+        else:
+            # likelihood got worse indicating failed to converge,
+            # do not accept new param value
+            pass
                 
-        gene_fits[gene_indx] = best_par
-            
         fit_ll += gene_like(gene_fits[gene_indx],
                             count_matrix[gene_indx,:],
                             expected_matrix[gene_indx,:],
@@ -316,15 +348,37 @@ def get_gene_overdisp(count_matrix, expected_matrix,
 def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
                     gene_fits, mean_fits):
     fit_ll = 0
+
+    tol = 1e-4
+    
     for indx in range(count_matrix.shape[1]):
-        gw_fits[indx] = fmin(gw_like,[gw_fits[indx]], 
-                             args=(count_matrix[:,indx],
-                                   expected_matrix[:,indx],
-                                   gene_fits, mean_fits),
-                                   disp=False, maxfun=50000, xtol=1e-6)[0]
+        cur_like = gw_like(gw_fits[indx], count_matrix[:,indx],
+                               expected_matrix[:,indx], gene_fits, mean_fits)
+
+        init_gw_fit = gw_fits[indx]
+        
+        
+        res = minimize_scalar(gw_like, bounds=(0.0, 100000.0),
+                              args=(count_matrix[:,indx],
+                                    expected_matrix[:,indx],
+                                    gene_fits, mean_fits),
+                              tol=tol,
+                              method="Brent")
+
+        new_like = res.fun
+        like_diff = cur_like - res.fun
+
+        if like_diff >= 0.0:
+            # likelhood improved
+            gw_fits[indx] = res.x
+            like = new_like
+        else:
+            # likelihood did not improve because failed to converge 
+            like = cur_like
         
         like = gw_like(gw_fits[indx], count_matrix[:,indx],
                        expected_matrix[:,indx], gene_fits, mean_fits)
+        
         fit_ll += like
     return gw_fits, fit_ll
 
@@ -359,6 +413,8 @@ def gw_like(gw_fit, counts, expecteds, gene_fits, mean_fits):
         loglike += BNB_loglike(counts[i], expecteds[i]*mean_fits[i],
                                gw_fit, gene_fits[i])
     return -loglike
+
+
 
 
 

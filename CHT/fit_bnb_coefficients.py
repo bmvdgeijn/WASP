@@ -108,7 +108,7 @@ def open_input_files(in_filename):
 
 def parse_options():
 
-    default_sample = 10000
+    default_sample = 2000
     
     parser=argparse.ArgumentParser(description="This program estimates the "
                                    "genome-wide dispersion parameters for "

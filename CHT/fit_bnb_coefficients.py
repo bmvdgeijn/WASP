@@ -26,6 +26,22 @@ import time
 import numpy as np
 
 
+# bounds for parameters
+MIN_MEAN_FIT = 0.0
+MAX_MEAN_FIT = 1e8
+
+MIN_GENE_FIT = 0.0
+MAX_GENE_FIT = 1e8
+
+MIN_GW_FIT = 1.0
+MAX_GW_FIT = 1e6
+
+GW_XTOL = 1e-2
+GENE_XTOL = 1e-7
+MEAN_XTOL = 1e-7
+
+
+
 class TestSNP:
     def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt, 
                  hetps, totals, counts):
@@ -55,8 +71,8 @@ class TestSNP:
 
 def open_input_files(in_filename):
     if not os.path.exists(in_filename) or not os.path.isfile(in_filename):
-        sys.stderr.write("input file %s does not exist or is not a regular file\n" %
-                         in_filename)
+        sys.stderr.write("input file %s does not exist or is not a "
+                         "regular file\n" % in_filename)
         exit(2)
     
     # read file that contains list of input files
@@ -148,7 +164,11 @@ def parse_options():
                         help="Disable random sampling of test regions",
                         default=False)
 
-    
+    parser.add_argument("--seed", help="Random seed which affects random "
+                        "sampling of test regions. Useful for testing.",
+                        type=int,
+                default=-1)
+        
     options = parser.parse_args()
 
     if options.no_sample or options.sample < 0:
@@ -234,6 +254,10 @@ def read_counts(options):
 def main():
     options = parse_options()
 
+    # set random seed:
+    if options.seed >= 0:
+        np.random.seed(seed=options.seed)
+    
     # read input data
     sys.stderr.write("reading input data\n")
     count_matrix, expected_matrix = read_counts(options)
@@ -269,9 +293,9 @@ def main():
         time_taken = time.time() - t1
         sys.stderr.write("time: %.2fs\n" % time_taken)
         sys.stderr.write("LL=-%f\n" % fit_ll)
-        gw_str = ", ".join("%.2f" % x for x in gw_fits)
+        gw_str = " ".join("%.2f" % x for x in gw_fits)
         sys.stderr.write("current genome-wide overdispersion param estimates:\n"
-                         "  [%s]\n" % gw_str)
+                         "  %s\n" % gw_str)
 
 
         # write estimates to outfile each iteration
@@ -288,29 +312,38 @@ def main():
             break
         old_ll = fit_ll
 
+    sys.stderr.write("done!\n")
+
 
 
         
 def get_gene_overdisp(count_matrix, expected_matrix,
                       gw_fits, gene_fits, mean_fits, iteration=0):
     fit_ll = 0
+    gene_fit_improved = 0
+    mean_fit_improved = 0
+
     for gene_indx in range(count_matrix.shape[0]):
         cur_like = mean_like(mean_fits[gene_indx],
                              count_matrix[gene_indx,:],
                              expected_matrix[gene_indx,:],
                              gw_fits, gene_fits[gene_indx])
+
+        xtol = min(mean_fits[gene_indx] * 1e-4, MEAN_XTOL)
         
         res = minimize_scalar(mean_like,
+                              bounds=(MIN_MEAN_FIT, MAX_MEAN_FIT),
                               args=(count_matrix[gene_indx,:],
                                     expected_matrix[gene_indx,:],
                                     gw_fits, gene_fits[gene_indx]),
-                              tol=1e-6,
-                              method="Brent", options={'xtol' : 1e-9})
+                              options={"xtol" : xtol},
+                              method="Bounded")
 
         like_diff = cur_like - res.fun
         if like_diff >= 0.0:
             # update parameter
             mean_fits[gene_indx] = res.x
+            mean_fit_improved += 1
         else:
             # likelihood got worse indicating failed to converge,
             # do not accept new param value
@@ -320,17 +353,22 @@ def get_gene_overdisp(count_matrix, expected_matrix,
                              expected_matrix[gene_indx,:], gw_fits,
                              mean_fits[gene_indx])
 
+        xtol = min(gene_fits[gene_indx] * 1e-4, GENE_XTOL)
+        
+        # xtol = gene_fits[gene_indx] * 0.01
         res = minimize_scalar(gene_like,
+                              bounds=(MIN_GENE_FIT, MAX_GENE_FIT),
                               args=(count_matrix[gene_indx,:],
                                     expected_matrix[gene_indx,:],
                                     gw_fits, mean_fits[gene_indx]),
-                              tol=1e-6,
-                              method="Brent", options={'xtol' : 1e-9})
+                              options={"xtol" : xtol},
+                              method="Bounded")
 
         like_diff = cur_like - res.fun
         if like_diff >= 0.0:
             # update parameter
             gene_fits[gene_indx] = res.x
+            gene_fit_improved += 1
         else:
             # likelihood got worse indicating failed to converge,
             # do not accept new param value
@@ -348,22 +386,23 @@ def get_gene_overdisp(count_matrix, expected_matrix,
 def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
                     gene_fits, mean_fits):
     fit_ll = 0
-
-    tol = 1e-4
     
     for indx in range(count_matrix.shape[1]):
         cur_like = gw_like(gw_fits[indx], count_matrix[:,indx],
-                               expected_matrix[:,indx], gene_fits, mean_fits)
+                           expected_matrix[:,indx], gene_fits, mean_fits)
 
         init_gw_fit = gw_fits[indx]
         
+        xtol = min(gw_fits[indx] * 1e-2, GW_XTOL)
         
-        res = minimize_scalar(gw_like, bounds=(0.0, 100000.0),
+        res = minimize_scalar(gw_like,
+                              bounds=(MIN_GW_FIT, MAX_GW_FIT),
                               args=(count_matrix[:,indx],
                                     expected_matrix[:,indx],
                                     gene_fits, mean_fits),
-                              tol=tol,
-                              method="Brent")
+                              options={'xtol' : xtol},
+                              # tol=GW_LIKE_TOL,
+                              method="Bounded")
 
         new_like = res.fun
         like_diff = cur_like - res.fun
@@ -385,7 +424,7 @@ def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
 
 
 def mean_like(mean_fit, counts, expecteds, gw_fits, gene_fit):
-    if mean_fit < 0:
+    if mean_fit < MIN_MEAN_FIT or mean_fit > MAX_MEAN_FIT:
         return 1e8
     loglike=0
     for i in range(len(counts)):
@@ -396,7 +435,7 @@ def mean_like(mean_fit, counts, expecteds, gw_fits, gene_fit):
 
 
 def gene_like(gene_fit, counts, expecteds, gw_fits, mean_fit):
-    if gene_fit < 0:
+    if gene_fit < MIN_GENE_FIT or gene_fit > MAX_GENE_FIT:
         return 1e8
     loglike=0
     for i in range(len(counts)):
@@ -406,7 +445,7 @@ def gene_like(gene_fit, counts, expecteds, gw_fits, mean_fit):
 
 
 def gw_like(gw_fit, counts, expecteds, gene_fits, mean_fits):
-    if gw_fit >1000000 or gw_fit < 1:
+    if gw_fit > MAX_GW_FIT or gw_fit < MIN_GW_FIT:
         return 1e8
     loglike = 0
     for i in range(len(counts)):

@@ -174,8 +174,8 @@ def parse_options():
     if options.no_sample or options.sample < 0:
         # do not perform sampling
         options.sample = 0
-
-    return parser.parse_args()
+        
+    return options
 
 
 

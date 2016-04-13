@@ -26,15 +26,24 @@ import time
 import numpy as np
 
 
-# bounds for parameters
-MIN_MEAN_FIT = 0.0
-MAX_MEAN_FIT = 1e8
 
 MIN_GENE_FIT = 0.0
 MAX_GENE_FIT = 1e8
 
 MIN_GW_FIT = 1.0
-MAX_GW_FIT = 1e6
+MAX_GW_FIT = 1e3
+
+
+# MIN_GENE_FIT = 0.0
+# MAX_GENE_FIT = 1.0
+
+# MIN_GW_FIT = 1.0
+# MAX_GW_FIT = 1e3
+
+
+# bounds for parameters
+MIN_MEAN_FIT = MIN_GENE_FIT
+MAX_MEAN_FIT = MAX_GENE_FIT
 
 GW_XTOL = 1e-2
 GENE_XTOL = 1e-7
@@ -168,7 +177,17 @@ def parse_options():
                         "sampling of test regions. Useful for testing.",
                         type=int,
                 default=-1)
-        
+
+    parser.add_argument("--fix_gene", type=float, default=-1.0,
+                        help="fix the per-gene dispersion parameter estimates to "
+                        "specified value, and only fit the genome-wide dispersion "
+                        "parameter estimates")
+
+    parser.add_argument("--fix_mean", type=float, default=-1.0,
+                        help="fix the per-gene mean dispersion parameter estimates to "
+                        "specified value, and only fit the genome-wide dispersion "
+                        "parameter estimates")
+    
     options = parser.parse_args()
 
     if options.no_sample or options.sample < 0:
@@ -268,6 +287,14 @@ def main():
 
     old_ll = np.float64(1000000000000000000000000)
 
+    fix_gene = options.fix_gene > 0.0
+    fix_mean = options.fix_mean > 0.0
+    
+    if fix_gene:
+        gene_fits = [np.float64(options.fix_gene)] * count_matrix.shape[0]
+    if fix_mean:
+        mean_fits = [np.float64(options.fix_mean)] * count_matrix.shape[0]
+    
     # iteratively search for maximum likelihood parameter estimates
     iteration = 1
     while True:
@@ -276,14 +303,21 @@ def main():
         # first fit over dispersion params for each region
         sys.stderr.write("fitting per-region overdispersion params\n")
         t1 = time.time()
-        gene_fits, mean_fits, fit_ll = \
-          get_gene_overdisp(count_matrix, expected_matrix,
-                            gw_fits, gene_fits, mean_fits)
+        gene_fits, mean_fits, fit_ll = get_gene_overdisp(count_matrix, expected_matrix,
+                                                         gw_fits, gene_fits, mean_fits,
+                                                         fix_gene=fix_gene,
+                                                         fix_mean=fix_mean)
         time_taken = time.time() - t1
         sys.stderr.write("time: %.2fs\n" % time_taken)
-        # sys.stderr.write("mean(gene_fits): %g\n" % np.mean(gene_fits))
-        # sys.stderr.write("min(gene_fits): %g\n" % np.min(gene_fits))
-        # sys.stderr.write("max(gene_fits): %g\n" % np.max(gene_fits))
+        
+        sys.stderr.write("min(gene_fits): %g\n" % np.min(gene_fits))
+        sys.stderr.write("max(gene_fits): %g\n" % np.max(gene_fits))
+        sys.stderr.write("mean(gene_fits): %g\n" % np.mean(gene_fits))
+
+        sys.stderr.write("min(mean_fits): %g\n" % np.min(mean_fits))
+        sys.stderr.write("max(mean_fits): %g\n" % np.max(mean_fits))
+        sys.stderr.write("mean(mean_fits): %g\n" % np.mean(mean_fits))
+
         
         # then fit genome-wide overdispersion params for each individual
         sys.stderr.write("fitting genome-wide overdispersion params\n")
@@ -318,62 +352,66 @@ def main():
 
         
 def get_gene_overdisp(count_matrix, expected_matrix,
-                      gw_fits, gene_fits, mean_fits, iteration=0):
+                      gw_fits, gene_fits, mean_fits, iteration=0,
+                      fix_gene=False, fix_mean=False):
     fit_ll = 0
     gene_fit_improved = 0
     mean_fit_improved = 0
 
     for gene_indx in range(count_matrix.shape[0]):
-        cur_like = mean_like(mean_fits[gene_indx],
-                             count_matrix[gene_indx,:],
-                             expected_matrix[gene_indx,:],
-                             gw_fits, gene_fits[gene_indx])
 
-        xtol = min(mean_fits[gene_indx] * 1e-4, MEAN_XTOL)
+        if not fix_mean:
+            cur_like = mean_like(mean_fits[gene_indx],
+                                 count_matrix[gene_indx,:],
+                                 expected_matrix[gene_indx,:],
+                                 gw_fits, gene_fits[gene_indx])
+
+            xtol = min(mean_fits[gene_indx] * 1e-4, MEAN_XTOL)
+
+            res = minimize_scalar(mean_like,
+                                  bounds=(MIN_MEAN_FIT, MAX_MEAN_FIT),
+                                  args=(count_matrix[gene_indx,:],
+                                        expected_matrix[gene_indx,:],
+                                        gw_fits, gene_fits[gene_indx]),
+                                  options={"xtol" : xtol},
+                                  method="Bounded")
+
+            like_diff = cur_like - res.fun
+            if like_diff >= 0.0:
+                # update parameter
+                mean_fits[gene_indx] = res.x
+                mean_fit_improved += 1
+            else:
+                # likelihood got worse indicating failed to converge,
+                # do not accept new param value
+                pass
+
+        if not fix_gene:
+            cur_like = gene_like(gene_fits[gene_indx], count_matrix[gene_indx,:],
+                                 expected_matrix[gene_indx,:], gw_fits,
+                                 mean_fits[gene_indx])
+
+            xtol = min(gene_fits[gene_indx] * 1e-4, GENE_XTOL)
+
+            res = minimize_scalar(gene_like,
+                                  bounds=(MIN_GENE_FIT, MAX_GENE_FIT),
+                                  args=(count_matrix[gene_indx,:],
+                                        expected_matrix[gene_indx,:],
+                                        gw_fits, mean_fits[gene_indx]),
+                                  options={"xtol" : xtol},
+                                  method="Bounded")
+
+            like_diff = cur_like - res.fun
+            if like_diff >= 0.0:
+                # update parameter
+                gene_fits[gene_indx] = res.x
+                gene_fit_improved += 1
+            else:
+                # likelihood got worse indicating failed to converge,
+                # do not accept new param value
+                pass
+
         
-        res = minimize_scalar(mean_like,
-                              bounds=(MIN_MEAN_FIT, MAX_MEAN_FIT),
-                              args=(count_matrix[gene_indx,:],
-                                    expected_matrix[gene_indx,:],
-                                    gw_fits, gene_fits[gene_indx]),
-                              options={"xtol" : xtol},
-                              method="Bounded")
-
-        like_diff = cur_like - res.fun
-        if like_diff >= 0.0:
-            # update parameter
-            mean_fits[gene_indx] = res.x
-            mean_fit_improved += 1
-        else:
-            # likelihood got worse indicating failed to converge,
-            # do not accept new param value
-            pass
-
-        cur_like = gene_like(gene_fits[gene_indx], count_matrix[gene_indx,:],
-                             expected_matrix[gene_indx,:], gw_fits,
-                             mean_fits[gene_indx])
-
-        xtol = min(gene_fits[gene_indx] * 1e-4, GENE_XTOL)
-        
-        # xtol = gene_fits[gene_indx] * 0.01
-        res = minimize_scalar(gene_like,
-                              bounds=(MIN_GENE_FIT, MAX_GENE_FIT),
-                              args=(count_matrix[gene_indx,:],
-                                    expected_matrix[gene_indx,:],
-                                    gw_fits, mean_fits[gene_indx]),
-                              options={"xtol" : xtol},
-                              method="Bounded")
-
-        like_diff = cur_like - res.fun
-        if like_diff >= 0.0:
-            # update parameter
-            gene_fits[gene_indx] = res.x
-            gene_fit_improved += 1
-        else:
-            # likelihood got worse indicating failed to converge,
-            # do not accept new param value
-            pass
-                
         fit_ll += gene_like(gene_fits[gene_indx],
                             count_matrix[gene_indx,:],
                             expected_matrix[gene_indx,:],

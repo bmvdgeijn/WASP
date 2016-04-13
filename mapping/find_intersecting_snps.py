@@ -5,6 +5,10 @@ import sys
 import array
 import pysam
 
+
+
+MAX_WINDOW_DEFAULT=100000
+
 class SNP:
     """SNP objects hold data for a single SNP"""
 
@@ -99,7 +103,7 @@ class BamScanner:
     Class to keep track of all the information read in from the bamfile/snpfile.
     """
 
-    def __init__(self, is_paired_end, max_window, file_name, keep_file_name,
+    def __init__(self, is_paired_end, max_window, filename, keep_filename,
                  remap_name, remap_num_name, fastq_names, snp_dir):
         """
         Constructor: opens files, creates initial table.
@@ -215,8 +219,8 @@ class BamScanner:
         
         # Read in all input files and create output files
         self.snp_dir = snp_dir
-        self.bamfile = pysam.Samfile(file_name,"rb")
-        self.keep_bam = pysam.Samfile(keep_file_name, "wb",
+        self.bamfile = pysam.Samfile(filename,"rb")
+        self.keep_bam = pysam.Samfile(keep_filename, "wb",
                                       template=self.bamfile)
         self.remap_bam = pysam.Samfile(remap_name, "wb", template=self.bamfile)
         self.remap_num_file = gzip.open(remap_num_name, "w")
@@ -749,40 +753,29 @@ class BamScanner:
 
 
 
-def run(is_paired_end, max_window, sort_file_name, keep_file_name, remap_name,
-        remap_num_name, fastq_names, snp_dir):
-
-    bam_data = BamScanner(is_paired_end, max_window, 
-                          sort_file_name, keep_file_name, remap_name, 
-                          remap_num_name, fastq_names, snp_dir)
-    bam_data.run()
-
-    
-
 
 def parse_options():
     parser=argparse.ArgumentParser()
 
-    parser.add_argument("-p", action='store_true', dest='is_paired_end', 
+    parser.add_argument("--is_paired_end", "-p", action='store_true', dest='is_paired_end', 
                         default=False, help=("Indicates that reads are paired-end "
                                              "(default is single)."))
     
-    parser.add_argument("-s", action='store_true', dest='is_sorted', 
+    parser.add_argument("--is_sorted", "-s", action='store_true', dest='is_sorted', 
                         default=False, help=('Indicates that the input bam file'
                                              ' is coordinate sorted (default '
                                              'is False).'))
     
-    mdefault = 100000
     mhelp = ('Changes the maximum window to search for SNPs.  The default is '
              '%d base pairs.  Reads or read pairs that span more than this '
              'distance (usually due to splice junctions) will be thrown out. '
              'Increasing this window allows for longer junctions, but may '
-             'increase run time and memory requirements.' % mdefault)
-    parser.add_argument("-m", action='store', dest='max_window', type=int, 
-                        default=mdefault, help=mhelp)
+             'increase run time and memory requirements.' % MAX_WINDOW_DEFAULT)
+    parser.add_argument("--max_window", "-m", action='store', dest='max_window', type=int, 
+                        default=MAX_WINDOW_DEFAULT, help=mhelp)
     
-    parser.add_argument("infile", action='store',
-                        help="Coordinate sorted bam file.")
+    parser.add_argument("bam_filename", action='store',
+                        help="Coordinate sorted bam file containing reads.")
 
     parser.add_argument("snp_dir", action='store', 
                         help=('Directory containing the SNPs segregating within the '
@@ -796,39 +789,43 @@ def parse_options():
 
 
 
-        
-def main():
-    options = parse_options()
-    infile = options.infile
-    snp_dir = options.snp_dir
-    name_split = infile.split(".")
+
+def main(bam_filename, snp_dir, max_window=MAX_WINDOW_DEFAULT,
+         is_paired_end=False, is_sorted=False):
+    
+    name_split = bam_filename.split(".")
     
     if len(name_split) > 1:
         pref = ".".join(name_split[:-1])
     else:
         pref = name_split[0]
-    
-    if not options.is_sorted:
-        pysam.sort(infile, pref + ".sort")
-        infile = pref + ".sort"
-        sort_file_name = pref + ".sort.bam"
+      
+    if not is_sorted:
+        pysam.sort(bam_filename, pref + ".sort")
+        sort_filename = pref + ".sort.bam"
     else:
-        sort_file_name = infile
+        sort_filename = bam_filename
 
-    keep_file_name = pref + ".keep.bam"
+    keep_filename = pref + ".keep.bam"
     remap_name = pref + ".to.remap.bam"
     remap_num_name = pref + ".to.remap.num.gz"
 
-    if options.is_paired_end:
+    if is_paired_end:
         fastq_names = [pref + ".remap.fq1.gz",
                        pref + ".remap.fq2.gz"]
     else:
         fastq_names = [pref + ".remap.fq.gz"]
 
-    run(options.is_paired_end, options.max_window, sort_file_name, keep_file_name, remap_name,
-        remap_num_name, fastq_names, snp_dir)
-    
+
+    bam_data = BamScanner(is_paired_end, max_window, 
+                          sort_filename, keep_filename, remap_name, 
+                          remap_num_name, fastq_names, snp_dir)
+    bam_data.run()
+
         
 
 if __name__ == '__main__':
-    main()
+    options = parse_options()
+    
+    main(options.bam_filename, options.snp_dir, max_window=options.max_window,
+         is_paired_end=options.is_paired_end, is_sorted=options.is_sorted)

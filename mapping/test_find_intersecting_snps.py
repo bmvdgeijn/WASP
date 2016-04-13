@@ -436,7 +436,50 @@ class TestSingleEnd:
                         
         find_intersecting_snps.main(test_data.bam_filename,
                                     test_data.snp_dir, max_window=100000,
-                                    is_paired_end=False, is_sorted=False)
+                                    is_paired_end=False, is_sorted=False,
+                                    max_seqs=10)
+
+        #
+        # Verify new fastq is correct. There should be no reads,
+        # because reads with greater than 10 allelic combinations
+        # are thrown out
+        #
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]        
+        assert len(lines) == 0
+
+        #
+        # Verify to.remap bam is empty
+        #
+        lines = read_bam(test_data.bam_remap_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+        
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        #
+        # Verify that the .to.remap.num filename contains
+        # the number of reads that need to be remapped
+        #
+        f = gzip.open(test_data.num_remap_filename)
+        lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 0
+
+        #
+        # re-run find intersecting SNPs but allow a max of 1024 allelic combinations
+        # (we expect 1023 new seqs with 10 bi-allelic SNPs)
+        #
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    test_data.snp_dir, max_window=100000,
+                                    is_paired_end=False, is_sorted=False,
+                                    max_seqs=1024)
 
         #
         # Verify new fastq is correct. There should be 1023 reads
@@ -447,8 +490,8 @@ class TestSingleEnd:
             lines = [x.strip() for x in f.readlines()]        
         assert len(lines) == 4*1023
 
-        # get every 4th line, starting at line 1
-        seqs = [lines[x] for x in range(1, 1024, 4)]
+        # get every 4th line, which correspond to sequences starting at line 1
+        seqs = [lines[x] for x in range(1, len(lines), 4)]
 
         # test a few combinations of alleles
         l = list(test_data.read1_seqs[0])
@@ -463,7 +506,7 @@ class TestSingleEnd:
         l = list(test_data.read1_seqs[0])
         l[0] = 'C'
         l[3] = 'C'
-        l[10] = 'C'
+        l[9] = 'C'
         new_seq3 = "".join(l)
 
         # read with 10 non-ref alleles

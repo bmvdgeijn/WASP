@@ -8,6 +8,7 @@ import pysam
 
 
 MAX_WINDOW_DEFAULT=100000
+MAX_SEQS_DEFAULT=10
 
 class SNP:
     """SNP objects hold data for a single SNP"""
@@ -104,7 +105,8 @@ class BamScanner:
     """
 
     def __init__(self, is_paired_end, max_window, filename, keep_filename,
-                 remap_name, remap_num_name, fastq_names, snp_dir):
+                 remap_name, remap_num_name, fastq_names, snp_dir,
+                 max_seqs=MAX_SEQS_DEFAULT):
         """
         Constructor: opens files, creates initial table.
         
@@ -213,6 +215,11 @@ class BamScanner:
             junction-spanning reads (i.e. with N in the cigar) that extend
             outside of the window are thrown out.
 
+        max_seqs : int
+            Maximum number of allelic combinations of read to consider. Reads
+            that have more than this number of allelic combinations due to 
+            a large number of overlapping SNPs are discarded.
+
         """
         
         self.is_paired_end = is_paired_end
@@ -252,6 +259,7 @@ class BamScanner:
         self.chr_num = self.cur_read.tid
         self.chr_name = self.bamfile.getrname(self.cur_read.tid)
         self.max_window = max_window
+        self.max_seqs = max_seqs
                 
         # Initialize the read tracking tables.
         self.read_table = [[] for x in range(self.max_window)]
@@ -443,7 +451,7 @@ class BamScanner:
             # includes the original sequence as well as the different sequences
             # with alternate alleles swapped in.
             num_seqs = len(seqs)
-            if (num_seqs == 0) or (num_seqs > 10):
+            if (num_seqs == 0) or (num_seqs > self.max_seqs):
                 continue
             if (num_seqs == 1):
                 self.keep_bam.write(read)
@@ -771,8 +779,17 @@ def parse_options():
              'distance (usually due to splice junctions) will be thrown out. '
              'Increasing this window allows for longer junctions, but may '
              'increase run time and memory requirements.' % MAX_WINDOW_DEFAULT)
-    parser.add_argument("--max_window", "-m", action='store', dest='max_window', type=int, 
+    
+    parser.add_argument("--max_window", "-m", action='store',
+                        dest='max_window', type=int, 
                         default=MAX_WINDOW_DEFAULT, help=mhelp)
+
+    parser.add_argument("--max_seqs", type=int, default=MAX_SEQS_DEFAULT,
+                        help="The maximum number of sequences with different "
+                        "allelic combinations to consider remapping (default=%d). "
+                        "Reads with more allelic combinations than MAX_SEQs are discarded"
+                        % MAX_SEQS_DEFAULT)
+                        
     
     parser.add_argument("bam_filename", action='store',
                         help="Coordinate sorted bam file containing reads.")
@@ -791,7 +808,7 @@ def parse_options():
 
 
 def main(bam_filename, snp_dir, max_window=MAX_WINDOW_DEFAULT,
-         is_paired_end=False, is_sorted=False):
+         is_paired_end=False, is_sorted=False, max_seqs=MAX_SEQS_DEFAULT):
     
     name_split = bam_filename.split(".")
     
@@ -819,7 +836,8 @@ def main(bam_filename, snp_dir, max_window=MAX_WINDOW_DEFAULT,
 
     bam_data = BamScanner(is_paired_end, max_window, 
                           sort_filename, keep_filename, remap_name, 
-                          remap_num_name, fastq_names, snp_dir)
+                          remap_num_name, fastq_names, snp_dir,
+                          max_seqs=max_seqs)
     bam_data.run()
 
         
@@ -828,4 +846,6 @@ if __name__ == '__main__':
     options = parse_options()
     
     main(options.bam_filename, options.snp_dir, max_window=options.max_window,
-         is_paired_end=options.is_paired_end, is_sorted=options.is_sorted)
+         is_paired_end=options.is_paired_end, is_sorted=options.is_sorted,
+         max_seqs=options.max_seqs)
+

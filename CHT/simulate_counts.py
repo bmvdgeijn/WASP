@@ -87,7 +87,6 @@ def parse_options():
                         help="per-gene overdispersion parameter for "
                         "beta-negative binomial (default=%.2f)" % dflt_gene_disp)
 
-    # TODO: could take array of overdispersion parameters (one for each individual)
     dflt_ind_disp = "100.0"
     parser.add_argument("--ind_disp", default=dflt_ind_disp,
                         help="per individual overdispersion parameter(s) for "
@@ -150,25 +149,6 @@ def parse_options():
 def main():
     options = parse_options()
     
-    # file_base=sys.argv[1]
-    # num_tests=int(sys.argv[2]) #10000
-    # num_inds=int(sys.argv[3]) #10
-    # min_hets=int(sys.argv[4]) #2
-    # MAF=float(sys.argv[5]) #0.2
-    # mean_counts=int(sys.argv[6]) #200
-    # as_counts=int(sys.argv[7]) #20
-    # gene_disp=float(sys.argv[8]) #0.01
-    # ind_disp=int(sys.argv[9]) #100
-    # AS_disp=float(sys.argv[10]) #0.2
-    # effect_size=float(sys.argv[11]) #0.2
-    # additivity=float(sys.argv[12]) #1
-    # het_error_rate=float(sys.argv[13]) #0.01
-    # read_error_rate=float(sys.argv[14]) #0.01
-    # true_positives=float(sys.argv[15]) #0.05
-    # simulate_hom_AS=True #False
-
-    write_options(sys.stderr, options)
-    
     out_files = []
     sys.stderr.write("creating output files:\n")
     file_list = open("%s_file_list.txt" % options.prefix, "w")
@@ -177,6 +157,7 @@ def main():
         sys.stderr.write("  %s\n" % out_filename)
 
         out_files.append(open(out_filename, "w"))
+        # write_options(out_files[i], options)
         write_header(out_files[i])
         file_list.write(out_filename + "\n")
     file_list.close()

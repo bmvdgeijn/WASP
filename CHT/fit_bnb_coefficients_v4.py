@@ -31,7 +31,7 @@ MIN_GENE_FIT = 0.0
 MAX_GENE_FIT = 1e8
 
 MIN_GW_FIT = 1.0
-MAX_GW_FIT = 1e3
+MAX_GW_FIT = 2e3
 
 
 # MIN_GENE_FIT = 0.0
@@ -310,10 +310,18 @@ def main():
         # first fit over dispersion params for each region
         sys.stderr.write("fitting per-region overdispersion params\n")
         t1 = time.time()
-        gene_fits, mean_fits, fit_ll = get_gene_overdisp(count_matrix, expected_matrix,
-                                                         gw_fits, gene_fits, mean_fits,
-                                                         fix_gene=fix_gene,
-                                                         fix_mean=fix_mean)
+        #gene_fits, mean_fits, fit_ll = get_gene_overdisp(count_matrix, expected_matrix,
+        #                                                 gw_fits, gene_fits, mean_fits,
+        #                                                 fix_gene=fix_gene,
+        #                                                 fix_mean=fix_mean)
+
+        gene_fit = gene_fits[0]
+        gene_fit, mean_fits, fit_ll = get_single_param_gene_overdisp(count_matrix, expected_matrix,
+                                                                     gw_fits, gene_fit, mean_fits)
+
+        gene_fits[:] = [gene_fit] * len(gene_fits)
+
+        
         time_taken = time.time() - t1
         sys.stderr.write("time: %.2fs\n" % time_taken)
         
@@ -356,7 +364,8 @@ def main():
     sys.stderr.write("done!\n")
 
 
-
+        
+    
         
 def get_gene_overdisp(count_matrix, expected_matrix,
                       gw_fits, gene_fits, mean_fits, iteration=0,
@@ -428,6 +437,73 @@ def get_gene_overdisp(count_matrix, expected_matrix,
 
 
 
+
+def get_single_param_gene_overdisp(count_matrix, expected_matrix,
+                                   gw_fits, gene_fit, mean_fits, iteration=0,
+                                   fix_gene=False, fix_mean=False):
+    fit_ll = 0
+    gene_fit_improved = 0
+    mean_fit_improved = 0
+
+    # update mean fits
+    for gene_indx in range(count_matrix.shape[0]):
+
+        if not fix_mean:
+            cur_like = mean_like(mean_fits[gene_indx],
+                                 count_matrix[gene_indx,:],
+                                 expected_matrix[gene_indx,:],
+                                 gw_fits, gene_fit)
+
+            xtol = min(mean_fits[gene_indx] * 1e-4, MEAN_XTOL)
+
+            res = minimize_scalar(mean_like,
+                                  bounds=(MIN_MEAN_FIT, MAX_MEAN_FIT),
+                                  args=(count_matrix[gene_indx,:],
+                                        expected_matrix[gene_indx,:],
+                                        gw_fits, gene_fit),
+                                  options={"xatol" : xtol},
+                                  method="Bounded")
+
+            like_diff = cur_like - res.fun
+            if like_diff >= 0.0:
+                # update parameter
+                mean_fits[gene_indx] = res.x
+                mean_fit_improved += 1
+            else:
+                # likelihood got worse indicating failed to converge,
+                # do not accept new param value
+                pass
+
+    cur_like = single_param_gene_like(gene_fit, count_matrix,
+                                      expected_matrix, gw_fits,
+                                      mean_fits)
+    
+    xtol = min(gene_fit * 1e-4, GENE_XTOL)
+
+    res = minimize_scalar(single_param_gene_like,
+                          bounds=(MIN_GENE_FIT, MAX_GENE_FIT),
+                          args=(count_matrix,
+                                expected_matrix,
+                                gw_fits, mean_fits),
+                          options={"xatol" : xtol},
+                          method="Bounded")
+
+    like_diff = cur_like - res.fun
+        
+    if like_diff >= 0.0:
+        # update parameter
+        gene_fit = res.x
+        fit_ll = res.fun
+    else:
+        # likelihood got worse indicating failed to converge,
+        # do not accept new param value
+        fit_ll = cur_like
+        
+    return gene_fit, mean_fits, fit_ll
+
+
+
+
 def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
                     gene_fits, mean_fits):
     fit_ll = 0
@@ -487,6 +563,19 @@ def gene_like(gene_fit, counts, expecteds, gw_fits, mean_fit):
         loglike += BNB_loglike(counts[i], expecteds[i]*mean_fit,
                                gw_fits[i], gene_fit)
     return -loglike
+
+
+def single_param_gene_like(gene_fit, count_matrix, expected_matrix, gw_fits, mean_fits):
+    ll = 0
+
+    for gene_indx in range(count_matrix.shape[0]):
+        ll += gene_like(gene_fit,
+                        count_matrix[gene_indx,:],
+                        expected_matrix[gene_indx,:],
+                        gw_fits, mean_fits[gene_indx])
+
+    return ll
+
 
 
 def gw_like(gw_fit, counts, expecteds, gene_fits, mean_fits):

@@ -71,18 +71,16 @@ char *util_read_entire_file(char *filename) {
  * before and after the count of newlines.
  */
 long util_fcount_lines(FILE *fh) {
-  char buf[UTIL_FGETS_BUF_SZ];
   long line_count;
-  int len;
+  char c;
 
   if(fseek(fh, 0L, SEEK_SET) != 0) {
     my_err("%s:%d: could not rewind filehandle", __FILE__, __LINE__);
   }
 
   line_count = 0;
-  while(fgets(buf, UTIL_FGETS_BUF_SZ, fh) != NULL) {
-    len = strlen(buf);
-    if(buf[len-1] == '\n') {
+  while((c = getc(fh)) != EOF) {
+    if(c == '\n') {
       line_count++;
     }
   }
@@ -93,6 +91,9 @@ long util_fcount_lines(FILE *fh) {
 
   return line_count;
 }
+
+
+
 
 
 /**
@@ -150,6 +151,7 @@ long util_count_lines(const char *filename) {
 
   return line_count;
 }
+
 
 /**
  * Counts the number of '\n' characters in the provided gzipped file.
@@ -572,38 +574,21 @@ char *util_str_ndup(const char *str, size_t n) {
  * This function still gives no indication that src string is
  * truncated, however.
  */
+
 size_t util_strncpy(char *dest, const char *src, size_t n) {
-  size_t i, len;
-  int src_end;
-
-  len = 0;
-  src_end = FALSE;
-  
-  for(i = 0; i < n-1; i++) {
-    if(src_end) {
-      /* Continue NULL padding to end of dest buf with '\0'.
-       * This is to have consistent behaviour with strncpy and also
-       * HDF5 API seems to expect this. WHen HDF5 string written
-       * with non-null chars past terminating '\0', entire length of
-       * string buffer is printed by pytables (including unprintable 
-       * binary chars) when string retrieved.
-       */
-      dest[i] = '\0';
-    } else {		 
+  size_t i = 0;
+  if(n > 0) {
+    while((i < n-1) && (src[i] != '\0')) {
       dest[i] = src[i];
-      if(src[i] == '\0') {
-	/* hit end of src string */
-	src_end = TRUE;
-      } else {
-	len += 1;
-      }
+      i++;
     }
+    /* padd to end with \0 */
+    memset(&dest[i], '\0', n-i);
+    /* dest[i] = '\0'; */
   }
-
-  dest[n-1] = '\0';
-  return len;
+	 
+  return i;
 }
-
 
 
 /**

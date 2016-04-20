@@ -761,7 +761,6 @@ class BamScanner:
 
 
 
-
 def parse_options():
     parser=argparse.ArgumentParser()
 
@@ -832,7 +831,6 @@ def main(bam_filename, snp_dir, max_window=MAX_WINDOW_DEFAULT,
                        pref + ".remap.fq2.gz"]
     else:
         fastq_names = [pref + ".remap.fq.gz"]
-
 
     bam_data = BamScanner(is_paired_end, max_window, 
                           sort_filename, keep_filename, remap_name, 

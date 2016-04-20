@@ -350,7 +350,11 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  util_strncpy(snp->chrom, token, sizeof(snp->chrom));
+
+  /* we don't bother to store chromosome since we store 
+   * SNPs from each chromosome in their own table
+   */
+  /* util_strncpy(snp->chrom, token, sizeof(snp->chrom)); */
   
   
   /* pos */

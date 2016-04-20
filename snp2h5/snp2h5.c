@@ -913,10 +913,9 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
 
     fprintf(stderr, "parsing file and writing to HDF5 files\n");
 
-    
     while(vcf_read_line(gzf, vcf, &snp,
 			geno_probs, haplotypes) != -1) {
-
+      
       if(geno_probs) {
 	write_h5matrix_row(gprob_info, row, geno_probs);
       }
@@ -942,7 +941,7 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
       if(snp_tab) {
 	snp_tab_append_row(snp_tab, &snp);
       }
-      
+
       row++;
       if((row % 1000) == 0) {
 	fprintf(stderr, ".");

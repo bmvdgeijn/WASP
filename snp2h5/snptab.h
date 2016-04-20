@@ -6,13 +6,15 @@
 #include "snp.h"
 
 
-#define SNPTAB_N_FIELDS 5
+#define SNPTAB_N_FIELDS 4
 
 /* chunk size affects performance a lot
  * small chunks = much faster writing of tables, but
  * worse compression
  */
+
 #define SNPTAB_CHUNK_SIZE 12
+
 
 
 /* SNPTab holds information about SNP table 

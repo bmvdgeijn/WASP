@@ -658,7 +658,8 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
     /* open file, count number of lines */
     fprintf(stderr, "reading from file %s\n", imp_files[i]);
     gzf = util_must_gzopen(args->input_files[i], "rb");
-    set_file_info(gzf, args->input_files[i], args, &file_info, NULL, impute_info);
+    set_file_info(gzf, args->input_files[i], args, &file_info, NULL,
+		  impute_info);
     
     /* initialize output files and memory to hold genotypes,
      * haplotypes, etc
@@ -813,7 +814,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 
 	  line_num += 1;
 
-	  if((line_num % 1000) == 0) {
+	  if((line_num % 10000) == 0) {
 	    fprintf(stderr, ".");
 	  }
 	}
@@ -1029,6 +1030,8 @@ int main(int argc, char **argv) {
 
   /* read chromosomes */
   all_chroms = chrom_read_file(args.chrom_file, &n_chrom);
+
+  fprintf(stderr, "long alleles will be truncated to %dbp\n", SNP_MAX_ALLELE);
   
   /* create new HDF5 file(s) */
   if(args.geno_prob_file) {

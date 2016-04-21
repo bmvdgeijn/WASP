@@ -376,26 +376,31 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  vcf_info->ref_len = strlen(token);
   ref_len = util_strncpy(snp->allele1, token, sizeof(snp->allele1));
 
-  if(ref_len != vcf_info->ref_len) {
-    my_warn("truncating long allele (%ld bp) to %ld bp\n",
-	    vcf_info->ref_len, ref_len);
-  }
+  /* used to warn about truncations, but makes program too
+   * chatty if there are a lot of them
+   */
+  vcf_info->ref_len = 0;
+  /* vcf_info->ref_len = strlen(token); */
+  /* if(ref_len != vcf_info->ref_len) { */
+  /*   my_warn("truncating long allele (%ld bp) to %ld bp\n", */
+  /* 	    vcf_info->ref_len, ref_len); */
+  /* } */
   
   /* alt */
   token = strsep(&cur, delim);
   if(token == NULL) {
     my_err("expected at least %d tokens per line\n", n_fix_header);
   }
-  vcf_info->alt_len = strlen(token);
   alt_len = util_strncpy(snp->allele2, token, sizeof(snp->allele2));
-
-  if(alt_len != vcf_info->alt_len) {
-    my_warn("truncating long allele (%ld bp) to %ld bp\n",
-	    vcf_info->alt_len, alt_len);
-  }
+  
+  vcf_info->alt_len = 0;
+  /* vcf_info->alt_len = strlen(token); */
+  /* if(alt_len != vcf_info->alt_len) { */
+  /*   my_warn("truncating long allele (%ld bp) to %ld bp\n", */
+  /* 	    vcf_info->alt_len, alt_len); */
+  /* } */
 
   /* qual */
   token = strsep(&cur, delim);

@@ -376,7 +376,9 @@ def set_snp_counts(data_files, region_list, snps, test_snp, options):
                         snp.ref_hap_count = alt_count
                         snp.alt_hap_count = ref_count
                     else:
-                        raise ValueError("expected haplotype to be defined")
+                        # haplotypes are undefined at this position
+                        snp.ref_hap_count = 0
+                        snp.alt_hap_count = 0
     
         
 

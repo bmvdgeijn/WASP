@@ -20,7 +20,7 @@ void my_err(const char *format, ...) {
   }
 
   va_end(args);
-  abort();
+  exit(2);
 }
 
 

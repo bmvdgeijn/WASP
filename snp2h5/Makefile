@@ -1,5 +1,5 @@
 # Edit the following variables as needed
-HDF_INSTALL=$(HOME)/anaconda
+HDF_INSTALL=$(HOME)/anaconda2
 EXTLIB=-L$(HDF_INSTALL)/lib
 CC=gcc
 LIB=-lz -lm -lhdf5 -lhdf5_hl

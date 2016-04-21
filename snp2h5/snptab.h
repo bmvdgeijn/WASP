@@ -6,14 +6,15 @@
 #include "snp.h"
 
 
-#define SNPTAB_NFIELDS 5
 #define SNPTAB_N_FIELDS 4
 
 /* chunk size affects performance a lot
  * small chunks = much faster writing of tables, but
  * worse compression
  */
+
 #define SNPTAB_CHUNK_SIZE 12
+
 
 
 /* SNPTab holds information about SNP table 
@@ -30,6 +31,7 @@ typedef struct {
   size_t field_offset[SNPTAB_N_FIELDS];
   
   hid_t name_type;
+  hid_t chrom_type;
   hid_t allele_type;
   
   int compress;

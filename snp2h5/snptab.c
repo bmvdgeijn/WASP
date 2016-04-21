@@ -35,22 +35,30 @@ SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name,
   /* set datatypes for each field */
   tab->name_type = H5Tcopy(H5T_C_S1);
   H5Tset_size(tab->name_type, SNP_MAX_NAME);
+  /* no longer store chromosome as each chromosome
+   * gets its own table 
+  /* tab->chrom_type = H5Tcopy(H5T_C_S1);
+   * H5Tset_size(tab->chrom_type, SNP_MAX_CHROM);
+   */
   tab->allele_type = H5Tcopy(H5T_C_S1);
-  H5Tset_size(tab->allele_type, SNP_MAX_ALLELE);    
+  H5Tset_size(tab->allele_type, SNP_MAX_ALLELE);
   tab->field_type[0] = tab->name_type; /* name */
+  /* tab->field_type[1] = tab->chrom_type; */ /* chromosome */
   tab->field_type[1] = H5T_NATIVE_LONG; /* pos */
   tab->field_type[2] = tab->allele_type; /* allele1 */
   tab->field_type[3] = tab->allele_type; /* allele2 */
 
   /* sizes of record and each field */
-  tab->record_size = sizeof(SNPTab);
+  tab->record_size = sizeof(SNP);
   tab->field_size[0] = sizeof(snp_desc.name);
+  /* tab->field_size[1] = sizeof(snp_desc.chrom); */
   tab->field_size[1] = sizeof(snp_desc.pos);
   tab->field_size[2] = sizeof(snp_desc.allele1);
   tab->field_size[3] = sizeof(snp_desc.allele2);
-
+    
   /* offsets of each field */
   tab->field_offset[0] = HOFFSET(SNP, name);
+  /* tab->field_offset[1] = HOFFSET(SNP, chrom); */
   tab->field_offset[1] = HOFFSET(SNP, pos);
   tab->field_offset[2] = HOFFSET(SNP, allele1);
   tab->field_offset[3] = HOFFSET(SNP, allele2);

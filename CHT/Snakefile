@@ -33,7 +33,7 @@ rule fit_as_coef:
         config['basedir'] + "as_coef.txt"
     shell:
         config['env_py2.7'] +
-        "python fit_as_coefficients_v2.py {input.cht_input} {output}"
+        "python fit_as_coefficients.py {input.cht_input} {output}"
 
 
 

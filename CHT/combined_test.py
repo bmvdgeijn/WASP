@@ -20,22 +20,20 @@ import gzip
 import argparse
 
 from scipy.optimize import *
-from scipy import cast
 from scipy.special import gammaln
 from scipy.special import betaln
 import scipy.stats
 
 import numpy as np
-from random import shuffle
-from random import randint
 
+import random
 
 # OPTIMIZER="BFGS"
 OPTIMIZER="Nelder-Mead"
 
 
 class TestSNP:
-    def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt, 
+    def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt,
                  hetps, totals, counts):
         self.name = name
         self.geno_hap1 = geno_hap1
@@ -46,9 +44,9 @@ class TestSNP:
         self.totals = totals
         self.counts = counts
 
-        
+
     def is_het(self):
-        """returns True if the test SNP is heterozygous"""        
+        """returns True if the test SNP is heterozygous"""
         return self.geno_hap1 != self.geno_hap2
 
     def is_homo_ref(self):
@@ -66,7 +64,7 @@ def open_input_files(in_filename):
         sys.stderr.write("input file %s does not exist or is not a regular file\n" %
                          in_filename)
         exit(2)
-    
+
     # read file that contains list of input files
     in_file = open(in_filename)
 
@@ -75,37 +73,37 @@ def open_input_files(in_filename):
         # open each input file and read first line
         filename = line.rstrip()
         if not filename or not os.path.exists(filename) or not os.path.isfile(filename):
-            sys.stderr.write("input file '%s' does not exist or is not a regular file\n" 
+            sys.stderr.write("input file '%s' does not exist or is not a regular file\n"
                              % line)
             exit(2)
         if filename.endswith(".gz"):
             f = gzip.open(filename)
         else:
             f = open(filename)
-            
+
         # skip header
         f.readline()
 
         infiles.append(f)
     in_file.close()
-    
+
     if len(infiles) == 0:
         sys.stderr.write("no input files specified in file '%s'\n" % options.infile_list)
         exit(2)
 
     return infiles
-    
+
 
 
 def write_header(outfile):
     outfile.write("\t".join(["TEST.SNP.CHROM", "TEST.SNP.POS",
-                             "LOGLIKE.NULL", "LOGLIKE.ALT", 
-                             "CHISQ", "P.VALUE", "ALPHA", "BETA", 
-                             "PHI", "TOTAL.AS.READ.COUNT", 
+                             "LOGLIKE.NULL", "LOGLIKE.ALT",
+                             "CHISQ", "P.VALUE", "ALPHA", "BETA",
+                             "PHI", "TOTAL.AS.READ.COUNT",
                              "TOTAL.READ.COUNT"]) + "\n")
 
 
-def read_bnb_sigmas(options, infiles):    
+def read_bnb_sigmas(options, infiles):
     """Read overdispersion parameters for beta-negative binomial.
     Expect one for each individual."""
     if (options.bnb_disp):
@@ -125,7 +123,7 @@ def read_bnb_sigmas(options, infiles):
         bnb_sigmas = [0.001]*len(infiles)
 
     return bnb_sigmas
-    
+
 
 
 def read_as_sigmas(options, infiles):
@@ -140,18 +138,18 @@ def read_as_sigmas(options, infiles):
             val = np.float64(line.strip())
             if val < 0.0 or val > 1.0:
                 raise ValueError("expected as_sigma values to be "
-                                 " in range 0.0-1.0, but got %g" % 
+                                 " in range 0.0-1.0, but got %g" %
                                  val)
             as_sigmas.append(np.float64(line.strip()))
             line = disp_file.readline()
-            
+
         disp_file.close()
 
         if len(as_sigmas) != len(infiles):
             raise ValueError("expected %d values in as_disp file "
                              "(one for each input file) but got "
                              "%d" % (len(infiles), len(as_sigmas)))
-        
+
     else:
         as_sigmas = [0.001] * len(infiles)
 
@@ -159,40 +157,40 @@ def read_as_sigmas(options, infiles):
 
 
 
-def write_results(outfile, snpinfo, loglike1par, loglike2par, 
+def write_results(outfile, snpinfo, loglike1par, loglike2par,
                   best2par, totcounts, all_counts):
-    """Write result to output file. Tab-delimited columns are: 
-      1. chromosome, 
-      2. SNP position, 
+    """Write result to output file. Tab-delimited columns are:
+      1. chromosome,
+      2. SNP position,
       3. Log likelihood 1 parameter model (Null)
       4. Log likelihood 2 parameter model (Alternative)
-      3. Chi-squared statistic, 
+      3. Chi-squared statistic,
       4. P-value
-      5. alpha parameter estimate (expression level 
+      5. alpha parameter estimate (expression level
          of reference allele)
-      6. beta parameter estimate (expression level of 
+      6. beta parameter estimate (expression level of
          alternative allele)
-      7. phi parameter estimate (beta-negative-binomial 
-         overdispersion 
+      7. phi parameter estimate (beta-negative-binomial
+         overdispersion
          parameter for this region)
       8. total number of allele-specific read counts for this
          region summed across individuals
-      9. total number of mapped reads for this region, 
+      9. total number of mapped reads for this region,
          summed across individuals"""
 
     # compute likelihood ratio test statistic:
     chisq = 2 * (loglike1par - loglike2par)
-    pval = (1-scipy.stats.chi2.cdf(chisq,1)), 
-         
+    pval = (1-scipy.stats.chi2.cdf(chisq,1)),
+
     outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1],
                              "%.2f" % -loglike1par,
                              "%.2f" % -loglike2par,
                              "%.3f" % chisq,
                              "%g" % pval,
-                             "%.3f" % best2par[0], 
-                             "%.3f" % best2par[1], 
-                             "%g" % best2par[2], 
-                             "%d" % totcounts, 
+                             "%.3f" % best2par[0],
+                             "%.3f" % best2par[1],
+                             "%g" % best2par[2],
+                             "%d" % totcounts,
                              "%d" % all_counts]) + '\n')
     outfile.flush()
 
@@ -201,12 +199,12 @@ def write_empty_result(outfile, snpinfo):
     """Write all zeros in the even that the test failed"""
     outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], "0", "0",
                              "0", "NA", "0", "0", "0", "0"]) + '\n')
-    
+
 
 
 def main():
     options = parse_options()
-    
+
     if options.pc_file:
         pc_matrix = load_covariates(options.pc_file)
         num_pcs = options.num_pcs
@@ -227,9 +225,6 @@ def main():
 
         bench_file.write("TEST.TYPE TIME\n")
 
-    
-        
-        
     write_header(outfile)
 
     # read list of input files (one for each individual)
@@ -239,7 +234,7 @@ def main():
     bnb_sigmas = read_bnb_sigmas(options, infiles)
     as_sigmas = read_as_sigmas(options, infiles)
 
-    
+
     # add first row of each input file to snpinfo list
     snpinfo = []
     for f in infiles:
@@ -247,8 +242,8 @@ def main():
 
     row_count = 0
     finished=False
-        
-    while not finished: 
+
+    while not finished:
         try:
             test_snps = []
             # parse test SNP and associated info from input file row
@@ -257,16 +252,16 @@ def main():
 
             # how many allele-specific reads are there across all linked SNPs and
             # and individuals?
-            totcounts = sum([np.sum(x.AS_target_ref) + np.sum(x.AS_target_alt) 
+            totcounts = sum([np.sum(x.AS_target_ref) + np.sum(x.AS_target_alt)
                              for x in test_snps])
 
-            
+
             all_counts = sum([test_snps[i].counts for i in range(len(test_snps))])
 
             if totcounts < options.min_as_counts:
                 if options.verbose:
                     sys.stderr.write("-----\nskipping SNP %s because "
-                                     "total AS counts %d <= %d\n" % 
+                                     "total AS counts %d <= %d\n" %
                                      (test_snps[0].name, totcounts, options.min_as_counts))
 
                 # skip, not enough allele-specific counts
@@ -281,15 +276,15 @@ def main():
 
             if options.verbose:
                 sys.stderr.write("-----\ntesting SNP %s\n" % test_snps[0].name)
-            
+
             row_count+=1
-            old_genos = [test_snps[y].geno_hap1 + test_snps[y].geno_hap2 
+            old_genos = [test_snps[y].geno_hap1 + test_snps[y].geno_hap2
                          for y in range(len(test_snps))]
-            
+
             if options.shuffle:
                 # permute genotypes
                 perm = range(len(test_snps))
-                shuffle(perm)
+                random.shuffle(perm)
                 geno1temp = [test_snps[y].geno_hap1 for y in perm]
                 geno2temp = [test_snps[y].geno_hap2 for y in perm]
                 for i in range(len(test_snps)):
@@ -299,17 +294,17 @@ def main():
 
             if options.benchmark:
                 # start timing test for NULL model
-                bench_file.write("null %s %s %d %d " % (snpinfo[0][0], snpinfo[0][1], 
+                bench_file.write("null %s %s %d %d " % (snpinfo[0][0], snpinfo[0][1],
                                                         totcounts, all_counts))
                 bench_file.flush()
             t1 = time.time()
-            
+
             starting_gene = [np.float64(x) for x in [0.1, 0.001]]
             maxlike = 10000000000
-            
+
             for start in starting_gene:
                 starts = [np.float64(0.5), np.float64(start)]
-                
+
                 # regress against the covariates and get residuals
                 #fit_cov(test_snps,cov_table)
 
@@ -317,7 +312,7 @@ def main():
                 res = minimize(ll_one, starts, args=(test_snps, True, #options.is_bnb_only,
                                                      options.is_as_only,
                                                      bnb_sigmas,
-                                                     as_sigmas, 
+                                                     as_sigmas,
                                                      options.read_error_rate,
                                                      [],
                                                      pc_matrix),
@@ -325,41 +320,41 @@ def main():
                                 method=OPTIMIZER)
 
                 new_par = res.x
-                
+
                 new_loglike = ll_one(new_par, test_snps, options.is_bnb_only,
                                      options.is_as_only, bnb_sigmas,
                                      as_sigmas, options.read_error_rate,
                                      [], pc_matrix)
                 if new_loglike < maxlike:
                     starting_par = new_par
-                
+
             pc_coefs=[]
             for pc in range(num_pcs):
-                res = minimize(ll_pc, [np.float64(0)], 
+                res = minimize(ll_pc, [np.float64(0)],
                                args=(starting_par, test_snps, True, #options.is_bnb_only,
-                                     options.is_as_only, bnb_sigmas, as_sigmas, 
+                                     options.is_as_only, bnb_sigmas, as_sigmas,
                                      options.read_error_rate, pc_coefs, pc_matrix),
                                options={"maxiter" : 50000, "disp" : options.verbose},
                                method=OPTIMIZER)
 
                 new_coef = res.x
                 pc_coefs = np.concatenate([pc_coefs, new_coef])
-                
-            res = minimize(ll_one, starting_par, 
+
+            res = minimize(ll_one, starting_par,
                            args=(test_snps, options.is_bnb_only, options.is_as_only, bnb_sigmas,
                                  as_sigmas, options.read_error_rate, pc_coefs, pc_matrix),
                            options={"maxiter" : 50000, "disp" : options.verbose},
                            method=OPTIMIZER)
             best1par = res.x
-            
+
             time_taken = time.time() - t1
             if options.verbose:
                 sys.stderr.write("null model optimization took %.3fs\n" % time_taken)
             if options.benchmark:
                 bench_file.write("%.3f\n" % time_taken)
                 bench_file.flush()
-            
-                
+
+
             loglike1par = ll_one(best1par, test_snps, options.is_bnb_only,
                                  options.is_as_only, bnb_sigmas,
                                  as_sigmas, options.read_error_rate,
@@ -370,7 +365,7 @@ def main():
 
             if options.benchmark:
                 # start timing test for ALT model
-                bench_file.write("alt %s %s %d %d " % (snpinfo[0][0], snpinfo[0][1], 
+                bench_file.write("alt %s %s %d %d " % (snpinfo[0][0], snpinfo[0][1],
                                                        totcounts, all_counts))
                 bench_file.flush()
 
@@ -391,15 +386,15 @@ def main():
             if options.benchmark:
                 bench_file.write("%.3f\n" % time_taken)
                 bench_file.flush()
-            
+
             loglike2par = ll_two(best2par, test_snps, options.is_bnb_only,
                                  options.is_as_only, bnb_sigmas,
                                  as_sigmas, options.read_error_rate,
                                  pc_coefs, pc_matrix)
-            
-            write_results(outfile, snpinfo, loglike1par, loglike2par, best2par, 
+
+            write_results(outfile, snpinfo, loglike1par, loglike2par, best2par,
                           totcounts, all_counts)
-            
+
         except Exception as e:
             write_empty_result(outfile, snpinfo)
             # an error occured, write to output file, but put 0s for all params and
@@ -420,57 +415,57 @@ def main():
 
 def parse_options():
     parser=argparse.ArgumentParser()
-    parser.add_argument("-a", "--as_only", 
-                        action='store_true', 
+    parser.add_argument("-a", "--as_only",
+                        action='store_true',
                         dest='is_as_only', default=False,
                         help="only perform the allele-specific part (Beta Binomial) "
                         "part of the test")
-    
-    parser.add_argument("-d", "--bnb_only", action='store_true', 
+
+    parser.add_argument("-d", "--bnb_only", action='store_true',
                         dest='is_bnb_only', default=False,
                         help="only perform the association (Beta Negative Binomial) part "
                         "of the test")
-    
-    parser.add_argument("--pc_file", action='store', 
-                        dest='pc_file', 
+
+    parser.add_argument("--pc_file", action='store',
+                        dest='pc_file',
                         help="file containing PC covariates to include in the model"
                         ,default=None)
 
-    parser.add_argument("-b", "--bnb_disp", action='store', dest='bnb_disp', 
+    parser.add_argument("-b", "--bnb_disp", action='store', dest='bnb_disp',
                         help="file containing depth (Beta Negative Binomial)"
                         "dispersion parameters", default=None)
 
-    parser.add_argument("-o", "--as_disp", action='store', 
-                        dest='as_disp', 
+    parser.add_argument("-o", "--as_disp", action='store',
+                        dest='as_disp',
                         help="file containing allele-specific (Beta Binomial) dispersion "
                         "parameters", default=None)
 
-    parser.add_argument("-s", "--shuffle", action='store_true', 
+    parser.add_argument("-s", "--shuffle", action='store_true',
                         dest='shuffle', default=False,
                         help="permute genotypes")
-    
+
     parser.add_argument("-e", "--read_error_rate", action='store', dest='read_error_rate',
                         help="estimate of error rate, used to update "
                         "heterozygous genotype probabilities "
                         "(currently this option disabled / not used)",
                         type=float, default=0.005)
-    
-    parser.add_argument("-m", "--min_as_counts", action='store', dest='min_as_counts', 
+
+    parser.add_argument("-m", "--min_as_counts", action='store', dest='min_as_counts',
                         type=int, default=0,
                         help="only perform test when total number of allele-specific "
                         "read counts across individuals > MIN_COUNTS")
 
-    parser.add_argument("--num_pcs", action='store', dest='num_pcs', 
+    parser.add_argument("--num_pcs", action='store', dest='num_pcs',
                         type=int, default=0,
                         help="designates the number of PCs to use as covariates")
-    
-    parser.add_argument("-v", "--verbose", action='store_true', dest='verbose', 
+
+    parser.add_argument("-v", "--verbose", action='store_true', dest='verbose',
                         default=False, help="print extra information")
 
     parser.add_argument("--benchmark", dest="benchmark",
                         help="write information about time test is takes, number of optimization "
                         "functions, etc. to specified filename, or to stderr if '-' is specified")
-    
+
     parser.add_argument("infile_list", action='store', default=None)
     parser.add_argument("out_file", action='store', default=None)
 
@@ -478,7 +473,7 @@ def parse_options():
 
 
 
-                
+
 def addlogs(loga, logb):
     """Helper function: perform numerically-stable addition in log space"""
     return max(loga, logb) + math.log(1 + math.exp(-abs(loga - logb)))
@@ -487,23 +482,23 @@ def addlogs(loga, logb):
 
 def AS_betabinom_loglike(logps, sigma, AS1, AS2, hetp, error):
     """Given parameter, returns log likelihood of allele-specific
-    part of test. Note that some parts of equation have been 
+    part of test. Note that some parts of equation have been
     canceled out"""
     a = math.exp(logps[0] + math.log(1/sigma**2 - 1))
     b = math.exp(logps[1] + math.log(1/sigma**2 - 1))
-    
+
     part1 = 0
     part1 += betaln(AS1 + a, AS2 + b)
     part1 -= betaln(a, b)
-    
+
     if hetp==1:
-        return part1        
+        return part1
 
     e1 = math.log(error) * AS1 + math.log(1 - error) * AS2
     e2 = math.log(error) * AS2 + math.log(1 - error) * AS1
     if hetp == 0:
         return addlogs(e1, e2)
-    
+
     return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1,e2))
 
 def betaln_asym(a,b):
@@ -554,7 +549,7 @@ def BNB_loglike(k,mean,sigma,n):
 
     #Add log(beta(a+n,b+k))
     loglike += betaln_asym(a+n,b+k)
-    
+
     #Subtract log(beta(a,b))
     loglike -= betaln_asym(a,b)
 
@@ -562,26 +557,26 @@ def BNB_loglike(k,mean,sigma,n):
 
 
 
-def ll_one(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas, 
+def ll_one(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas,
            as_sigmas, error, pc_coefs, pc_matrix):
     alpha = x[0]
     beta = x[0]
     r = x[1]
-    return loglikelihood(alpha, beta, r, test_snps, is_bnb_only, 
+    return loglikelihood(alpha, beta, r, test_snps, is_bnb_only,
                          is_as_only, bnb_sigmas, as_sigmas, error, pc_coefs, pc_matrix)
 
 
-def ll_pc(x, params, test_snps, is_bnb_only, is_as_only, bnb_sigmas, 
+def ll_pc(x, params, test_snps, is_bnb_only, is_as_only, bnb_sigmas,
           as_sigmas, error, other_pc_coefs, pc_matrix):
     alpha = params[0]
     beta = params[0]
     r = params[1]
     pc_coefs=np.concatenate([other_pc_coefs,x])
-    return loglikelihood(alpha, beta, r, test_snps, is_bnb_only, 
+    return loglikelihood(alpha, beta, r, test_snps, is_bnb_only,
                          is_as_only, bnb_sigmas, as_sigmas, error, pc_coefs,pc_matrix)
 
 
-def ll_two(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas, 
+def ll_two(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas,
            as_sigmas, error, pc_coefs, pc_matrix):
     alpha = x[0]
     beta = x[1]
@@ -590,7 +585,7 @@ def ll_two(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas,
     #    pc_fits=x[3:]
     #else:
     #    pc_fits=[]
-    return loglikelihood(alpha, beta, r, test_snps, is_bnb_only, 
+    return loglikelihood(alpha, beta, r, test_snps, is_bnb_only,
                          is_as_only, bnb_sigmas, as_sigmas, error, pc_coefs, pc_matrix)
 
 
@@ -600,13 +595,13 @@ def calc_pc_factor(pc_fits, pcs, i):
     else:
         return 1
 
-    
-def loglikelihood(alpha, beta, r, test_snps, is_bnb_only, 
-                  is_as_only, bnb_sigmas, as_sigmas, error, 
-                  pc_coefs, pc_matrix): 
+
+def loglikelihood(alpha, beta, r, test_snps, is_bnb_only,
+                  is_as_only, bnb_sigmas, as_sigmas, error,
+                  pc_coefs, pc_matrix):
     loglike = 0
 
-    # if input values are outside of reasonable range return a 
+    # if input values are outside of reasonable range return a
     # very high -loglike
     if alpha <= 0 or beta <= 0 or r <= 0 or r > 1:
         return 10000000
@@ -623,12 +618,12 @@ def loglikelihood(alpha, beta, r, test_snps, is_bnb_only,
         if m<0:
             m = 0.000001
         if not is_bnb_only:
-            for j in range(len(test_snps[i].AS_target_ref)):            
+            for j in range(len(test_snps[i].AS_target_ref)):
                 if test_snps[i].hetps[j]>.9:
                     hetp = min(0.99, test_snps[i].hetps[j])
                     logps = [math.log(alpha) - math.log(alpha+beta),
                              math.log(beta) - math.log(alpha+beta)]
-                    loglike += AS_betabinom_loglike(logps, as_sigmas[i], 
+                    loglike += AS_betabinom_loglike(logps, as_sigmas[i],
                                                     test_snps[i].AS_target_ref[j],
                                                     test_snps[i].AS_target_alt[j],
                                                     hetp, error)
@@ -656,7 +651,7 @@ def parse_test_snp(snpinfo, options):
     else:
         geno_hap1 = int(snpinfo[6].strip().split("|")[0])
         geno_hap2 = int(snpinfo[6].strip().split("|")[1])
-    
+
     if snpinfo[15] == "NA":
         count = 0
     else:
@@ -664,10 +659,10 @@ def parse_test_snp(snpinfo, options):
 
     #if snpinfo[9].strip() == "NA":
         # SNP is homozygous, so there is no AS info
-    #    return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)    
+    #    return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)
     if snpinfo[9].strip() == "NA" or geno_hap1 == geno_hap2:
         # SNP is homozygous, so there is no AS info
-        return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)    
+        return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)
     else:
         # positions of target SNPs (not currently used)
         snplocs=[int(y.strip()) for y in snpinfo[9].split(';')]
@@ -688,12 +683,12 @@ def parse_test_snp(snpinfo, options):
             # permute allele-specific read counts by flipping them randomly at
             # each SNP
             for y in range(len(AS_target_ref)):
-                if randint(0,1) == 1:
-                    temp=AS_target_ref[y]
+                if random.randint(0, 1) == 1:
+                    temp = AS_target_ref[y]
                     AS_target_ref[y] = AS_target_alt[y]
                     AS_target_alt[y] = temp
 
-        return TestSNP(snp_id, geno_hap1, geno_hap2, AS_target_ref, 
+        return TestSNP(snp_id, geno_hap1, geno_hap2, AS_target_ref,
                        AS_target_alt, hetps, tot, count)
 
 def load_covariates(cov_file):
@@ -705,7 +700,7 @@ def load_covariates(cov_file):
             cov_table.append([np.float64(x) for x in line.strip().split()])
         else:
             break
-    
+
     return np.array(cov_table, dtype=np.float64)
-        
+
 main()

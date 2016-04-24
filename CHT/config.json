@@ -1,0 +1,7 @@
+
+{
+    "basedir" : "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/",
+    "min_as_count" : "10",
+    "env_py2.7" : "PATH=/iblm/netapp/home/gmcvicker/anaconda2/bin:/opt/sge/bin:/opt/sge/bin/lx-amd64:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin; "
+
+}

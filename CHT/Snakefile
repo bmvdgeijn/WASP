@@ -1,0 +1,133 @@
+configfile: "config.json"
+
+rule all:
+    input:
+        [config['basedir'] + "cht_results.txt",
+        config['basedir'] + "cht_results_as.txt",
+        config['basedir'] + "cht_results_bnb.txt",
+        config['basedir'] + "cht_results_as_permuted.txt",
+        config['basedir'] + "cht_results_bnb_permuted.txt",
+        config['basedir'] + "cht_results_permuted.txt"]
+
+
+
+rule fit_bnb_coef:
+    """estimate dispersion parameters for beta-negative binomial
+    part of combined test"""
+    input:
+        cht_input = config['basedir'] + "cht_input_files.txt"
+    output:
+        config['basedir'] + "bnb_coef.txt"
+    shell:
+        config['env_py2.7'] +
+        "python fit_bnb_coefficients_v4.py --min_as_counts {config[min_as_count]}"
+        "  --sample 2000 --seed 1234 {input.cht_input} {output}"
+
+
+rule fit_as_coef:
+    """estimate dispersion parameters for allele-specific
+    part of combined test"""
+    input:
+        cht_input = config['basedir'] + "cht_input_files.txt"
+    output:
+        config['basedir'] + "as_coef.txt"
+    shell:
+        config['env_py2.7'] +
+        "python fit_as_coefficients_v2.py {input.cht_input} {output}"
+
+
+
+rule combined_test:
+    input:
+        as_coef = config['basedir'] + "as_coef.txt",
+        bnb_coef = config['basedir'] + "bnb_coef.txt",
+        cht_input = config['basedir'] + "cht_input_files.txt"
+    output:
+        results = config['basedir'] + "cht_results.txt"
+    shell:
+        config['env_py2.7'] +
+        "python combined_test.py --min_as_counts {config[min_as_count]}"
+        "  --bnb_disp {input.bnb_coef} --as_disp {input.as_coef}"
+        "  {input.cht_input} {output.results}"
+
+
+rule as_test:
+    """run just the allele-specific part of the combined test"""
+    input:
+        as_coef = config['basedir'] + "as_coef.txt",
+        cht_input = config['basedir'] + "cht_input_files.txt"
+    output:
+        results = config['basedir'] + "cht_results_as.txt"
+    shell:
+        config['env_py2.7'] +
+        "python combined_test.py --min_as_counts {config[min_as_count]}"
+        "  --as_only --as_disp {input.as_coef}"
+        "  {input.cht_input} {output.results}"
+
+
+
+rule bnb_test:
+    """run just the beta-negative-binomial part of the combined test"""
+    input:
+        bnb_coef = config['basedir'] + "bnb_coef.txt",
+        cht_input = config['basedir'] + "cht_input_files.txt"
+    output:
+        results = config['basedir'] + "cht_results_bnb.txt"
+    shell:
+        config['env_py2.7'] +
+        "python combined_test.py --min_as_counts {config[min_as_count]}"
+        "  --bnb_only --bnb_disp {input.bnb_coef}"
+        "  {input.cht_input} {output.results}"
+
+
+
+
+rule as_test_permuted:
+    """run just the allele-specific part of the combined test
+    on permuted genotypes"""
+    input:
+        as_coef = config['basedir'] + "as_coef.txt",
+        cht_input = config['basedir'] + "cht_input_files.txt"
+    output:
+        results = config['basedir'] + "cht_results_as_permuted.txt"
+    shell:
+        config['env_py2.7'] +
+        "python combined_test.py --shuffle "
+        "  --min_as_counts {config[min_as_count]}"
+        "  --as_only --as_disp {input.as_coef}"
+        "  {input.cht_input} {output.results}"
+
+
+rule bnb_test_permuted:
+    """run just the beta-negative-binomial part of the combined test with
+    permuted genotypes
+    """
+    input:
+        bnb_coef = config['basedir'] + "bnb_coef.txt",
+        cht_input = config['basedir'] + "cht_input_files.txt"
+    output:
+        results = config['basedir'] + "cht_results_bnb_permuted.txt"
+    shell:
+        config['env_py2.7'] +
+        "python combined_test.py --shuffle"
+        "  --min_as_counts {config[min_as_count]}"
+        "  --bnb_only --bnb_disp {input.bnb_coef}"
+        "  {input.cht_input} {output.results}"
+
+
+rule combined_test_permuted:
+    """Run the combined test on permuted genotypes"""
+    input:
+        as_coef = config['basedir'] + "as_coef.txt",
+        bnb_coef = config['basedir'] + "bnb_coef.txt",
+        cht_input = config['basedir'] + "cht_input_files.txt"
+    output:
+        results = config['basedir'] + "cht_results_permuted.txt"
+    shell:
+        config['env_py2.7'] +
+        "python combined_test.py --shuffle"
+        "  --min_as_counts {config[min_as_count]}"
+        "  --bnb_disp {input.bnb_coef} --as_disp {input.as_coef}"
+        "  {input.cht_input} {output.results}"
+
+

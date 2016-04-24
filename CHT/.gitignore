@@ -1,5 +1,11 @@
 *.py[cod]
 
+# snakemake files
+.snakemake
+
+# emacs backups
+*~
+
 # C extensions
 *.so
 

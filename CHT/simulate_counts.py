@@ -13,8 +13,10 @@ def write_options(f, options):
     f.write("# min_hets = %d\n" % options.min_hets)
     f.write("# maf = %g\n" % options.maf)
     f.write("# mean_counts = %g\n" % options.mean_counts)
+    f.write("# mean_counts_distr = %s\n" % options.mean_counts_distr)
     f.write("# as_counts = %g\n" % options.as_counts)
     f.write("# gene_disp = %g\n" % options.gene_disp)
+    f.write("# gene_disp_distr = %s\n" % options.gene_disp_distr)
     f.write("# ind_disp = %s\n" % ",".join(["%g" % x for x in options.ind_disp]))
     f.write("# as_disp = %g\n" % options.as_disp)
     f.write("# effect_size = %g\n" % options.effect_size)
@@ -47,7 +49,8 @@ def write_header(f):
 
 
 def parse_options():
-    parser = argparse.ArgumentParser(description="simulate counts for combined haplotype test")
+    parser = argparse.ArgumentParser(description="simulate counts for "
+                                     "combined haplotype test")
 
     parser.add_argument("--prefix", default=None, required=True,
                         help="prefix for output files")
@@ -77,6 +80,15 @@ def parse_options():
                         help="mean number of read counts per region "
                         "(default=%.2f)" % dflt_mean_counts)
 
+    dflt_mean_counts_distr = "POINT"
+    parser.add_argument("--mean_counts_distr", default=dflt_mean_counts_distr,
+                        help="distribution for mean number of "
+                        "read counts per region (default=%s). "
+                        " If EXPONENTIAL is specified, the value of "
+                        "mean_counts is used as the scale parameter "
+                        "(mean) of the distribution" % dflt_mean_counts_distr,
+                        choices=("POINT", "EXPONENTIAL"))
+
     dflt_as_counts = 20.0
     parser.add_argument("--as_counts", default=dflt_as_counts, type=float,
                         help="expected number of allele-specific read counts "
@@ -85,7 +97,16 @@ def parse_options():
     dflt_gene_disp = 0.01
     parser.add_argument("--gene_disp", default=dflt_gene_disp, type=float,
                         help="per-gene overdispersion parameter for "
-                        "beta-negative binomial (default=%.2f)" % dflt_gene_disp)
+                        "beta-negative binomial (default=%.2f)" %
+                        dflt_gene_disp)
+
+    dflt_gene_disp_distr = "POINT"
+    parser.add_argument("--gene_disp_distr", default=dflt_gene_disp_distr,
+                        help="distribution for sampling per-gene "
+                        "overdispersion from (default=%s). If EXPONENTIAL "
+                        "is specified, the value of gene_disp is used as "
+                        "the scale parameter (mean) of the distribution"
+                        % dflt_gene_disp, choices=("POINT", "EXPONENTIAL"))
 
     dflt_ind_disp = "100.0"
     parser.add_argument("--ind_disp", default=dflt_ind_disp,
@@ -164,9 +185,9 @@ def main():
     
     
     ASseq_Y_file = open("%s_Y.txt" % options.prefix, "w")
-    ASseq_Y1_file =open("%s_Y1.txt" % options.prefix, "w")
-    ASseq_Y2_file =open("%s_Y2.txt" % options.prefix, "w")
-    ASseq_Z_file =open("%s_Z.txt" % options.prefix, "w")
+    ASseq_Y1_file = open("%s_Y1.txt" % options.prefix, "w")
+    ASseq_Y2_file = open("%s_Y2.txt" % options.prefix, "w")
+    ASseq_Z_file = open("%s_Z.txt" % options.prefix, "w")
 
     test = 1
     while test <= options.num_tests:
@@ -190,6 +211,25 @@ def main():
         snps = []
         counts = []
         num_hets = 0
+
+        
+        if options.mean_counts_distr == "POINT":
+            mean_counts = options.mean_counts
+        elif options.mean_counts_distr == "EXPONENTIAL":
+            mean_counts = np.random.exponential(options.mean_counts)
+        else:
+            raise ValueError("unknown distribution %s\n" %
+                             options.mean_counts_distr)
+
+        if options.gene_disp_distr == "POINT":
+            gene_disp = options.gene_disp
+        elif options.gene_disp_distr == "EXPONENTIAL":
+            gene_disp = np.random.exponential(options.gene_disp)
+            sys.stderr.write("gene_disp: %.2f\n" % gene_disp)
+        else:
+            sys.stderr.write("unknown distribution: %s\n" % gene_disp)
+
+        
         for ind in range(options.num_inds):
             # Simulate the individual's haps=[0,0]
             # prob of each minor allele is MAF (minor allele freq)
@@ -207,12 +247,13 @@ def main():
             else:
                 # two minor alleles
                 haps = [1,1]
-
+            
             # Expected number of reads based on genotypes
-            ind_mean_counts = options.mean_counts * ((2 - n_minor) + (n_minor * alt_expr))
+            ind_mean_counts = mean_counts * ((2 - n_minor) + (n_minor * alt_expr))
             #sys.stderr.write("n_minor: %d alt_expr: %g mean_counts: %g " %
             #                 (n_minor, alt_expr, ind_mean_counts))
-            sim_count = simulate_BNB(ind_mean_counts, options.gene_disp, options.ind_disp[ind])
+            
+            sim_count = simulate_BNB(ind_mean_counts, gene_disp, options.ind_disp[ind])
 
             if is_het:
                 if random() < options.het_error_rate:

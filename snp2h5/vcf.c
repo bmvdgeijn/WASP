@@ -134,6 +134,7 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 			  char *cur) {
   int gt_idx, hap1, hap2, i, n;
   static int warn_phase = TRUE;
+  static int warn_parse = TRUE;
   long expect_haps, n_haps;
   char gt_str[VCF_MAX_FORMAT];
   
@@ -178,8 +179,12 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 		    inner_tok);
 	    warn_phase = FALSE;
 	  } else {
-	    my_warn("%s:%d: could not parse genotype string '%s'\n",
-		    __FILE__, __LINE__, inner_tok);
+	    if(warn_parse) {
+	      my_warn("%s:%d: could not parse some genotype "
+		      "strings that look like: '%s'\n", __FILE__, __LINE__,
+		      inner_tok);
+	      warn_parse = FALSE;
+	    }
 	    hap1 = VCF_GTYPE_MISSING;
 	    hap2 = VCF_GTYPE_MISSING;
 	  }

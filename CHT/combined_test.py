@@ -243,6 +243,8 @@ def main():
     row_count = 0
     finished=False
 
+    options.dup_snp_warn = True
+    
     while not finished:
         try:
             test_snps = []
@@ -633,7 +635,7 @@ def loglikelihood(alpha, beta, r, test_snps, is_bnb_only,
     return -loglike
 
 
-def parse_test_snp(snpinfo, options):
+def parse_test_snp(snpinfo, options):    
     snp_id = snpinfo[2]
     if snpinfo[16] == "NA":
         # SNP is missing data
@@ -657,39 +659,54 @@ def parse_test_snp(snpinfo, options):
     else:
         count = int(snpinfo[15])
 
-    #if snpinfo[9].strip() == "NA":
-        # SNP is homozygous, so there is no AS info
-    #    return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)
     if snpinfo[9].strip() == "NA" or geno_hap1 == geno_hap2:
         # SNP is homozygous, so there is no AS info
         return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)
     else:
-        # positions of target SNPs (not currently used)
-        snplocs=[int(y.strip()) for y in snpinfo[9].split(';')]
+        # positions of target SNPs
+        snp_locs = np.array([int(y.strip()) for y in snpinfo[9].split(';')])
 
         # counts of reads that match reference overlapping linked 'target' SNPs
-        AS_target_ref = [int(y) for y in snpinfo[12].split(';')]
+        snp_as_ref = np.array([int(y) for y in snpinfo[12].split(';')])
 
         # counts of reads that match alternate allele
-        AS_target_alt = [int(y) for y in snpinfo[13].split(';')]
+        snp_as_alt = np.array([int(y) for y in snpinfo[13].split(';')])
 
         # heterozygote probabilities
-        hetps = [np.float64(y.strip()) for y in snpinfo[10].split(';')]
+        snp_hetps = np.array([np.float64(y.strip())
+                          for y in snpinfo[10].split(';')])
 
         # linkage probabilities, not currently used
-        linkageps = [np.float64(y.strip()) for y in snpinfo[11].split(';')]
+        snp_linkageps = np.array([np.float64(y.strip())
+                                  for y in snpinfo[11].split(';')])
 
+
+        # same SNP should not be provided multiple times, this
+        # can create problems with combined test. Warn and filter
+        # duplicate SNPs
+        uniq_loc, uniq_idx = np.unique(snp_locs, return_index=True)
+
+        if options.dup_snp_warn and uniq_loc.shape[0] != snp_locs.shape[0]:
+            sys.stderr.write("WARNING: discarding SNPs that are repeated "
+                                     "multiple times in same line\n")
+            options.dup_snp_warn = False
+
+        snp_as_ref = snp_as_ref[uniq_idx]
+        snp_as_alt = snp_as_alt[uniq_idx]
+        snp_hetps = snp_hetps[uniq_idx]
+        snp_linkageps = snp_linkageps[uniq_idx]
+                             
         if options.shuffle:
             # permute allele-specific read counts by flipping them randomly at
             # each SNP
-            for y in range(len(AS_target_ref)):
+            for y in range(len(snp_as_ref)):
                 if random.randint(0, 1) == 1:
-                    temp = AS_target_ref[y]
-                    AS_target_ref[y] = AS_target_alt[y]
-                    AS_target_alt[y] = temp
+                    temp = snp_as_ref[y]
+                    snp_as_ref[y] = snp_as_alt[y]
+                    snp_as_alt[y] = temp
 
-        return TestSNP(snp_id, geno_hap1, geno_hap2, AS_target_ref,
-                       AS_target_alt, hetps, tot, count)
+        return TestSNP(snp_id, geno_hap1, geno_hap2, snp_as_ref,
+                       snp_as_alt, snp_hetps, tot, count)
 
 def load_covariates(cov_file):
     infile=open(cov_file)

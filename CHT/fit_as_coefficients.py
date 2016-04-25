@@ -93,7 +93,8 @@ def main():
     options = parse_options()
     infiles = open_input_files(options.infile_list)
     outfile = open(options.out_file,"w")
-
+    dup_snp_warn = True
+    
     # read input data and estimate dispersion coefficient
     # for one individual at a time
     for i in range(len(infiles)):
@@ -101,7 +102,7 @@ def main():
 
         AS_ref = []
         AS_alt = []
-        hetps = []
+        hetps =[]
 
         header = cur_file.readline()
 
@@ -109,11 +110,31 @@ def main():
         # array for this individual
         for line in cur_file:
             snpinfo = line.strip().split()
-
+            
             if snpinfo[12] != "NA":
-                AS_ref += [int(y) for y in snpinfo[12].split(';')]
-                AS_alt += [int(y) for y in snpinfo[13].split(';')]
-                hetps += [float(y.strip()) for y in snpinfo[10].split(';')]
+                # read information aout target SNPs
+                snp_locs = np.array([int(y.strip()) for y in snpinfo[9].split(';')],
+                                    dtype=np.int32)
+                snp_as_ref = np.array([int(y) for y in snpinfo[12].split(';')],
+                                      dtype=np.int32)
+                snp_as_alt = np.array([int(y) for y in snpinfo[13].split(';')],
+                                      dtype=np.int32)
+                snp_hetps = np.array([float(y.strip()) for y in snpinfo[10].split(';')],
+                                     dtype=np.float64)
+
+                # same SNP should not be provided multiple times, this
+                # can create problems with combined test. Warn and filter
+                # duplicate SNPs
+                uniq_loc, uniq_idx = np.unique(snp_locs, return_index=True)
+
+                if dup_snp_warn and uniq_loc.shape[0] != snp_locs.shape[0]:
+                    sys.stderr.write("WARNING: discarding SNPs that are repeated "
+                                     "multiple times in same line\n")
+                    dup_snp_warn = False
+                
+                AS_ref.extend(snp_as_ref[uniq_idx])
+                AS_alt.extend(snp_as_alt[uniq_idx])
+                hetps.extend(snp_hetps[uniq_idx])
 
         AS_ref = np.array(AS_ref)
         AS_alt = np.array(AS_alt)

@@ -5,9 +5,9 @@
 filenames <- c(# "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/cht_results.txt",
                "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/cht_results_as.txt",
                "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/cht_results_bnb.txt",
-              # "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/cht_results_permuted.txt",
+               # "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/cht_results_permuted.txt",
                 "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/cht_results_as_permuted.txt",
-               "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/cht_results_bnb_permuted.txt"
+                "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22/cht_results_bnb_permuted.txt"
                )
 
 

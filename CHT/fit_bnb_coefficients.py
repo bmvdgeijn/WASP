@@ -31,7 +31,7 @@ MIN_GENE_FIT = 0.0
 MAX_GENE_FIT = 1e8
 
 MIN_GW_FIT = 1.0
-MAX_GW_FIT = 2e3
+MAX_GW_FIT = 10e3
 
 
 # MIN_GENE_FIT = 0.0
@@ -52,7 +52,7 @@ MEAN_XTOL = 1e-7
 
 
 class TestSNP:
-    def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt, 
+    def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt,
                  hetps, totals, counts):
         self.name = name
         self.geno_hap1 = geno_hap1
@@ -63,9 +63,9 @@ class TestSNP:
         self.totals = totals
         self.counts = counts
 
-        
+
     def is_het(self):
-        """returns True if the test SNP is heterozygous"""        
+        """returns True if the test SNP is heterozygous"""
         return self.geno_hap1 != self.geno_hap2
 
     def is_homo_ref(self):
@@ -83,7 +83,7 @@ def open_input_files(in_filename):
         sys.stderr.write("input file %s does not exist or is not a "
                          "regular file\n" % in_filename)
         exit(2)
-    
+
     # read file that contains list of input files
     in_file = open(in_filename)
 
@@ -101,13 +101,13 @@ def open_input_files(in_filename):
             f = gzip.open(filename)
         else:
             f = open(filename)
-            
+
         # skip header
         f.readline()
 
         infiles.append(f)
     in_file.close()
-    
+
     if len(infiles) == 0:
         sys.stderr.write("no input files specified in file '%s'\n" % in_filename)
         exit(2)
@@ -118,7 +118,7 @@ def open_input_files(in_filename):
 def parse_options():
 
     default_sample = 2000
-    
+
     parser=argparse.ArgumentParser(description="This program estimates the "
                                    "genome-wide dispersion parameters for "
                                    "the read depth (beta-negative binomial, BNB) part "
@@ -140,13 +140,13 @@ def parse_options():
                                    "estimates can be used before the program "
                                    "has finished running." % default_sample)
 
-                                   
 
-    
+
+
     parser.add_argument("infile_list", action='store', default=None)
-    
+
     parser.add_argument("outfile", action='store', default=None)
-    
+
     parser.add_argument("--min_as_counts", action='store', dest='min_as_counts',
                         type=int, default=0, metavar="MIN_COUNTS",
                         help="only use regions where total allele-specific "
@@ -156,11 +156,11 @@ def parse_options():
                         type=int, default=0, metavar="MIN_COUNTS",
                         help="only use regions where total number of "
                         "read counts across individuals > MIN_COUNTS")
-    
+
     parser.add_argument("--skip", action='store', dest='skip',
                         type=int, default=0,
                         help="skip n test region between each one used for fitting")
-    
+
     parser.add_argument("--sample", type=int, default=default_sample,
                         help="Randomly sample a specified number of test "
                         "regions from the total set to speed up the "
@@ -187,13 +187,13 @@ def parse_options():
                         help="fix the per-gene mean dispersion parameter estimates to "
                         "specified value, and only fit the genome-wide dispersion "
                         "parameter estimates")
-    
+
     options = parser.parse_args()
 
     if options.no_sample or options.sample < 0:
         # do not perform sampling
         options.sample = 0
-        
+
     return options
 
 
@@ -201,13 +201,13 @@ def parse_options():
 
 def read_counts(options):
     infiles = open_input_files(options.infile_list)
-    
+
     is_finished = False
     count_matrix = []
     expected_matrix = []
     line_num = 0
     skip_num = 0
-        
+
     while not is_finished:
         is_comment = False
         line_num += 1
@@ -230,7 +230,7 @@ def read_counts(options):
                     raise IOError("Comment and header lines should be consistent accross "
                                   "all input files. LINE %d is comment or header line in some input files "
                                   "but not in file %s" % (line_num, options.infile_list[i]))
-                
+
                 # parse test SNP and associated info from input file row
                 new_snp = parse_test_snp(line.split(), options)
                 if new_snp.is_het():
@@ -254,7 +254,7 @@ def read_counts(options):
                     count_matrix.append(count_line)
                     expected_matrix.append(expected_line)
                 skip_num = 0
-                
+
     count_matrix = np.array(count_matrix, dtype=int)
     expected_matrix = np.array(expected_matrix, dtype=np.float64)
 
@@ -270,20 +270,22 @@ def read_counts(options):
         samp_index = samp_index[:options.sample]
         count_matrix = count_matrix[samp_index,]
         expected_matrix = expected_matrix[samp_index,]
-        
+
         sys.stderr.write("new count_matrix dimension: %s\n" % str(count_matrix.shape))
         sys.stderr.write("new expect_matrix dimension: %s\n" % str(expected_matrix.shape))
-    
+
     return count_matrix, expected_matrix
 
 
 def main():
     options = parse_options()
+    options.dup_snp_warn = True
+    options.shuffle = False
 
     # set random seed:
     if options.seed >= 0:
         np.random.seed(seed=options.seed)
-    
+
     # read input data
     sys.stderr.write("reading input data\n")
     count_matrix, expected_matrix = read_counts(options)
@@ -296,17 +298,17 @@ def main():
 
     fix_gene = options.fix_gene > 0.0
     fix_mean = options.fix_mean > 0.0
-    
+
     if fix_gene:
         gene_fits = [np.float64(options.fix_gene)] * count_matrix.shape[0]
     if fix_mean:
         mean_fits = [np.float64(options.fix_mean)] * count_matrix.shape[0]
-    
+
     # iteratively search for maximum likelihood parameter estimates
     iteration = 1
     while True:
         sys.stderr.write("\niteration %d\n" % iteration)
-        
+
         # first fit over dispersion params for each region
         sys.stderr.write("fitting per-region overdispersion params\n")
         t1 = time.time()
@@ -321,10 +323,10 @@ def main():
 
         gene_fits[:] = [gene_fit] * len(gene_fits)
 
-        
+
         time_taken = time.time() - t1
         sys.stderr.write("time: %.2fs\n" % time_taken)
-        
+
         sys.stderr.write("min(gene_fits): %g\n" % np.min(gene_fits))
         sys.stderr.write("max(gene_fits): %g\n" % np.max(gene_fits))
         sys.stderr.write("mean(gene_fits): %g\n" % np.mean(gene_fits))
@@ -333,7 +335,7 @@ def main():
         sys.stderr.write("max(mean_fits): %g\n" % np.max(mean_fits))
         sys.stderr.write("mean(mean_fits): %g\n" % np.mean(mean_fits))
 
-        
+
         # then fit genome-wide overdispersion params for each individual
         sys.stderr.write("fitting genome-wide overdispersion params\n")
         t1 = time.time()
@@ -353,7 +355,7 @@ def main():
         for i in gw_fits:
             outfile.write("%f\n" % i)
         outfile.close()
-        
+
         iteration += 1
 
         if old_ll - fit_ll < 0.0001:
@@ -364,9 +366,9 @@ def main():
     sys.stderr.write("done!\n")
 
 
-        
-    
-        
+
+
+
 def get_gene_overdisp(count_matrix, expected_matrix,
                       gw_fits, gene_fits, mean_fits, iteration=0,
                       fix_gene=False, fix_mean=False):
@@ -427,12 +429,12 @@ def get_gene_overdisp(count_matrix, expected_matrix,
                 # do not accept new param value
                 pass
 
-        
+
         fit_ll += gene_like(gene_fits[gene_indx],
                             count_matrix[gene_indx,:],
                             expected_matrix[gene_indx,:],
                             gw_fits, mean_fits[gene_indx])
-        
+
     return gene_fits, mean_fits, fit_ll
 
 
@@ -477,7 +479,7 @@ def get_single_param_gene_overdisp(count_matrix, expected_matrix,
     cur_like = single_param_gene_like(gene_fit, count_matrix,
                                       expected_matrix, gw_fits,
                                       mean_fits)
-    
+
     xtol = min(gene_fit * 1e-4, GENE_XTOL)
 
     res = minimize_scalar(single_param_gene_like,
@@ -489,7 +491,7 @@ def get_single_param_gene_overdisp(count_matrix, expected_matrix,
                           method="Bounded")
 
     like_diff = cur_like - res.fun
-        
+
     if like_diff >= 0.0:
         # update parameter
         gene_fit = res.x
@@ -498,7 +500,7 @@ def get_single_param_gene_overdisp(count_matrix, expected_matrix,
         # likelihood got worse indicating failed to converge,
         # do not accept new param value
         fit_ll = cur_like
-        
+
     return gene_fit, mean_fits, fit_ll
 
 
@@ -507,15 +509,15 @@ def get_single_param_gene_overdisp(count_matrix, expected_matrix,
 def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
                     gene_fits, mean_fits):
     fit_ll = 0
-    
+
     for indx in range(count_matrix.shape[1]):
         cur_like = gw_like(gw_fits[indx], count_matrix[:,indx],
                            expected_matrix[:,indx], gene_fits, mean_fits)
 
         init_gw_fit = gw_fits[indx]
-        
+
         xtol = min(gw_fits[indx] * 1e-2, GW_XTOL)
-        
+
         res = minimize_scalar(gw_like,
                               bounds=(MIN_GW_FIT, MAX_GW_FIT),
                               args=(count_matrix[:,indx],
@@ -533,12 +535,12 @@ def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
             gw_fits[indx] = res.x
             like = new_like
         else:
-            # likelihood did not improve because failed to converge 
+            # likelihood did not improve because failed to converge
             like = cur_like
-        
+
         like = gw_like(gw_fits[indx], count_matrix[:,indx],
                        expected_matrix[:,indx], gene_fits, mean_fits)
-        
+
         fit_ll += like
     return gw_fits, fit_ll
 
@@ -600,7 +602,7 @@ def addlogs(loga, logb):
 def lbeta_asymp(a,b):
     if b > a:
         a,b = b,a
-    
+
     if a<1e6:
         return betaln(a,b)
 
@@ -610,7 +612,7 @@ def lbeta_asymp(a,b):
     l += b*(1-b)/(2*a)
     l += b*(1-b)*(1-2*b)/(12*a*a)
     l += -((b*(1-b))**2)/(12*a**3)
-    
+
     return l
 
 
@@ -631,9 +633,9 @@ def BNB_loglike(k,mean,n,sigma):
 
     a = p * sigma + 1
     b = (1-p) * sigma
-    
+
     loglike = 0
-    
+
     #Rising Pochhammer = gamma(k+n)/gamma(n)
     #for j in range(k):
     #    loglike += math.log(j+n)
@@ -642,22 +644,31 @@ def BNB_loglike(k,mean,n,sigma):
         #loglike=scipy.special.gammaln(k+n)-scipy.special.gammaln(n)
     else:
         loglike=0
-    
+
     #Add log(beta(a+n,b+k))
     loglike += lbeta_asymp(a+n,b+k)
-    
+
     #Subtract log(beta(a,b))
     loglike -= lbeta_asymp(a,b)
 
     return loglike
 
+
+#
+# TODO: place SNP parsing in module so can be shared across multiple
+# scripts instead of cut-and-paste
+#
 def parse_test_snp(snpinfo, options):
     snp_id = snpinfo[2]
     if snpinfo[16] == "NA":
         # SNP is missing data
         tot = 0
     else:
-        tot = np.float64(snpinfo[16])
+        # rescale these to put totals in reasonable range
+        # better approach might be to divide by minimum total
+        # across individuals
+        #if tot>10000:
+        tot = float(snpinfo[16]) #/1000000
 
     if snpinfo[6] == "NA":
         geno_hap1 = 0
@@ -665,7 +676,7 @@ def parse_test_snp(snpinfo, options):
     else:
         geno_hap1 = int(snpinfo[6].strip().split("|")[0])
         geno_hap2 = int(snpinfo[6].strip().split("|")[1])
-    
+
     if snpinfo[15] == "NA":
         count = 0
     else:
@@ -673,24 +684,55 @@ def parse_test_snp(snpinfo, options):
 
     if snpinfo[9].strip() == "NA" or geno_hap1 == geno_hap2:
         # SNP is homozygous, so there is no AS info
-        return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)    
+        return TestSNP(snp_id, geno_hap1, geno_hap2, [], [], [], tot, count)
     else:
-        # positions of target SNPs (not currently used)
-        snplocs=[int(y.strip()) for y in snpinfo[9].split(';')]
+        # positions of target SNPs
+        snp_locs = np.array([int(y.strip()) for y in snpinfo[9].split(';')])
 
         # counts of reads that match reference overlapping linked 'target' SNPs
-        AS_target_ref = [int(y) for y in snpinfo[12].split(';')]
+        snp_as_ref = np.array([int(y) for y in snpinfo[12].split(';')])
 
         # counts of reads that match alternate allele
-        AS_target_alt = [int(y) for y in snpinfo[13].split(';')]
+        snp_as_alt = np.array([int(y) for y in snpinfo[13].split(';')])
 
         # heterozygote probabilities
-        hetps = [np.float64(y.strip()) for y in snpinfo[10].split(';')]
+        snp_hetps = np.array([np.float64(y.strip())
+                          for y in snpinfo[10].split(';')])
 
         # linkage probabilities, not currently used
-        linkageps = [np.float64(y.strip()) for y in snpinfo[11].split(';')]
+        snp_linkageps = np.array([np.float64(y.strip())
+                                  for y in snpinfo[11].split(';')])
 
-        return TestSNP(snp_id, geno_hap1, geno_hap2, AS_target_ref, 
-                       AS_target_alt, hetps, tot, count)
+
+        # same SNP should not be provided multiple times, this
+        # can create problems with combined test. Warn and filter
+        # duplicate SNPs
+        uniq_loc, uniq_idx = np.unique(snp_locs, return_index=True)
+
+        if options.dup_snp_warn and uniq_loc.shape[0] != snp_locs.shape[0]:
+            sys.stderr.write("WARNING: discarding SNPs that are repeated "
+                                     "multiple times in same line\n")
+            options.dup_snp_warn = False
+
+        snp_as_ref = snp_as_ref[uniq_idx]
+        snp_as_alt = snp_as_alt[uniq_idx]
+        snp_hetps = snp_hetps[uniq_idx]
+        snp_linkageps = snp_linkageps[uniq_idx]
+
+        if options.shuffle:
+            # permute allele-specific read counts by flipping them randomly at
+            # each SNP
+            for y in range(len(snp_as_ref)):
+                if random.randint(0, 1) == 1:
+                    temp = snp_as_ref[y]
+                    snp_as_ref[y] = snp_as_alt[y]
+                    snp_as_alt[y] = temp
+
+        return TestSNP(snp_id, geno_hap1, geno_hap2, snp_as_ref,
+                       snp_as_alt, snp_hetps, tot, count)
+
+
+
+
 
 main()

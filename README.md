@@ -59,9 +59,9 @@ The easiest way to install [HDF5](https://www.hdfgroup.org/HDF5/),
 [numpy](http://www.numpy.org), [scipy](http://scipy.org) and
 [Pytables](http://www.pytables.org/) is to download and install
 [Anaconda](http://continuum.io/downloads). *Installing Anaconda is
-highly recommended.* After installing Anaconda, the only dependency
-that must be downloaded and installed is
-[pysam](https://github.com/pysam-developers/pysam).
+highly recommended.* After installing Anaconda, configure [Bioconda] (https://bioconda.github.io/)
+and do `conda install pysam`, or download and install 
+[pysam](https://github.com/pysam-developers/pysam) directly.
 
 
 ## Installation
@@ -69,7 +69,13 @@ that must be downloaded and installed is
 1. Download and install [Anaconda](http://continuum.io/downloads),
 (or download and install Numpy, Scipy, HDF5, and Pytables separately).
 
-2. Download and install [pysam](https://github.com/pysam-developers/pysam)
+2. Configure Bioconda and install pysam:
+
+		conda config --add channels r
+		conda config --add channels bioconda
+		conda install pysam
+  Alternatively, download and install [pysam](https://github.com/pysam-developers/pysam)
+  yourself.
 
 3. Make sure that the HDF5 library is in your library path. For example 
 on Linux or OSX you can add the following to your .bashrc or .profile (replace

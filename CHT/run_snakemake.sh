@@ -1,3 +1,3 @@
 #!/bin/bash
 
-snakemake --cluster "qsub -V" --jobs 5
+snakemake --cluster "qsub -V" --jobs 10

@@ -59,7 +59,7 @@ rule fasta2h5:
     shell:
         "mkdir -p {config[base_dir]}/fasta_h5; "
         "{config[wasp_dir]}/snp2h5/fasta2h5 --chrom {input.chrom} "
-        "  --seq {output} {input.chrom}"
+        "  --seq {output} {input.fasta}"
 
 
 rule bam2h5:
@@ -117,11 +117,11 @@ rule get_target_regions:
         "{config[env_py2]} "
         "python {config[wasp_dir]}/CHT/get_target_regions.py "
         "  --target_region_size 2000 "
-        "  --min_as_count config[min_as_count] "
+        "  --min_as_count {config[min_as_count]} "
         "  --min_het_count 1 "
         "  --min_minor_allele_count 1 "
         "  --chrom {input.chrom} "
-        "  --read_count_dir {config[base_dir]} "
+        "  --read_count_dir {config[base_dir]}/bam_h5 "
         "  --individuals {input.samples} "
         "  --samples {input.snp_samples} "
         "  --snp_tab {input.snp_tab} "
@@ -182,21 +182,22 @@ rule make_adj_in_out_files:
     shell:
         "mkdir -p {config[base_dir]}/adjust_hap_read_counts; "
         "ls {input} > {output[0]}; "
-        "ls {input} | sed 's/.txt/.adjusted.txt/ > {output[1]}"
+        "ls {input} | sed 's/.txt/.adjusted.txt/' > {output[1]}"
         
         
 rule adjust_read_counts:
     input:
-        "%s/adjust_hap_read_counts/input.txt" % config['base_dir'],
-        "%s/adjust_hap_read_counts/output.txt" % config['base_dir']
+        in_file="%s/adjust_hap_read_counts/input.txt" % config['base_dir'],
+        out_file="%s/adjust_hap_read_counts/output.txt" % config['base_dir'],
+        seq=config['base_dir'] + "/fasta_h5/seq.h5"
     output:
         ["%s/adjust_hap_read_counts/haplotype_read_counts.%s.adjusted.gz" %
          (config['base_dir'], ind) for ind in get_individuals()]
     shell:
         "{config[env_py2]} "
-        "python {config[base_dir]}/CHT/update_total_depth.py "
-        "    --seq {config[base_dir]}/seq.h5 "
-        "   {input[0]} {input[1]}"
+        "python {config[wasp_dir]}/CHT/update_total_depth.py "
+        "    --seq {input.seq} "
+        "   {input.in_file} {input.out_file}"
 
 
 

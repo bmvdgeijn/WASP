@@ -32,10 +32,10 @@ do the following:
 
 ## Configuring the CHT pipeline
 
-The rules for the Snakemake tasks are defined in the file `CHT/Snakefile`.
+The rules for the Snakemake tasks are defined in the [Snakefile](Snakefile).
 
 Configuration parameters for this Snakefile are read from the YAML file
-`CHT/snake_conf.yaml`.
+[snake_conf.yaml](snake_conf.yaml).
 
 Before running Snakemake edit this file to specify the location
 of all of the input directories and files that will be used by the pipeline.
@@ -58,9 +58,9 @@ you could do something like the following:
         cd $WASP_DIR/CHT
         snakemake
 
-We provide a script `run_snakemake.sh` to run Snakemake on a SGE compute
-cluster. You must be in a python3 environment to run this script, and
-the script must be run from a job submission host.
+We provide a script [run_snakemake.sh](run_snakemake.sh) to run Snakemake
+on a SGE compute cluster. You must be in a python3 environment to run this
+script, and the script must be run from a job submission host.
 
         source activate py35
         cd $WASP_DIR/CHT
@@ -75,7 +75,6 @@ that if you are disconnected from the cluster, Snakemake will continue to run.
 
 At the conclusion of the pipeline, a QQPlot will be generated that summarizes
 the results of the CHT.
-
 
 
 ## Debugging the CHT pipeline

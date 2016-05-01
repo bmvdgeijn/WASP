@@ -93,11 +93,15 @@ the [1000 Genomes website](http://www.1000genomes.org/data#DataAccess).
 
 ##  Workflow
 
-An example workflow is provided in [example_workflow.sh](../example_workflow.sh)
-script. This workflow uses data in the [example_data directory](../example_data).
+We now provide a Snakemake workflow that can be used to run the entire
+CHT pipeline. For more information see the [Snakemake README](README.snakemake.md)
+
+An example workflow in the form of a shell script is also provided in
+[example_workflow.sh](../example_workflow.sh) script. This workflow uses
+data in the [example_data directory](../example_data).
 
 Some of the input files that we used for our paper can be downloaded from 
-[here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/). 
+[here](http://eqtl.uchicago.edu/histone_mods/).
 
 The following steps can be used to generate input files and run the
 Combined Haplotype Test. The examples given below use the example

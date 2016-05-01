@@ -1,4 +1,4 @@
-configfile: "config.yaml"
+configfile: "snake_conf.yaml"
 
 import glob
 
@@ -18,13 +18,26 @@ def get_individuals():
 
 rule all:
     input:
+        config['base_dir'] + "/CHT/qqplot.png"
+
+
+#### Make a QQPlot from CHT results
+        
+rule qqplot:
+    input:
         [config['base_dir'] + "/CHT/cht_results.txt",
         config['base_dir'] + "/CHT/cht_results_as.txt",
         config['base_dir'] + "/CHT/cht_results_bnb.txt",
         config['base_dir'] + "/CHT/cht_results_as_permuted.txt",
         config['base_dir'] + "/CHT/cht_results_bnb_permuted.txt",
         config['base_dir'] + "/CHT/cht_results_permuted.txt"]
-
+    output:
+        config['base_dir'] + "/CHT/qqplot.png"
+    shell:
+        "{config[Rscript]} --vanilla "
+        "{config[wasp_dir]}/CHT/qqplot.R {output[0]} {input}; "
+        "sleep 10; "
+        
 
 ########## Generating HDF5 files for SNPs, genome sequence and read counts
 
@@ -82,8 +95,7 @@ rule bam2h5:
         read_counts=config['base_dir'] + "/bam_h5/read_counts.{individual}.h5"
     shell:
         "mkdir -p {config[base_dir]}/bam_h5; "
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/bam2h5.py --chrom {input.chrom} "
+        "{config[py2]} {config[wasp_dir]}/CHT/bam2h5.py --chrom {input.chrom} "
         "  --snp_index {input.snp_index} "
         "  --snp_tab {input.snp_tab} "
         "  --haplotype {input.haplotype} "
@@ -116,8 +128,7 @@ rule get_target_regions:
     output:
         config['base_dir'] + "/target_regions.txt.gz"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/get_target_regions.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/get_target_regions.py "
         "  --target_region_size 2000 "
         "  --min_as_count {config[min_as_count]} "
         "  --min_het_count 1 "
@@ -151,8 +162,7 @@ rule extract_haplotype_read_counts:
         config['base_dir'] + "/hap_read_counts/haplotype_read_counts.{individual}.txt.gz"
     shell:
         "mkdir -p {config[base_dir]}/hap_read_counts; "
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/extract_haplotype_read_counts.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/extract_haplotype_read_counts.py "
         "  --chrom {input.chrom} "
         "  --snp_index {input.snp_index} "
         "  --snp_tab {input.snp_tab} "
@@ -198,8 +208,7 @@ rule adjust_read_counts:
         ["%s/adjust_hap_read_counts/haplotype_read_counts.%s.adjusted.txt.gz" %
          (config['base_dir'], ind) for ind in get_individuals()]
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/update_total_depth.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/update_total_depth.py "
         "    --seq {input.seq} "
         "   {input.in_file} {input.out_file}"
 
@@ -218,8 +227,7 @@ rule update_het_probs:
             config['base_dir']
     shell:
         "mkdir -p {config[base_dir]}/update_het_probs; "
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/update_het_probs.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/update_het_probs.py "
         "  --ref_as_counts {input.ref_as_counts} "
         "  --alt_as_counts {input.alt_as_counts} "
         " {input.hap_read_counts} {output}"
@@ -255,8 +263,7 @@ rule fit_bnb_coef:
     output:
         config['base_dir'] + "/CHT/bnb_coef.txt"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/fit_bnb_coefficients_v4.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/fit_bnb_coefficients_v4.py "
         "  --min_as_counts {config[min_as_count]}"
         "  --sample 2000 --seed 1234 {input.cht_input} {output}"
 
@@ -269,8 +276,7 @@ rule fit_as_coef:
     output:
         config['base_dir'] + "/CHT/as_coef.txt"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/fit_as_coefficients.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/fit_as_coefficients.py "
         "  {input.cht_input} {output}"
 
 
@@ -286,8 +292,7 @@ rule combined_test:
     output:
         results = config['base_dir'] + "/CHT/cht_results.txt"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/combined_test.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/combined_test.py "
         "  --min_as_counts {config[min_as_count]}"
         "  --bnb_disp {input.bnb_coef} --as_disp {input.as_coef}"
         "  {input.cht_input} {output.results}"
@@ -301,8 +306,7 @@ rule as_test:
     output:
         results = config['base_dir'] + "/CHT/cht_results_as.txt"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/combined_test.py"
+        "{config[py2]} {config[wasp_dir]}/CHT/combined_test.py"
         "  --min_as_counts {config[min_as_count]}"
         "  --as_only --as_disp {input.as_coef}"
         "  {input.cht_input} {output.results}"
@@ -317,8 +321,7 @@ rule bnb_test:
     output:
         results = config['base_dir'] + "/CHT/cht_results_bnb.txt"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/combined_test.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/combined_test.py "
         "  --min_as_counts {config[min_as_count]}"
         "  --bnb_only --bnb_disp {input.bnb_coef}"
         "  {input.cht_input} {output.results}" 
@@ -333,8 +336,7 @@ rule as_test_permuted:
     output:
         results = config['base_dir'] + "/CHT/cht_results_as_permuted.txt"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/combined_test.py --shuffle "
+        "{config[py2]} {config[wasp_dir]}/CHT/combined_test.py --shuffle "
         "  --min_as_counts {config[min_as_count]}"
         "  --as_only --as_disp {input.as_coef}"
         "  {input.cht_input} {output.results}"
@@ -350,8 +352,7 @@ rule bnb_test_permuted:
     output:
         results = config['base_dir'] + "/CHT/cht_results_bnb_permuted.txt"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/combined_test.py --shuffle"
+        "{config[py2]} {config[wasp_dir]}/CHT/combined_test.py --shuffle"
         "  --min_as_counts {config[min_as_count]}"
         "  --bnb_only --bnb_disp {input.bnb_coef}"
         "  {input.cht_input} {output.results}"
@@ -367,8 +368,7 @@ rule combined_test_permuted:
     output:
         results = config['base_dir'] + "/CHT/cht_results_permuted.txt"
     shell:
-        "{config[env_py2]} "
-        "python {config[wasp_dir]}/CHT/combined_test.py --shuffle"
+        "{config[py2]} {config[wasp_dir]}/CHT/combined_test.py --shuffle"
         "  --min_as_counts {config[min_as_count]}"
         "  --bnb_disp {input.bnb_coef} --as_disp {input.as_coef}"
         "  {input.cht_input} {output.results}"

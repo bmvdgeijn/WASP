@@ -1,34 +1,44 @@
+#
+# This is the Snakemake configuration file that specifies paths and 
+# and options for the Combined Haplotype Pipeline
+#
 {
-    # env_py2 is a bit of a hack so that python2 scripts can be called
-    # by snakemake (which is written in python3). The value should set
-    # PATH environment variable that is suitable for running python2
-    "env_py2" : "PATH=/iblm/netapp/home/gmcvicker/anaconda2/bin:/opt/sge/bin:/opt/sge/bin/lx-amd64:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin;",
+    # py2 is a bit of a hack so that python2 scripts can be called
+    # by snakemake (which is written in python3). The value should
+    # do whatever is needed to setup a python2 environment and
+    # call the python2 interpreter. This might, for example, involve
+    # setting the PATH environment variable
+    "py2" : "PATH=$HOME/anaconda2/bin:$PATH; python ",
+
+    # Rscript should set environment as appropriate and call Rscript interpreter
+    "Rscript" : "PATH=$HOME/anaconda2/bin:$PATH; Rscript ",
 
     # WASP directory (should have trailing '/')
     "wasp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP",
 
 
     # directory to write data files to
-    # "base_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/nick_input_data_chr22",
     "base_dir" :  "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/example_data",
 
     # minimum number of allele-specific reads (combined across individuals)
     # required to perform combined test on a region
     "min_as_count" : "10",
 
-    # location of chromInfo file (can be downloaded from UCSC genome browser)
+    # location of chromInfo file containing chromosome names and lengths
+    # (can be downloaded from UCSC genome browser)
     "chrom_info" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/chromInfo.hg19.txt",
 
     # directory containing impute or VCF SNP files
     "snp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes",
-    # file containing identifiers for impute or VCF SNP file
+    # file containing sample identifiers for impute or VCF SNP file
     "snp_samples" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/YRI_samples.txt",
 
-    # directory containing genome fasta files, one per chromosome
+    # directory containing fasta files for genome assembly
+    # one file per chromosome
     "fasta_dir" : "/iblm/netapp/data1/external/GRC37/chroms",
 
-
-    # text file containing identifiers of samples used in study (one per line)
+    # text file containing sample identifiers for the subset of
+    # samples that are used in study (one per line)
     "samples_file" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/H3K27ac/samples.txt",
 
     # directory containing BAM files

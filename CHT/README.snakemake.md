@@ -70,7 +70,7 @@ It should be possible to make simple modifications to this script to
 run on queue management systems other than SGE (e.g. LSF or Slurm).
 
 
-You should Snakemake from within a (Screen)[https://www.gnu.org/software/screen/] virtual terminal or using (nohup)[https://en.wikipedia.org/wiki/Nohup] so
+You should Snakemake from within a [Screen](https://www.gnu.org/software/screen/) virtual terminal or using [nohup](https://en.wikipedia.org/wiki/Nohup) so
 that if you are disconnected from the cluster, Snakemake will continue to run.
 
 At the conclusion of the pipeline, a QQPlot will be generated that summarizes

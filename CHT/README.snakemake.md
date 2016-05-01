@@ -1,11 +1,9 @@
 ## Snakemake CHT pipeline
 
-[Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home) is a 
+[Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home) is a
 workflow management system, designed to streamline the execution of
-software pipelines. 
-
-We now provide a Snakemake rule file that can be used to run the entire
-Combined Haplotype Pipeline.
+software pipelines. We now provide a Snakemake rule file that can be
+used to run the entire Combined Haplotype Pipeline.
 
 For a more complete description of Snakemake see the
 [Snakemake tutorial](http://snakemake.bitbucket.org/snakemake-tutorial.html).
@@ -26,7 +24,8 @@ Snakemake with the following commands:
         source activate py35
         conda install snakemake
 
-Then when you want to switch back to your default (e.g. python2) environment:
+Then when you want to switch back to your default (e.g. python2) environment
+do the following:
 
         source deactivate
 
@@ -68,14 +67,20 @@ the script must be run from a job submission host.
 It should be possible to make simple modifications to this script to
 run on queue management systems other than SGE (e.g. LSF or Slurm).
 
+
+*You should Snakemake from within a (Screen)[https://www.gnu.org/software/screen/] virtual terminal or using (nohup)[https://en.wikipedia.org/wiki/Nohup]* so
+that if you are disconnected from the cluster, Snakemake will continue to run.
+
 At the conclusion of the pipeline, a QQPlot will be generated that summarizes
 the results of the CHT.
+
 
 
 ## Debugging the CHT pipeline
 
 By default Snakemake will write an output and error file for each job
 to your home directory. These files will be named like: snakejob.<rulename>.<job_num>.sh.{e|o}<sge_jobid>. For example:
+
    	# contains error output for extract_haplotype_read_counts rule:
    	snakejob.extract_haplotype_read_counts.13.sh.e4507125
 

@@ -2,6 +2,7 @@
 # This is the Snakemake configuration file that specifies paths and 
 # and options for the Combined Haplotype Pipeline
 #
+
 {
     # py2 is a bit of a hack so that python2 scripts can be called
     # by snakemake (which is written in python3). The value should
@@ -17,8 +18,8 @@
     "wasp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP",
 
 
-    # directory to write data files to
-    "base_dir" :  "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/example_data",
+    # directory to write all output data files to
+    "base_dir" :  "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/output",
 
     # minimum number of allele-specific reads (combined across individuals)
     # required to perform combined test on a region

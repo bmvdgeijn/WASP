@@ -63,8 +63,8 @@ cluster. You must be in a python3 environment to run this script, and
 the script must be run from a job submission host.
 
         source activate py35
-	cd $WASP_DIR/CHT
-	./run_snakemake.sh
+        cd $WASP_DIR/CHT
+        ./run_snakemake.sh
 
 It should be possible to make simple modifications to this script to
 run on queue management systems other than SGE (e.g. LSF or Slurm).

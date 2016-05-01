@@ -37,7 +37,7 @@ The rules for the Snakemake tasks are defined in the file `CHT/Snakefile`.
 Configuration parameters for this Snakefile are read from the YAML file
 `CHT/snake_conf.yaml`.
 
-*Before running Snakemake edit this file* to specify the location
+Before running Snakemake edit this file to specify the location
 of all of the input directories and files that will be used by the pipeline.
 This includes locations of the impute2 SNP files, input BAM files etc.
 
@@ -62,9 +62,9 @@ We provide a script `run_snakemake.sh` to run Snakemake on a SGE compute
 cluster. You must be in a python3 environment to run this script, and
 the script must be run from a job submission host.
 
-	 source activate py35
-	 cd $WASP_DIR/CHT
-	 ./run_snakemake.sh
+        source activate py35
+	cd $WASP_DIR/CHT
+	./run_snakemake.sh
 
 It should be possible to make simple modifications to this script to
 run on queue management systems other than SGE (e.g. LSF or Slurm).

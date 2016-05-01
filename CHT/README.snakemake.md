@@ -54,9 +54,9 @@ Snakemake can be run as a single process or on a compute cluster with
 multiple jobs running simultaneuously. To run Snakemake on a single node
 you could do something like the following:
 
-    	  source activate py35
-	  cd $WASP_DIR/CHT
-	  snakemake
+        source activate py35
+	cd $WASP_DIR/CHT
+	snakemake
 
 We provide a script `run_snakemake.sh` to run Snakemake on a SGE compute
 cluster. You must be in a python3 environment to run this script, and

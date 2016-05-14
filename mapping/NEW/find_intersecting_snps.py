@@ -10,17 +10,9 @@ import pysam
 import snptable
 
 
-
 MAX_SEQS_DEFAULT = 10
             
 
-                
-                
-                
-                
-
-
-        
 class DataFiles(object):
     """Object to hold names and filehandles for all input / output 
     datafiles"""
@@ -158,16 +150,16 @@ def sort_bam(input_bam, output_prefix):
 
 
 
-def write_read(read, snp_tab, snp_idx, read_idx):
+def write_read(read, snp_tab, snp_idx, read_pos):
     snp_allele1 = [' '] * read.qlen
     snp_allele2 = [' '] * read.qlen
 
-    for (s_idx, r_idx) in zip(snp_idx, read_idx):
+    for (s_idx, r_idx) in zip(snp_idx, read_pos):
         a1 = snp_tab.snp_allele1[s_idx]
         a2 = snp_tab.snp_allele2[s_idx]
 
-        snp_allele1[r_idx] = a1
-        snp_allele2[r_idx] = a2
+        snp_allele1[r_pos-1] = a1
+        snp_allele2[r_pos-1] = a2
 
     sys.stderr.write("READ: %s\n" % read.query)
     sys.stderr.write("A1:   %s\n" % "".join(snp_allele1))
@@ -177,7 +169,7 @@ def write_read(read, snp_tab, snp_idx, read_idx):
         
 
 
-def count_ref_alt_matches(read, snp_tab, snp_idx, read_idx):
+def count_ref_alt_matches(read, snp_tab, snp_idx, read_pos):
     ref_alleles = snp_tab.snp_allele1[snp_idx]
     alt_alleles = snp_tab.snp_allele2[snp_idx]
     
@@ -186,10 +178,10 @@ def count_ref_alt_matches(read, snp_tab, snp_idx, read_idx):
     other_count = 0
 
     for i in range(len(snp_idx)):
-        if ref_alleles[i] == read.query[read_idx[i]]:
+        if ref_alleles[i] == read.query[read_pos[i]-1]:
             # read matches reference allele
             ref_count += 1
-        elif alt_alleles[i] == read.query[read_idx[i]]:
+        elif alt_alleles[i] == read.query[read_pos[i]-1]:
             # read matches non-reference allele
             alt_count += 1
         else:
@@ -200,24 +192,24 @@ def count_ref_alt_matches(read, snp_tab, snp_idx, read_idx):
     
 
 
-def generate_reads(read_seq, ref_alleles, alt_alleles, read_idx, i):
+def generate_reads(read_seq, ref_alleles, alt_alleles, read_pos, i):
     """Recursively generate set of reads with all possible combinations
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
     # create new version of this read with both reference and
     # alternative versions of allele at this index
-    idx = read_idx[i]
+    idx = read_pos[i]-1
     ref_read = read_seq[:idx] + ref_alleles[i] + read_seq[idx+1:]
     alt_read = read_seq[:idx] + alt_alleles[i] + read_seq[idx+1:]
 
-    if i == len(read_idx)-1:
+    if i == len(read_pos)-1:
         # this was the last SNP
         return [ref_read, alt_read]
 
     # continue recursively with other SNPs overlapping this read
-    reads1 = generate_reads(ref_read, ref_alleles, alt_alleles, read_idx, i+1)
-    reads2 = generate_reads(alt_read, ref_alleles, alt_alleles, read_idx, i+1)
+    reads1 = generate_reads(ref_read, ref_alleles, alt_alleles, read_pos, i+1)
+    reads2 = generate_reads(alt_read, ref_alleles, alt_alleles, read_pos, i+1)
 
     return reads1 + reads2
                 
@@ -247,8 +239,7 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
     n_ref_match = 0
     n_alt_match = 0
     n_other = 0
-    
-    
+        
     for read in files.input_bam:
         # TODO: handle paired end reads!!!!
         
@@ -268,37 +259,48 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
             snp_tab.read_file(snp_filename)
 
         # check if read overlaps SNPs or indels
-        snp_idx, read_idx = snp_tab.get_overlapping_snps(read)
+        snp_idx, snp_read_pos, \
+            indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
+
+        if len(indel_idx) > 0:
+            # for now discard this read, we want to improve this to handle
+            # the indel reads appropriately
+            # TODO: add option to handle indels instead of throwing out reads
+            continue
 
         if len(snp_idx) > 0:
             ref_alleles = snp_tab.snp_allele1[snp_idx]
             alt_alleles = snp_tab.snp_allele2[snp_idx]
 
             ref, alt, other = count_ref_alt_matches(read, snp_tab,
-                                                    snp_idx, read_idx)
+                                                    snp_idx, snp_read_pos)
             n_ref_match += ref
             n_alt_match += alt
             n_other += other
-            
-            
+                        
             # TODO: limit recursion, by throwing out read
             #       if it overlaps too many SNPs
             read_seqs = generate_reads(read.query, ref_alleles, alt_alleles,
-                                       read_idx, 0)
-            
+                                       snp_read_pos, 0)
+
             # make set of unique reads, we don't want to remap
             # duplicates, or the read that matches original
             unique_reads = set(read_seqs)
             if read.query in unique_reads:
                 unique_reads.remove(read.query)
-             
-            # write read to fastq file for remapping
-            write_fastq(files.fastq1, read, unique_reads)
 
-            # write read to 'to remap' BAM
-            # this is probably not necessary with new implmentation
-            # but kept for consistency with previous version of script
-            files.remap_bam.write(read)
+            if len(unique_reads) < max_seqs:
+                # write read to fastq file for remapping
+                write_fastq(files.fastq1, read, unique_reads)
+
+                # write read to 'to remap' BAM
+                # this is probably not necessary with new implmentation
+                # but kept for consistency with previous version of script
+                files.remap_bam.write(read)
+            else:
+                # discard read
+                # TODO: count number of discarded reads here...
+                pass
 
         else:
             # no SNPs overlap read, write to keep file
@@ -311,11 +313,11 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
     total = n_other + n_ref_match + n_alt_match
     if total > 0:
         mismatch_pct = 100.0 * float(n_other) / total
-
-        if mismatch_pct > 20.0:
+        if mismatch_pct > 10.0:
             sys.stderr.write("WARNING: many read SNP overlaps do not match "
                              "either allele (%.1f%%). SNP coordinates "
-                             "in input file xmay be incorrect.\n" % mismatch_pct)
+                             "in input file xmay be incorrect.\n" %
+                             mismatch_pct)
     
     
                      

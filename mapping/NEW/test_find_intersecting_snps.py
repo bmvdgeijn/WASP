@@ -568,7 +568,6 @@ class TestPairedEnd:
                          read1_quals=read1_quals)
 
 
-
         test_data.setup()
         test_data.index_genome_bowtie2()
         test_data.map_single_bowtie2()

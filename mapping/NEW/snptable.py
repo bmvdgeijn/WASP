@@ -95,11 +95,16 @@ class SNPTable(object):
                         # reads overlapping indels are thrown out, although
                         # we will likely handle indels better soon
                         indel_pos_list.append(pos)
-                        indel_allele1_list.append(a1)
-                        indel_allele2_list.append(a2)
+                        indel_allele1_list.append(a1.replace("-", ""))
+                        indel_allele2_list.append(a2.replace("-", ""))
                     else:
                         sys.stderr.write("WARNING: unexpected character "
                                          "in SNP:\n%s\n" % line)
+            else:
+                # this is an indel
+                indel_pos_list.append(pos)
+                indel_allele1_list.append(a1)
+                indel_allele2_list.append(a2)
 
         f.close()
 
@@ -129,8 +134,12 @@ class SNPTable(object):
 
     
     def get_overlapping_snps(self, read):
-        """returns list containing indices of overlapping SNPs, as well 
-        as index in read sequence of the overlapping SNPs"""
+        """Returns several lists: 
+        [1] indices of SNPs that this read overlaps,
+        [2] positions in read sequence that overlap SNPs, 
+        [3] indices for indels that read overlaps, 
+        [4] positions in read sequence that overlap indels. 
+        First base of read is position 1."""
         
         # read.cigar is a list of tuples. Each tuple has two entries. The first
         # entry specifies the character in the cigar and the second entry
@@ -145,14 +154,19 @@ class SNPTable(object):
         # =       BAM_CEQUAL      7
         # X       BAM_CDIFF       8
         # E.g. (0, 5) means 5 matches, and (4, 2) means a soft clip of 2bp
-
         read_start = 0
         read_end = 0
         genome_start = read.pos
         genome_end = read.pos
-        
-        snp_idx_list = []
-        read_idx_list = []
+
+        # index into SNP table for overlapping SNPs
+        snp_idx = []
+        # positions in read of overlapping SNPs
+        snp_read_pos = []
+        # index into indel table for overlapping indels
+        indel_idx = []
+        # positions in read of overlapping SNPs
+        indel_read_pos = []
         
         for cigar in read.cigar:
             op = cigar[0] # CIGAR 'operation'
@@ -165,7 +179,7 @@ class SNPTable(object):
                 genome_start = genome_start + 1
                 genome_end = genome_start + op_len - 1
 
-                # TODO: check for SNP in this genome segment
+                # check for SNP in this genome segment
                 s = genome_start - 1
                 e = min(genome_end, self.snp_index.shape[0])
                 s_idx = self.snp_index[s:e]
@@ -173,32 +187,51 @@ class SNPTable(object):
                 
                 if offsets.shape[0] > 0:
                     # there are overlapping SNPs
-                    snp_idx_list.extend(s_idx[offsets])
+                    snp_idx.extend(s_idx[offsets])
                     # get the offset of the SNPs into the read
-                    read_idx = offsets + read_start - 1
-                    read_idx_list.extend(read_idx)
+                    read_pos = offsets + read_start
+                    snp_read_pos.extend(read_pos)
+
+                # check for INDEL in this genome segment
+                i_idx = self.indel_index[s:e]
+                offsets = np.where(i_idx != SNP_UNDEF)[0]
+                if offsets.shape[0] > 0:
+                    indel_idx.extend(i_idx[offsets])
+                    read_pos = offsets + read_start
+                    indel_read_pos.extend(read_pos)
 
             elif op == BAM_CINS:
                 # insert in read relative to reference
                 read_start = read_end + 1
                 read_end = read_start + op_len - 1
 
-                # genome sequence does not advance, no possibility
+                # Genome sequence does not advance, no possibility
                 # for read to overlap SNP, since these bases do
-                # not exist in reference
-
-                # TODO: handle indels
+                # not exist in reference.
+                # INDELs here should be picked up
+                # by one of flanking match segments
 
             elif op == BAM_CDEL:
                 # deletion in read relative to reference
                 genome_start = genome_start + 1
                 genome_end   = genome_start + op_len - 1
 
-                # read sequence does not advance, no possibility
+                # Read sequence does not advance, no possibility
                 # for read to overlap SNP, since these bases do
                 # not exist in read
 
-                # TODO handle indels
+                # in most cases deletion should be picked up
+                # by flanking match segment, but there could be
+                # nested indels
+                
+                # check for INDEL in this genome segment
+                i_idx = self.indel_index[s:e]
+                offsets = np.where(i_idx != SNP_UNDEF)[0]
+                if offsets.shape[0] > 0:
+                    indel_idx.extend(i_idx[offsets])
+                    # position in read is where we last left off
+                    # in read sequence
+                    indel_read_pos.extend(read_end)
 
             elif op == BAM_CREF_SKIP:
                 # section of skipped reference, such as intron
@@ -214,8 +247,10 @@ class SNPTable(object):
                 read_end = read_start + op_len - 1
 
                 # This is like insert, but at the beginning of the read.
-
-                # TODO: handle indels?
+                # TODO: handle indels? Sometimes a read can be softclipped
+                # because it contains insert relative to reference, but
+                # in these cases, presumably reference version of read
+                # would map to same location (with higher score).
 
             elif seq_type == BAM_CHARD_CLIP:
                 # these bases not included in read or genome
@@ -228,15 +263,12 @@ class SNPTable(object):
                 read_start += read_end + 1
                 read_end = read_start + op_len - 1
 
-                # TODO: handle indels?
-
             else:
                 raise ValueError("unknown CIGAR code %d" % op)
 
-
-        if read_end != read.qlen:
+        if read_end != read.query_length:
             raise ValueError("length of read segments in CIGAR %d "
                              "does not add up to query length (%d)" %
-                             (read_end, read.qlen))
+                             (read_end, read.query_length))
         
-        return snp_idx_list, read_idx_list
+        return snp_idx, snp_read_pos, indel_idx, indel_read_pos

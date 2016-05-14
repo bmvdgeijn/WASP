@@ -47,8 +47,8 @@ class DataFiles(object):
         self.fastq2 = None
 
         if self.is_paired:
-            self.fastq1_filename = prefix + ".remap.fq1.gz"
-            self.fastq2_filename = prefix + ".remap.fq2.gz"
+            self.fastq1_filename = self.prefix + ".remap.fq1.gz"
+            self.fastq2_filename = self.prefix + ".remap.fq2.gz"
             self.fastq1 = gzip.open(self.fastq1_filename, "wb")
             self.fastq2 = gzip.open(self.fastq2_filename, "wb")
         else:

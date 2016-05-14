@@ -58,6 +58,8 @@ class Data(object):
         self.bam_keep_filename = self.prefix + ".keep.bam"
         self.bam_remap_filename = self.prefix + ".to.remap.bam"
         self.fastq_remap_filename = self.prefix + ".remap.fq.gz"
+        self.fastq1_remap_filename = self.prefix + ".remap.fq1.gz"
+        self.fastq2_remap_filename = self.prefix + ".remap.fq2.gz"
 
 
     def setup(self):
@@ -81,7 +83,9 @@ class Data(object):
             self.bam_sort_filename,
             self.bam_keep_filename,
             self.bam_remap_filename,
-            self.fastq_remap_filename]
+            self.fastq_remap_filename,
+            self.fastq1_remap_filename,
+            self.fastq2_remap_filename]
 
         index_filenames = glob.glob(self.genome_prefix + "*.bt2")
         filenames.extend(index_filenames)
@@ -551,47 +555,84 @@ class TestSingleEnd:
 class TestPairedEnd:
     """tests for paired end read mapping"""
 
-    def test_paired_one_read_one_snp(self):
+    def test_paired_two_reads_one_snp(self):
         """Simple test of whether 1 PE read with one end overlapping
         1 SNP works correctly"""
         test_data = Data()
 
-        read1_seqs = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                      "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"]
-        read1_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-                       "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"]
+        read1_seqs = ["AACGAAAAGGAGAA",
+                      "AAAAAAATTTAAAA"]
+        read2_seqs = ["AAGAAACAACACAA",
+                      "AAGAAACAACACAA"]
+        
+        read1_quals = ["B" * len(read1_seqs[0]),
+                       "C" * len(read1_seqs[1])]
+        read2_quals = ["D" * len(read2_seqs[0]),
+                       "E" * len(read2_seqs[1])]
 
-        genome_seq =  ("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
-                       "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"),
-
-        test_data = Data(read1_seqs=read1_seqs,
-                         read1_quals=read1_quals)
-
-
+        # POS           123456789012345678901234567890
+        # read1[0]          AACGAAAAGGAGAA
+        # read1[1]                      AAAAAAATTTAAAA
+        # SNP                            ^
+        genome_seq =  ("AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT")
+        # read2[0]                      AACACAACAAAGAA
+        # read2[1]                      AACACAACAAAGAA
+        # POS           123456789012345678901234567890
+        
+        snp_list = [['test_chrom', 18, "A", "C"]]
+        
+        test_data = Data(genome_seq=genome_seq,
+                         read1_seqs=read1_seqs,
+                         read2_seqs=read2_seqs,
+                         read1_quals=read1_quals,
+                         read2_quals=read2_quals,
+                         snp_list=snp_list)
+        
         test_data.setup()
         test_data.index_genome_bowtie2()
-        test_data.map_single_bowtie2()
+        test_data.map_paired_bowtie2()
         test_data.sam2bam()
 
         find_intersecting_snps.main(test_data.bam_filename,
                                     test_data.snp_dir, 
-                                    is_paired_end=False, is_sorted=False)
+                                    is_paired_end=True, is_sorted=False)
 
         #
-        # Verify new fastq is correct. The first base of the first read
-        # should be switched from a C to an A.
+        # Verify new fastq1 is correct.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq1_remap_filename) as f:
             lines = [x.strip() for x in f.readlines()]
-        assert len(lines) == 4
+        assert len(lines) == 8
 
         l = list(test_data.read1_seqs[0])
-        l[0] = 'C'
+        # last base of first read should be changed from A to C
+        l[13] = 'C'
         new_seq = "".join(l)
-
         assert lines[1] == new_seq
         assert lines[3] == test_data.read1_quals[0]
 
+        # second base of second read should be changed from A to C
+        l = list(test_data.read1_seqs[1])
+        l[1] = "C"
+        new_seq = "".join(l)
+        assert(lines[5] == new_seq)
+        assert(lines[7] == test_data.read1_quals[1])
+
+        #
+        # verify fastq2 is correct
+        #
+        with gzip.open(test_data.fastq2_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 8
+
+        # bases should be the same for the second half of
+        # the reads, since no SNP overlap
+        assert lines[1] == test_data.read2_seqs[0]
+        assert lines[3] == test_data.read2_quals[0]
+        assert lines[5] == test_data.read2_seqs[1]
+        assert lines[7] == test_data.read2_quals[1]
+        
         #
         # Verify to.remap bam is the same as the input bam file.
         #

@@ -41,19 +41,23 @@ class DataFiles(object):
         self.keep_filename = self.prefix + ".keep.bam"
         self.remap_filename = self.prefix + ".to.remap.bam"
 
+        self.fastq_single_filename = None
         self.fastq1_filename = None
         self.fastq2_filename = None
         self.fastq1 = None
         self.fastq2 = None
+        self.fastq_single = None
 
         if self.is_paired:
             self.fastq1_filename = self.prefix + ".remap.fq1.gz"
             self.fastq2_filename = self.prefix + ".remap.fq2.gz"
             self.fastq1 = gzip.open(self.fastq1_filename, "wb")
             self.fastq2 = gzip.open(self.fastq2_filename, "wb")
+            self.fastq_single_filename = self.prefix + ".remap.single.fq.gz"
+            self.fastq_single = gzip.open(self.fastq_single_filename, "wb")
         else:
-            self.fastq1_filename = self.prefix + ".remap.fq.gz"
-            self.fastq1 = gzip.open(self.fastq1_filename, "wb")
+            self.fastq_single_filename = self.prefix + ".remap.fq.gz"
+            self.fastq_single = gzip.open(self.fastq_single_filename, "wb")
 
         self.input_bam = pysam.Samfile(self.bam_sort_filename, "rb")
         self.keep_bam = pysam.Samfile(self.keep_filename, "wb",
@@ -64,7 +68,53 @@ class DataFiles(object):
 
 
         
+class ReadStats(object):
+    """Track information about reads and SNPs that they overlap"""
 
+    def __init__(self):
+        # number of read matches to reference allele
+        self.ref_count = 0
+        # number of read matches to alternative allele
+        self.alt_count = 0
+        # number of reads that overlap SNP but match neither allele
+        self.other_count = 0
+
+        # number of reads discarded because not proper pair
+        self.discard_improper_pair = 0
+
+        # number of reads discarded because overlap an indel
+        self.discard_indel = 0
+
+        # number of reads discarded because secondary match
+        self.discard_secondary = 0
+
+        # number of reads discarded because too many allelic combinations
+        self.discard_excess_reads = 0
+        
+        # number of single reads kept
+        self.keep_single = 0
+        # number of read pairs kept
+        self.keep_pair = 0
+
+        # number of single reads that need remapping
+        self.remap_single = 0
+        # number of read pairs kept
+        self.remap_pair = 0
+        
+
+    def write(self, file_handle):
+        file_handle.write("read SNP ref matches: %d\n" % self.ref_count)
+        file_handle.write("read SNP alt matches: %d\n" % self.alt_count)
+        file_handle.write("read SNP mismatches: %d\n" % self.other_count)
+
+        total = self.ref_count + self.alt_count + self.other_count
+        if total > 0:
+            mismatch_pct = 100.0 * float(self.other_count) / total
+            if mismatch_pct > 10.0:
+                sys.stderr.write("WARNING: many read SNP overlaps do not match "
+                                 "either allele (%.1f%%). SNP coordinates "
+                                 "in input file xmay be incorrect.\n" %
+                                 mismatch_pct)
     
 
 
@@ -169,26 +219,20 @@ def write_read(read, snp_tab, snp_idx, read_pos):
         
 
 
-def count_ref_alt_matches(read, snp_tab, snp_idx, read_pos):
+def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
     ref_alleles = snp_tab.snp_allele1[snp_idx]
     alt_alleles = snp_tab.snp_allele2[snp_idx]
     
-    ref_count = 0
-    alt_count = 0
-    other_count = 0
-
     for i in range(len(snp_idx)):
         if ref_alleles[i] == read.query[read_pos[i]-1]:
             # read matches reference allele
-            ref_count += 1
+            read_stats.ref_count += 1
         elif alt_alleles[i] == read.query[read_pos[i]-1]:
             # read matches non-reference allele
-            alt_count += 1
+            read_stats.alt_count += 1
         else:
             # read matches neither ref nor other
-            other_count += 1
-
-    return ref_count, alt_count, other_count
+            read_stats.other_count += 1
     
 
 
@@ -225,6 +269,21 @@ def write_fastq(fastq_file, orig_read, new_seqs):
         name = orig_read.qname
         fastq_file.write("@%s\n%s\n+%s\n%s\n" %
                          (name, new_seq, name, orig_read.qual))
+
+        
+def write_pair_fastq(fastq_file1, fastq_file2, orig_read1, orig_read2,
+                     new_pairs):    
+    for pair in new_pairs:
+        # TODO: give each fastq a new name giving:
+        # 1 - the original name of the read
+        # 2 - the coordinate that it should map to
+        # 3 - the number of the read
+        # 4 - the total number of reads being remapped
+        name = orig_read1.qname
+        fastq_file1.write("@%s\n%s\n+%s\n%s\n" %
+                          (name, pair[0], name, orig_read1.qual))
+        fastq_file2.write("@%s\n%s\n+%s\n%s\n" %
+                          (name, pair[1], name, orig_read2.qual))
                          
     
 
@@ -235,18 +294,21 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
     seen_chrom = set([])
 
     snp_tab = snptable.SNPTable()
-
-    n_ref_match = 0
-    n_alt_match = 0
-    n_other = 0
+    read_stats = ReadStats()
+    read_pair_cache = {}
         
     for read in files.input_bam:
         # TODO: handle paired end reads!!!!
-        
         if (cur_tid is None) or (read.tid != cur_tid):
             # this is a new chromosome
             cur_chrom = files.input_bam.getrname(read.tid)
 
+            if len(read_pair_cache) != 0:
+                sys.stderr.write("WARNING: failed to find pairs for %d "
+                                 "reads on this chromosome\n" %
+                                 len(read_pair_cache))
+            read_pair_cache = {}
+            
             if cur_chrom in seen_chrom:
                 # sanity check that input bam file is sorted
                 raise ValueError("expected input BAM file to be sorted "
@@ -258,70 +320,183 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
 
             snp_tab.read_file(snp_filename)
 
+        if read.is_secondary:
+            # this is a secondary alignment (i.e. read was aligned more than
+            # once and this has align score that <= best score)
+            read_stats.discard_secondary += 1
+            continue
+
+        if read.is_paired:
+            if read.next_reference_name is None:
+                # other side of pair not mapped...
+                process_single_read(read, read_stats, files, snp_tab, max_seqs)
+            elif read.next_reference_name == "=":
+                # other pair mapped to same chrom
+                if not read.is_proper_pair:
+                    read_stats.discard_improper_pair += 1
+                    continue
+
+                if read.qname in read_pair_cache:
+                    # we already saw prev pair, retrieve from cache
+                    read2 = read_pair_cache[read.qname]
+                    del read_pair_cache[read.qname]
+
+                    if read2.next_reference_start != read.reference_start:
+                        sys.stderr.write("WARNING: read pair positions "
+                                         "do not match for pair %s" %
+                                         read.qname)
+                    else:
+                        process_paired_read(read, read2, read_stats,
+                                            files, snp_tab, max_seqs)
+                else:
+                    # we need to wait for next pair
+                    read_pair_cache[read.qname] = read
+            else:
+                # other side of pair mapped to different
+                # chromosome, discard this read
+                read_stats.discard_improper_pair += 1
+
+        else:
+            process_single_read(read, read_stats, files, snp_tab, max_seqs)
+                
+    
+    read_stats.write(sys.stderr)
+                     
+
+def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs):
+    """Checks if either end of read pair overlaps SNPs or indels
+    and writes read pair (or generated read pairs) to appropriate 
+    output files"""
+
+    new_reads = []    
+    for read in (read1, read2):
+        # check if either read overlaps SNPs or indels
         # check if read overlaps SNPs or indels
         snp_idx, snp_read_pos, \
             indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
-
+        
         if len(indel_idx) > 0:
-            # for now discard this read, we want to improve this to handle
+            # for now discard this read pair, we want to improve this to handle
             # the indel reads appropriately
+            read_stats.discard_indel += 2
             # TODO: add option to handle indels instead of throwing out reads
-            continue
+            return
 
         if len(snp_idx) > 0:
-            ref_alleles = snp_tab.snp_allele1[snp_idx]
-            alt_alleles = snp_tab.snp_allele2[snp_idx]
+            ref_alleles = snp_tab.snp_allele[snp_idx]
+            alt_alleles = snp_tab.snp_allele[snp_idx]
 
-            ref, alt, other = count_ref_alt_matches(read, snp_tab,
-                                                    snp_idx, snp_read_pos)
-            n_ref_match += ref
-            n_alt_match += alt
-            n_other += other
-                        
-            # TODO: limit recursion, by throwing out read
-            #       if it overlaps too many SNPs
+            count_ref_alt_matches(read, read_stats, snp_tab, snp_idx,
+                                  snp_read_pos)
+
+            # TODO: limit recursion here by discarding reads that
+            # overlap too many SNPs            
             read_seqs = generate_reads(read.query, ref_alleles, alt_alleles,
                                        snp_read_pos, 0)
 
-            # make set of unique reads, we don't want to remap
-            # duplicates, or the read that matches original
-            unique_reads = set(read_seqs)
-            if read.query in unique_reads:
-                unique_reads.remove(read.query)
-
-            if len(unique_reads) < max_seqs:
-                # write read to fastq file for remapping
-                write_fastq(files.fastq1, read, unique_reads)
-
-                # write read to 'to remap' BAM
-                # this is probably not necessary with new implmentation
-                # but kept for consistency with previous version of script
-                files.remap_bam.write(read)
-            else:
-                # discard read
-                # TODO: count number of discarded reads here...
-                pass
-
+            new_reads.append(read_seqs)
         else:
-            # no SNPs overlap read, write to keep file
-            files.keep_bam.write(read)
+            # no SNPs or indels overlap this read
+            new_reads.append([])
 
-    sys.stderr.write("read SNP ref matches: %d\n" % n_ref_match)
-    sys.stderr.write("read SNP alt matches: %d\n" % n_alt_match)
-    sys.stderr.write("read SNP mismatches: %d\n" % n_other)
+    if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:
+        # neither read overlapped SNPs or indels
+        files.keep_bam.write(read1)
+        files.keep_bam.write(read2)
+        read_stats.keep_pair += 1
+    else:
+        # add original version of both sides of pair
+        new_reads[0].append(read1.query)
+        new_reads[1].append(read2.query)
 
-    total = n_other + n_ref_match + n_alt_match
-    if total > 0:
-        mismatch_pct = 100.0 * float(n_other) / total
-        if mismatch_pct > 10.0:
-            sys.stderr.write("WARNING: many read SNP overlaps do not match "
-                             "either allele (%.1f%%). SNP coordinates "
-                             "in input file xmay be incorrect.\n" %
-                             mismatch_pct)
-    
-    
-                     
+        if len(new_reads[0]) + len(new_reads[1]) > max_seqs:
+            # quit now before generating a lot of read pairs
+            read_stats.discard_excess_reads += 2
+            return 
+
+        # collect all unique combinations of read pairs
+        unique_pairs = set([])
+        n_unique_pairs = 0
+        for new_read1 in new_reads[0]:
+            for new_read2 in new_reads[1]:
+                pair = (new_read1, new_read2)
+                if pair in unique_pairs:
+                    pass
+                else:
+                    n_unique_pairs += 1
+                    if n_unique_pairs > max_seqs:
+                        read_stats.discard_excess_reads += 2
+                        return
+                    unique_pairs.add(pair)
         
+        # write read pair to fastqs for remapping
+        write_pair_fastq(files.fastq1, files.fastq2, read1, read2, unique_pairs)
+
+        # Write read to 'remap' BAM for consistency with previous
+        # implementation of script. Probably not needed and will result in
+        # BAM that is not coordinate sorted. Possibly remove this...
+        files.remap_bam.write(read1)
+        files.remap_bam.write(read2)
+        read_stats.keep_pair += 1
+        
+
+        
+    
+
+    
+
+def process_single_read(read, read_stats, files, snp_tab, max_seqs):
+    """Check if a single read overlaps SNPs or indels, and writes
+    this read (or generated read pairs) to appropriate output files"""
+                
+    # check if read overlaps SNPs or indels
+    snp_idx, snp_read_pos, \
+        indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
+
+    if len(indel_idx) > 0:
+        # for now discard this read, we want to improve this to handle
+        # the indel reads appropriately
+        read_stats.discard_indel += 1
+        # TODO: add option to handle indels instead of throwing out reads
+        return
+
+    if len(snp_idx) > 0:
+        ref_alleles = snp_tab.snp_allele1[snp_idx]
+        alt_alleles = snp_tab.snp_allele2[snp_idx]
+
+        count_ref_alt_matches(read, read_stats, snp_tab, snp_idx,
+                              snp_read_pos)
+
+        # TODO: limit recursion, by throwing out read
+        #       if it overlaps too many SNPs
+        read_seqs = generate_reads(read.query, ref_alleles, alt_alleles,
+                                   snp_read_pos, 0)
+
+        # make set of unique reads, we don't want to remap
+        # duplicates, or the read that matches original
+        unique_reads = set(read_seqs)
+        if read.query in unique_reads:
+            unique_reads.remove(read.query)
+
+        if len(unique_reads) < max_seqs:
+            # write read to fastq file for remapping
+            write_fastq(files.fastq_single, read, unique_reads)
+
+            # write read to 'to remap' BAM
+            # this is probably not necessary with new implmentation
+            # but kept for consistency with previous version of script
+            files.remap_bam.write(read)
+        else:
+            # discard read
+            read_stats.discard_excess_reads += 1
+            return
+
+    else:
+        # no SNPs overlap read, write to keep file
+        files.keep_bam.write(read)
+        read_stats.keep_single += 1
+            
+
 
 
 

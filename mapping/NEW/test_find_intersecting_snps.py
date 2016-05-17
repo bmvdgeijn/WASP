@@ -696,47 +696,33 @@ class TestPairedEnd:
                                     test_data.snp_dir, 
                                     is_paired_end=True, is_sorted=False)
 
+        expect_reads = set([("AACGAAAAGGAGAC", "AAGAAACAACACAA"),
+                            ("ACAAAAATTTAAAA", "AAAAATAAAAAATA")])
+
         #
-        # Verify new fastq1 is correct.
+        # Verify fastq1 and fastq2 have appropriate read pairs
         #
         with gzip.open(test_data.fastq1_remap_filename) as f:
-            lines = [x.strip() for x in f.readlines()]
-        assert len(lines) == 8
+            lines1 = [x.strip() for x in f.readlines()]
+        assert len(lines1) == len(expect_reads) * 4
 
-        l = list(test_data.read1_seqs[0])
-        # last base of first read should be changed from A to C
-        l[13] = 'C'
-        new_seq = "".join(l)
-        assert lines[1] == new_seq
-        assert lines[3] == test_data.read1_quals[0]
-
-        # second base of second read should be changed from A to C
-        l = list(test_data.read1_seqs[1])
-        l[1] = "C"
-        new_seq = "".join(l)
-        assert(lines[5] == new_seq)
-        assert(lines[7] == test_data.read1_quals[1])
-
-        #
-        # verify fastq2 is correct
-        #
         with gzip.open(test_data.fastq2_remap_filename) as f:
-            lines = [x.strip() for x in f.readlines()]
-        assert len(lines) == 8
+            lines2 = [x.strip() for x in f.readlines()]
 
-        # bases should be the same for the second half of
-        # the reads, since no SNP overlap
-        assert lines[1] == test_data.read2_seqs[0]
-        assert lines[3] == test_data.read2_quals[0]
-        assert lines[5] == test_data.read2_seqs[1]
-        assert lines[7] == test_data.read2_quals[1]
+        # should be same number of lines in each file
+        assert len(lines1) == len(lines2)
+
+        # number of read records (4 lines each) should match expectation
+        assert len(lines2) == len(expect_reads) * 4
         
-        #
-        # Verify to.remap bam is the same as the input bam file.
-        #
-        old_lines = read_bam(test_data.bam_filename)
-        new_lines = read_bam(test_data.bam_remap_filename)
-        assert old_lines == new_lines
+        for i in range(1, len(lines1), 4):
+            read_pair = (lines1[i], lines2[i])
+            assert read_pair in expect_reads
+            sys.stderr.write("removing pair: %s\n" % repr(read_pair))
+            expect_reads.remove(read_pair)
+
+        assert len(expect_reads) == 0
+        
 
         #
         # Verify that the keep file is empty since only
@@ -779,7 +765,7 @@ class TestPairedEnd:
         # POS           123456789012345678901234567890
         #                       40        50
         
-        snp_list = [['test_chrom', 19, "A", "C"],
+        snp_list = [['test_chrom', 18, "A", "C"],
                     ['test_chrom', 52, "G", "GTTA"]]
         
         test_data = Data(genome_seq=genome_seq,
@@ -812,20 +798,14 @@ class TestPairedEnd:
             lines2 = [x.strip() for x in f.readlines()]
         assert len(lines2) == len(expect_reads) * 4
                            
-        for i in range(1, len(expect_reads), 4):
+        for i in range(1, len(lines2), 4):
             read_pair = (lines1[i], lines2[i])
             assert read_pair in expect_reads
             expect_reads.remove(read_pair)
 
         assert len(expect_reads) == 0
 
-        #
-        # Verify to.remap bam is the same as the input bam file.
-        #
-        old_lines = read_bam(test_data.bam_filename)
-        new_lines = read_bam(test_data.bam_remap_filename)
-        assert old_lines == new_lines
-
+   
         #
         # Verify that the keep file is empty since only
         # read needs to be remapped. Note that the
@@ -868,7 +848,7 @@ class TestPairedEnd:
         #                       40        50
         
         snp_list = [['test_chrom', 18, "A", "C"],
-                    ['test_chrom', 39, "A", "G"],
+                    ['test_chrom', 39, "T", "G"],
                     ['test_chrom', 51, "G", "T"]]
         
         test_data = Data(genome_seq=genome_seq,
@@ -904,19 +884,12 @@ class TestPairedEnd:
         with gzip.open(test_data.fastq2_remap_filename) as f:
             lines2 = [x.strip() for x in f.readlines()]
         assert len(lines2) == len(expect_reads) * 4
-        for i in range(1, len(expect_reads), 4):
+        for i in range(1, len(lines2), 4):
             read_pair = (lines1[i], lines2[i])
             assert read_pair in expect_reads
             expect_reads.remove(read_pair)
 
         assert len(expect_reads) == 0
-
-        #
-        # Verify to.remap bam is the same as the input bam file.
-        #
-        old_lines = read_bam(test_data.bam_filename)
-        new_lines = read_bam(test_data.bam_remap_filename)
-        assert old_lines == new_lines
 
         #
         # Verify that the keep file is empty since only

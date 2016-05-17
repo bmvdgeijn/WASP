@@ -2,6 +2,7 @@ import sys
 import os
 import subprocess
 import gzip
+import string
 import argparse
 import numpy as np
 
@@ -82,6 +83,9 @@ class ReadStats(object):
         # number of reads discarded because not proper pair
         self.discard_improper_pair = 0
 
+        # paired reads map to different chromosomes
+        self.discard_different_chromosome = 0
+
         # number of reads discarded because overlap an indel
         self.discard_indel = 0
 
@@ -103,10 +107,32 @@ class ReadStats(object):
         
 
     def write(self, file_handle):
+        sys.stderr.write("DISCARD reads:\n"
+                         "  improper pair: %d\n"
+                         "  different chromosome: %d\n"
+                         "  indel: %d\n"
+                         "  secondary alignment: %d\n"
+                         "  excess allelic combinations: %d\n"
+                         "KEEP reads:\n"
+                         "  single-end: %d\n"
+                         "  pairs: %d\n"
+                         "REMAP reads:\n"
+                         "  single-end: %d\n"
+                         "  pairs: %d\n" %
+                         (self.discard_improper_pair,
+                          self.discard_different_chromosome,
+                          self.discard_indel,
+                          self.discard_secondary,
+                          self.discard_excess_reads,
+                          self.keep_single,
+                          self.keep_pair,
+                          self.remap_single,
+                          self.remap_pair))
+
         file_handle.write("read SNP ref matches: %d\n" % self.ref_count)
         file_handle.write("read SNP alt matches: %d\n" % self.alt_count)
         file_handle.write("read SNP mismatches: %d\n" % self.other_count)
-
+        
         total = self.ref_count + self.alt_count + self.other_count
         if total > 0:
             mismatch_pct = 100.0 * float(self.other_count) / total
@@ -152,6 +178,26 @@ def parse_options():
                               "RefAllele AltAllele"))
                         
     return parser.parse_args()
+
+
+
+
+
+DNA_COMP = None
+
+def comp(seq_str):
+    """complements the provided DNA sequence and returns it"""
+    global DNA_COMP
+
+    if DNA_COMP is None:
+        DNA_COMP = string.maketrans("ATCGMRWSYKNatcgmrwsykn",
+                                    "TAGCKYWSRMNtagckywsrmn")
+    return seq_str.translate(DNA_COMP)
+
+
+def revcomp(seq_str):
+    """returns reverse complement of provided DNA sequence"""
+    return comp(seq_str)[::-1]
 
 
 
@@ -282,8 +328,11 @@ def write_pair_fastq(fastq_file1, fastq_file2, orig_read1, orig_read2,
         name = orig_read1.qname
         fastq_file1.write("@%s\n%s\n+%s\n%s\n" %
                           (name, pair[0], name, orig_read1.qual))
+
+        # TODO: need to revcomp read!!!!!
+        rev_seq = revcomp(pair[1])
         fastq_file2.write("@%s\n%s\n+%s\n%s\n" %
-                          (name, pair[1], name, orig_read2.qual))
+                          (name, rev_seq, name, orig_read2.qual))
                          
     
 
@@ -330,7 +379,8 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
             if read.next_reference_name is None:
                 # other side of pair not mapped...
                 process_single_read(read, read_stats, files, snp_tab, max_seqs)
-            elif read.next_reference_name == "=":
+            elif(read.next_reference_name == cur_chrom or
+                 read.next_reference_name == "="):
                 # other pair mapped to same chrom
                 if not read.is_proper_pair:
                     read_stats.discard_improper_pair += 1
@@ -338,15 +388,16 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
 
                 if read.qname in read_pair_cache:
                     # we already saw prev pair, retrieve from cache
-                    read2 = read_pair_cache[read.qname]
+                    read1 = read_pair_cache[read.qname]
+                    read2 = read
                     del read_pair_cache[read.qname]
 
-                    if read2.next_reference_start != read.reference_start:
+                    if read2.next_reference_start != read1.reference_start:
                         sys.stderr.write("WARNING: read pair positions "
-                                         "do not match for pair %s" %
+                                         "do not match for pair %s\n" %
                                          read.qname)
                     else:
-                        process_paired_read(read, read2, read_stats,
+                        process_paired_read(read1, read2, read_stats,
                                             files, snp_tab, max_seqs)
                 else:
                     # we need to wait for next pair
@@ -354,7 +405,7 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
             else:
                 # other side of pair mapped to different
                 # chromosome, discard this read
-                read_stats.discard_improper_pair += 1
+                read_stats.discard_different_chromosome += 1
 
         else:
             process_single_read(read, read_stats, files, snp_tab, max_seqs)
@@ -383,8 +434,8 @@ def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs):
             return
 
         if len(snp_idx) > 0:
-            ref_alleles = snp_tab.snp_allele[snp_idx]
-            alt_alleles = snp_tab.snp_allele[snp_idx]
+            ref_alleles = snp_tab.snp_allele1[snp_idx]
+            alt_alleles = snp_tab.snp_allele2[snp_idx]
 
             count_ref_alt_matches(read, read_stats, snp_tab, snp_idx,
                                   snp_read_pos)
@@ -393,12 +444,12 @@ def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs):
             # overlap too many SNPs            
             read_seqs = generate_reads(read.query, ref_alleles, alt_alleles,
                                        snp_read_pos, 0)
-
+            
             new_reads.append(read_seqs)
         else:
             # no SNPs or indels overlap this read
             new_reads.append([])
-
+            
     if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:
         # neither read overlapped SNPs or indels
         files.keep_bam.write(read1)
@@ -428,7 +479,13 @@ def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs):
                         read_stats.discard_excess_reads += 2
                         return
                     unique_pairs.add(pair)
-        
+
+        # remove original read pair, if present
+        orig_pair = (read1.query, read2.query)
+                                 
+        if orig_pair in unique_pairs:
+            unique_pairs.remove(orig_pair)
+            
         # write read pair to fastqs for remapping
         write_pair_fastq(files.fastq1, files.fastq2, read1, read2, unique_pairs)
 

@@ -306,33 +306,47 @@ def generate_reads(read_seq, ref_alleles, alt_alleles, read_pos, i):
 
 
 def write_fastq(fastq_file, orig_read, new_seqs):
+    n_seq = len(new_seqs)
+    i = 1
     for new_seq in new_seqs:
-        # TODO: give each fastq a new name giving:
+        # Give each fastq a new name giving:
         # 1 - the original name of the read
         # 2 - the coordinate that it should map to
         # 3 - the number of the read
         # 4 - the total number of reads being remapped
-        name = orig_read.qname
+        name = "%s.%d.%d.%d" % (orig_read.qname, orig_read.pos+1, i, n_seq)
+                                       
         fastq_file.write("@%s\n%s\n+%s\n%s\n" %
                          (name, new_seq, name, orig_read.qual))
 
+        i += 1
+
         
 def write_pair_fastq(fastq_file1, fastq_file2, orig_read1, orig_read2,
-                     new_pairs):    
+                     new_pairs):
+
+    n_pair = len(new_pairs)
+    i = 1
     for pair in new_pairs:
-        # TODO: give each fastq a new name giving:
+        # give each fastq record a new name giving:
         # 1 - the original name of the read
-        # 2 - the coordinate that it should map to
+        # 2 - the coordinates the two ends of the pair should map to
         # 3 - the number of the read
         # 4 - the total number of reads being remapped
-        name = orig_read1.qname
+
+        pos_str = "%d-%d" % (min(orig_read1.pos+1, orig_read2.pos+1),
+                             max(orig_read1.pos+1, orig_read2.pos+1))
+        
+        name = "%s.%s.%d.%d" % (orig_read1.qname, pos_str, i+1, n_pair)
+        
         fastq_file1.write("@%s\n%s\n+%s\n%s\n" %
                           (name, pair[0], name, orig_read1.qual))
 
-        # TODO: need to revcomp read!!!!!
         rev_seq = revcomp(pair[1])
         fastq_file2.write("@%s\n%s\n+%s\n%s\n" %
                           (name, rev_seq, name, orig_read2.qual))
+
+        i += 1
                          
     
 

@@ -30,6 +30,8 @@ class Data(object):
                  genome_seq =  ("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
                                 "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"),
                  chrom_name = 'test_chrom',
+                 read1_names = None,
+                 read2_names = None,
                  snp_list = [['test_chrom', 1, "A", "C"]]):
 
         self.data_dir = data_dir
@@ -41,6 +43,9 @@ class Data(object):
         self.genome_seq = genome_seq
         self.snp_list = snp_list
 
+        self.read1_names = read1_names
+        self.read2_names = read2_names
+        
         self.genome_prefix = self.prefix + "_genome"
         self.genome_filename = self.genome_prefix + ".fa"
         self.chrom_name = "test_chrom"
@@ -107,28 +112,40 @@ class Data(object):
         f.close()
 
 
-    def write_fastqs(self):
+    def write_fastqs(self):        
         if self.read1_seqs:
             # write fastq1
-            read_num = 1
+            
+            if self.read1_names is None:
+                names = ["read%d" % (x+1) for x in range(len(self.read1_seqs))]
+            else:
+                names = self.read1_names
+
             f = open(self.fastq1_filename, "w")
+            i = 0
             for seq_str, qual_str in zip(self.read1_seqs, self.read1_quals):
-                f.write("@read%d#0/1\n" % read_num)
+                f.write("@%s\n" % names[i])
                 f.write(seq_str + "\n")
-                f.write("+\n")
+                f.write("+%s\n" % names[i])
                 f.write(qual_str + "\n")
-                read_num += 1
+                i += 1
+                
             f.close()
 
         if self.read2_seqs:
-            read_num = 1
+            if self.read2_names is None:
+                names = ["read%d" % (x+1) for x in range(len(self.read2_seqs))]
+            else:
+                names = self.read2_names
+
             f = open(self.fastq2_filename, "w")
+            i = 0
             for seq_str, qual_str in zip(self.read2_seqs, self.read2_quals):
-                f.write("@read%d#0/2\n" % read_num)
+                f.write("@%s\n" % names[i])
                 f.write(seq_str + "\n")
-                f.write("+\n")
+                f.write("+%s\n" % names[i])
                 f.write(qual_str + "\n")
-                read_num += 1
+                i += 1
             f.close()
 
 
@@ -377,6 +394,14 @@ class TestSingleEnd:
         assert new_seq3 in seqs
 
 
+        #
+        # Check the new reads are named correctly
+        #
+        assert lines[0] == "@read1.1.1.3"
+        assert lines[4] == "@read1.1.2.3"
+        assert lines[8] == "@read1.1.3.3"
+        
+        
         #
         # Verify to.remap bam is the same as the input bam file.
         #

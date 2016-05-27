@@ -39,6 +39,7 @@ class SNPTable(object):
         self.indel_pos = np.array([], dtype=np.int32)
         self.indel_allele1 = []
         self.indel_allele2 = []
+        self.n_snp = 0
         
     
     def read_file(self, filename):
@@ -131,6 +132,8 @@ class SNPTable(object):
         self.indel_index[self.indel_pos-1] = np.arange(self.indel_pos.shape[0])
         self.indel_allele1 = indel_allele1_list
         self.indel_allele2 = indel_allele2_list
+
+        self.n_snp = self.snp_pos.shape[0]
 
     
     def get_overlapping_snps(self, read):

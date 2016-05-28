@@ -1,0 +1,18 @@
+
+
+# TODO: rule to make snp input files from VCF or IMPUTE
+
+# TODO: rule to run bowtie2 or other aligner
+
+# TODO: rule to sort & index BAMs
+
+# TODO: rule to find_intersecting_snps
+
+# TODO: rule to remap reads using aligner a second time
+
+# TODO: rule to filter_remapped_reads
+
+# TODO: rule to merge BAMs
+
+# TODO: rule to merge duplicate reads
+

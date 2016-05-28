@@ -249,7 +249,7 @@ def write_fastq(fastq_file, orig_read, new_seqs):
     n_seq = len(new_seqs)
     i = 1
     for new_seq in new_seqs:
-        # Give each fastq a new name giving:
+        # Give each read a new name giving:
         # 1 - the original name of the read
         # 2 - the coordinate that it should map to
         # 3 - the number of the read
@@ -440,7 +440,8 @@ def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs):
             unique_pairs.remove(orig_pair)
             
         # write read pair to fastqs for remapping
-        write_pair_fastq(files.fastq1, files.fastq2, read1, read2, unique_pairs)
+        write_pair_fastq(files.fastq1, files.fastq2, read1, read2,
+                         unique_pairs)
 
         # Write read to 'remap' BAM for consistency with previous
         # implementation of script. Probably not needed and will result in

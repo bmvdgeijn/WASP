@@ -226,6 +226,9 @@ class SNPTable(object):
                 # in most cases deletion should be picked up
                 # by flanking match segment, but there could be
                 # nested indels
+
+                s = genome_start - 1
+                e = min(genome_end, self.indel_index.shape[0])
                 
                 # check for INDEL in this genome segment
                 i_idx = self.indel_index[s:e]

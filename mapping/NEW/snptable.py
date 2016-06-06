@@ -69,8 +69,9 @@ class SNPTable(object):
         for line in f:
             words = line.split()
 
-            if(len(words) != 3):
-                raise ValueError("expected 3 values per SNP file line got %d:\n"
+            if(len(words) < 3):
+                raise ValueError("expected at least 3 values per SNP "
+              			 "file line but got %d:\n"
                                  "%s\n" % (len(words), line))
 
             pos = int(words[0])
@@ -272,9 +273,9 @@ class SNPTable(object):
             else:
                 raise ValueError("unknown CIGAR code %d" % op)
 
-        if read_end != read.query_length:
+        if read_end != read.qlen:
             raise ValueError("length of read segments in CIGAR %d "
                              "does not add up to query length (%d)" %
-                             (read_end, read.query_length))
+                             (read_end, read.qlen))
         
         return snp_idx, snp_read_pos, indel_idx, indel_read_pos

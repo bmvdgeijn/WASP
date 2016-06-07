@@ -273,9 +273,9 @@ class SNPTable(object):
             else:
                 raise ValueError("unknown CIGAR code %d" % op)
 
-        if read_end != read.qlen:
+        if read_end != len(read.seq):
             raise ValueError("length of read segments in CIGAR %d "
                              "does not add up to query length (%d)" %
-                             (read_end, read.qlen))
+                             (read_end, len(read.seq)))
         
         return snp_idx, snp_read_pos, indel_idx, indel_read_pos

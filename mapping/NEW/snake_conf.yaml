@@ -21,8 +21,15 @@
     # directory containing input SNP files
     "snp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/snps",
 
-    # prefix for bowtie2 reference genome index
-    "bowtie2_index" : "/iblm/netapp/data1/external/GRC37/chroms//iblm/netapp/data1/external/GRC37/combined/bowtie2_index/hg37",
+    # path to samtools
+    "samtools" : "/iblm/netapp/home/gmcvicker/anaconda2/bin/samtools",
 
-    "sample_file" : "/iblm/netapp/data1/external/Grubert2015/sample_paths.txt"
+    # path to bowtie2 aligner
+    "bowtie2" : "/iblm/netapp/home/gmcvicker/anaconda2/bin/bowtie2",
+
+    # prefix for bowtie2 reference genome index
+    "bowtie2_index" : "/iblm/netapp/data1/external/GRC37/combined/bowtie2_index/hg37",
+
+    # sample file containing sample names and paths to fastq files
+    "sample_file" : "/iblm/netapp/data1/external/Grubert2015/sample_paths_H3K27ac.txt"
 }

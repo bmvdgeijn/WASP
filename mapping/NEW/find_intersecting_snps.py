@@ -17,21 +17,42 @@ class DataFiles(object):
     """Object to hold names and filehandles for all input / output 
     datafiles"""
     
-    def __init__(self, bam_filename, snp_dir, is_sorted, is_paired):
+    def __init__(self, bam_filename, snp_dir, is_sorted, is_paired,
+                 output_dir = None):
         self.is_paired = is_paired
         self.bam_filename = bam_filename
 
         self.snp_dir = snp_dir
-        
-        name_split = self.bam_filename.split(".")
-        if len(name_split) > 1:
-           self.prefix = ".".join(name_split[:-1])
+
+        # separate input directory and bam filename
+        tokens = self.bam_filename.split("/")
+        bam_dir = "/".join(tokens[:-1])
+        filename = tokens[-1]
+
+        if output_dir is None:
+            # if no output dir specified, use same directory as input
+            # bam file
+            output_dir = bam_dir
         else:
-            self.prefix = name_split[0]
-        
+            if output_dir.endswith("/"):
+                # strip trailing '/' from output dir name
+                output_dir = output_dir[:-1]
+
+        sys.stderr.write("OUTPUT_DIR: %s\n" % output_dir)
+                
+        name_split = filename.split(".")
+        if len(name_split) > 1:
+           self.prefix = output_dir + "/" + ".".join(name_split[:-1])
+        else:
+            self.prefix = output_dir + "/" + name_split[0]
+            
         # TODO: could allow names of output files to be specified
         # on command line rather than appending name to prefix
 
+
+        sys.stderr.write("prefix: %s\n" % self.prefix)
+
+        
         if not is_sorted:
             util.sort_bam(self.bam_filename, self.prefix)
             self.bam_sort_filename = self.prefix + ".sort.bam"
@@ -48,6 +69,8 @@ class DataFiles(object):
         self.fastq2 = None
         self.fastq_single = None
 
+        sys.stderr.write("writing output files to:\n")
+        
         if self.is_paired:
             self.fastq1_filename = self.prefix + ".remap.fq1.gz"
             self.fastq2_filename = self.prefix + ".remap.fq2.gz"
@@ -55,15 +78,25 @@ class DataFiles(object):
             self.fastq2 = gzip.open(self.fastq2_filename, "wb")
             self.fastq_single_filename = self.prefix + ".remap.single.fq.gz"
             self.fastq_single = gzip.open(self.fastq_single_filename, "wb")
+            sys.stderr.write("  %s\n  %s\n  %s\n" %
+                             (self.fastq1_filename,
+                              self.fastq2_filename,
+                              self.fastq_single_filename))
+            
         else:
             self.fastq_single_filename = self.prefix + ".remap.fq.gz"
             self.fastq_single = gzip.open(self.fastq_single_filename, "wb")
+            sys.stderr.write("  %s\n" % (self.fastq_single_filename))
 
         self.input_bam = pysam.Samfile(self.bam_sort_filename, "rb")
         self.keep_bam = pysam.Samfile(self.keep_filename, "wb",
                                       template=self.input_bam)
         self.remap_bam = pysam.Samfile(self.remap_filename, "wb",
                                        template=self.input_bam)
+        sys.stderr.write("  %s\n  %s\n  %s\n" % (self.bam_sort_filename,
+                                                 self.keep_filename,
+                                                 self.remap_filename))
+        
     
 
 
@@ -156,8 +189,8 @@ def parse_options():
     parser.add_argument("--is_sorted", "-s", action='store_true',
                         dest='is_sorted', 
                         default=False,
-                        help=('Indicates that the input bam file'
-                              ' is coordinate sorted (default '
+                        help=('Indicates that the input BAM file'
+                              ' is coordinate-sorted (default '
                               'is False).'))
     
     parser.add_argument("--max_seqs", type=int, default=MAX_SEQS_DEFAULT,
@@ -165,9 +198,15 @@ def parse_options():
                         "allelic combinations to consider remapping "
                         "(default=%d). Reads with more allelic combinations "
                         "than MAX_SEQs are discarded" % MAX_SEQS_DEFAULT)
+
+    parser.add_argument("--output_dir", default=None,
+                        help="Directory to write output files to. If not "
+                        "specified, output files are written to the "
+                        "same directory as the input BAM file.")
                         
     parser.add_argument("bam_filename", action='store',
-                        help="Coordinate sorted bam file containing reads.")
+                        help="Coordinate-sorted input BAM file "
+                        "containing mapped reads.")
 
     parser.add_argument("snp_dir", action='store', 
                         help=("Directory containing SNPs "
@@ -512,9 +551,13 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs):
 
 
 def main(bam_filenames, snp_dir, is_paired_end=False,
-         is_sorted=False, max_seqs=MAX_SEQS_DEFAULT):
+         is_sorted=False, max_seqs=MAX_SEQS_DEFAULT,
+         output_dir=None):
 
-    files = DataFiles(bam_filenames, snp_dir, is_sorted, is_paired_end)
+    sys.stderr.write("OUTPUT_DIR: %s\n" % output_dir)
+    
+    files = DataFiles(bam_filenames, snp_dir, is_sorted, is_paired_end,
+                      output_dir=output_dir)
     filter_reads(files, max_seqs=max_seqs)
     
     
@@ -528,5 +571,5 @@ if __name__ == '__main__':
 
     main(options.bam_filename, options.snp_dir,
          is_paired_end=options.is_paired_end, is_sorted=options.is_sorted,
-         max_seqs=options.max_seqs)
+         max_seqs=options.max_seqs, output_dir=options.output_dir)
     

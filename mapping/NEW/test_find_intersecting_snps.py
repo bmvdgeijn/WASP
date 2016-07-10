@@ -1,6 +1,7 @@
 import glob
 import gzip
 import os
+import os.path
 import subprocess
 import sys
 
@@ -23,6 +24,7 @@ class Data(object):
     def __init__(self,
                  data_dir="test_data",
                  prefix="test_data/test",
+                 output_prefix=None,
                  read1_seqs =  ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
                  read2_seqs =  ["TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"],
                  read1_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
@@ -34,6 +36,11 @@ class Data(object):
                  read2_names = None,
                  snp_list = [['test_chrom', 1, "A", "C"]]):
 
+        if output_prefix is None:
+            self.output_prefix = prefix
+        else:
+            self.output_prefix = output_prefix
+        
         self.data_dir = data_dir
         self.prefix = prefix
         self.read1_seqs  = read1_seqs
@@ -60,11 +67,11 @@ class Data(object):
         self.snp_dir = self.prefix + "_snps"
 
         # these are files that are written by find_intersecting_snps
-        self.bam_keep_filename = self.prefix + ".keep.bam"
-        self.bam_remap_filename = self.prefix + ".to.remap.bam"
-        self.fastq_remap_filename = self.prefix + ".remap.fq.gz"
-        self.fastq1_remap_filename = self.prefix + ".remap.fq1.gz"
-        self.fastq2_remap_filename = self.prefix + ".remap.fq2.gz"
+        self.bam_keep_filename = self.output_prefix + ".keep.bam"
+        self.bam_remap_filename = self.output_prefix + ".to.remap.bam"
+        self.fastq_remap_filename = self.output_prefix + ".remap.fq.gz"
+        self.fastq1_remap_filename = self.output_prefix + ".remap.fq1.gz"
+        self.fastq2_remap_filename = self.output_prefix + ".remap.fq2.gz"
 
 
     def setup(self):
@@ -536,7 +543,7 @@ class TestSingleEnd:
 
     def test_single_cli(self):
         """Make sure the command line interface
-        for single-end read mapping"""
+        for single-end read mapping works"""
 
         test_data = Data()
         test_data.setup()
@@ -570,6 +577,40 @@ class TestSingleEnd:
         assert old_lines[0] == new_lines[0]
 
         test_data.cleanup()
+        
+
+    def test_new_output_dir_cli(self):
+        """Make sure files can be written to directory of choice"""
+        out_dir = "test_output_dir"
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        
+        test_data = Data(
+            prefix="test_data/test",
+            output_prefix=out_dir + "/test")
+        test_data.setup()
+        
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        command = ['python', 'find_intersecting_snps.py',
+                   "--output_dir", out_dir,
+                   test_data.bam_filename, test_data.snp_dir]
+        subprocess.check_call(command)
+
+        # verify that all output files written to output dir
+        out_files = ["test_output_dir/test.keep.bam",
+                     "test_output_dir/test.to.remap.bam",
+                     "test_output_dir/test.remap.fq.gz"]
+        
+        for out_file in out_files:
+            sys.stderr.write("%s\n"%out_file)
+            assert(os.path.exists(out_file))
+            os.remove(out_file)
+
+        os.remove("test_output_dir/test.sort.bam")
+        os.rmdir(out_dir)
 
 
 

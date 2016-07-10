@@ -238,7 +238,7 @@ class SNPTable(object):
                     indel_idx.extend(i_idx[offsets])
                     # position in read is where we last left off
                     # in read sequence
-                    indel_read_pos.extend(read_end)
+                    indel_read_pos.append(read_end)
 
             elif op == BAM_CREF_SKIP:
                 # section of skipped reference, such as intron

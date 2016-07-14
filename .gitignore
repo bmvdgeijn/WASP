@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# emacs tmp files
+*~
+
 # C extensions
 *.so
 

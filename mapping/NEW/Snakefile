@@ -21,14 +21,41 @@ def read_samples():
     return samp_dict
 
 
+
+def get_chromosomes():
+    """Gets list of chromosomes with from VCF files"""
+    filenames = os.listdir(config['vcf_dir'])
+
+    chr_names = set([])
+    for filename in filenames:
+        if filename.endswith(".vcf.gz"):
+            m = re.match(".*(chr[0-9A-Z]+).*", filename)
+            if m:
+                chr_names.add(m.groups()[0])
+
+    sys.stderr.write("chromosomes: %s\n" % repr(chr_names))
+
+    return chr_names
+    
+
 rule all:
     input:
         expand(config["output_dir"] + "/merge/{sample}.keep.merge.sort.bam",
                sample=read_samples().keys())
 
 
-# TODO: rule to make snp input files from VCF or IMPUTE
+rule extract_vcf_snps:
+    """makes SNP input files for find_intersecting_snps.py by extracting
+    information from VCF files"""
+    input:
+        config["vcf_dir"]
+    output:
+        expand(config["snp_dir"] + "/{chromosome}.snps.vcf.gz", chromosome=get_chromosomes())
+    shell:
+        "mkdir -p {config[snp_dir]} ; "
+        "{config[wasp_dir]}/mapping/NEW/extract_vcf_snps.sh {input} {config[snp_dir]}"
 
+    
 
 rule map_bowtie2_paired_end1:
     """map reads using bowtie2"""
@@ -60,23 +87,23 @@ rule find_intersecting_snps_paired_end:
     """find intersecting SNPs using WASP script"""
     input:
         bam=config["output_dir"] + "/map1_sort/{sample}.bam",
-        snps=config["snp_dir"]
+        snps=[config["snp_dir"] + "/%s.snps.vcf.gz" % s for s in get_chromosomes()]
     output:
-        fastq1=config["output_dir"] + "/map1_intersect/{sample}.remap.fq1.gz",
-        fastq2=config["output_dir"] + "/map1_intersect/{sample}.remap.fq2.gz",
-        keep_bam=config["output_dir"] + "/map1_intersect/{sample}.keep.bam",
-        remap_bam=config["output_dir"] + "/map1_intersect/{sample}.remap.bam"
+        fastq1=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
+        fastq2=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq2.gz",
+        keep_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.keep.bam",
+        remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
     shell:
-        "mkdir -p {config[output_dir]}/map1_intersect ; "
+        "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
         "{config[py2]} {config[wasp_dir]}/mapping/NEW/find_intersecting_snps.py "
-        "    --is_paired_end --is_sorted --output_dir config[output_dir]/map1_intersect {input.bam} {input.snps}"
+        "    --is_paired_end --is_sorted --output_dir {config[output_dir]}/find_intersecting_snps {input.bam} config[snp_dir]"
 
 
 rule map_bowtie2_paired_end2:
     """map reads a second time using bowtie2"""
     input:
-        fastq1=config['output_dir'] + "/map1_intersect/{sample}.remap.fq1.gz",
-        fastq2=config['output_dir'] + "/map1_intersect/{sample}.remap.fq2.gz"
+        fastq1=config['output_dir'] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
+        fastq2=config['output_dir'] + "/find_intersecting_snps/{sample}.remap.fq2.gz"
     output:
         config["output_dir"] + "/map2/{sample}.bam"
     shell:
@@ -101,11 +128,12 @@ rule sort_and_index_bam2:
 rule filter_remapped_reads:
     """filter reads from second mapping step"""
     input:
-        to_remap_bam=config['output_dir'] + "/map1_intersect/{sample}.remap.bam",
+        to_remap_bam=config['output_dir'] + "/find_intersecting_snps/{sample}.to.remap.bam",
         remap_bam=config['output_dir'] + "/map2_sort/{sample}.bam",
     output:
-        keep_bam=config['output_dir'] + "/map2_filter/{sample}.keep.bam"
+        keep_bam=config['output_dir'] + "/filter_remapped_reads/{sample}.keep.bam"
     shell:
+        "mkdir -p {config[output_dir]}/filter_remapped_reads ; "
         "{config[py2]} {config[wasp_dir]}/mapping/NEW/filter_remapped_reads.py "
         "  {input.to_remap_bam} {input.remap_bam} {output.keep_bam}"
 
@@ -113,8 +141,8 @@ rule filter_remapped_reads:
 rule merge_bams:
     """merge 'keep' BAM files from mapping steps 1 and 2, then sort and index"""
     input:
-        keep1=config['output_dir'] + "/map1_intersect/{sample}.keep.bam",
-        keep2=config['output_dir'] + "/map2_filter/{sample}.keep.bam"
+        keep1=config['output_dir'] + "/find_intersecting_snps/{sample}.keep.bam",
+        keep2=config['output_dir'] + "/filter_remapped_reads/{sample}.keep.bam"
     output:
         merge=config['output_dir'] + "/merge/{sample}.keep.merge.bam",
         sort=config['output_dir'] + "/merge/{sample}.keep.merge.sort.bam",
@@ -124,11 +152,8 @@ rule merge_bams:
         "{config[samtools]} sort -o {output.sort} {output.merge}; "
         "{config[samtools]} index {output.sort}"
 
-
-# TODO: change find_intersecting_snps.py and filter_remapped_reads.py
-#       so that output filenames can be specified on command line
-#       and output dirs can be specified more sensibly
-        
-# TODO: rule to merge duplicate reads
+    
+# TODO: rule to remove duplicate reads
 
 # TODO: rule to write out summary of allele-specific reads
+

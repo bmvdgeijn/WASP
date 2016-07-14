@@ -4,21 +4,24 @@
 #
 
 {
-    # py2 is a bit of a hack so that python2 scripts can be called
+    # py2 is a hack so that python2 scripts can be called
     # by snakemake (which is written in python3). The value should
-    # do whatever is needed to setup a python2 environment and
+    # be a command to do whatever is needed to setup a python2 environment and
     # call the python2 interpreter. Depending on your system configuration,
     # this might involve setting the PATH environment variable or
     # just calling python2
     "py2" : "PATH=$HOME/anaconda2/bin:$PATH; python ",
 
-    # WASP directory
+    # WASP directory containing scripts
     "wasp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP",
 
     # directory to write all output data files to
     "output_dir" :  "/iblm/netapp/home/gmcvicker/proj/WASP/mapping/output",
 
-    # directory containing input SNP files
+    # directory to read VCF files from (used to write SNP input files)
+    "vcf_dir" : "/iblm/netapp/home/gmcvicker/data1/external/1000Genomes/GRC37/20130502",
+
+    # directory to write SNP input files to
     "snp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/snps",
 
     # path to samtools

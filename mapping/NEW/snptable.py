@@ -44,8 +44,6 @@ class SNPTable(object):
     
     def read_file(self, filename):
         """read in SNPs and indels from text input file"""
-        sys.stderr.write("reading SNPs from file '%s'\n" % filename)
-
         try:
             if filename.endswith(".gz"):
                 f = gzip.open(filename)
@@ -277,5 +275,6 @@ class SNPTable(object):
             raise ValueError("length of read segments in CIGAR %d "
                              "does not add up to query length (%d)" %
                              (read_end, len(read.seq)))
+        
         
         return snp_idx, snp_read_pos, indel_idx, indel_read_pos

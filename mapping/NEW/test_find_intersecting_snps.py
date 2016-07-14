@@ -29,9 +29,9 @@ class Data(object):
                  read2_seqs =  ["TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"],
                  read1_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
                  read2_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
-                 genome_seq =  ("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
-                                "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"),
-                 chrom_name = 'test_chrom',
+                 genome_seqs = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
+                                "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"],
+                 chrom_names = ['test_chrom'],
                  read1_names = None,
                  read2_names = None,
                  snp_list = [['test_chrom', 1, "A", "C"]]):
@@ -47,15 +47,15 @@ class Data(object):
         self.read1_quals = read1_quals
         self.read2_seqs  = read2_seqs
         self.read2_quals = read2_quals
-        self.genome_seq = genome_seq
-        self.snp_list = snp_list
+        self.genome_seqs = list(genome_seqs)
+        self.snp_list = list(snp_list)
 
         self.read1_names = read1_names
         self.read2_names = read2_names
         
         self.genome_prefix = self.prefix + "_genome"
         self.genome_filename = self.genome_prefix + ".fa"
-        self.chrom_name = "test_chrom"
+        self.chrom_names = list(chrom_names)
 
         self.fastq1_filename = self.prefix + "_1.fq"
         self.fastq2_filename = self.prefix + "_2.fq"
@@ -115,7 +115,8 @@ class Data(object):
 
     def write_ref_genome(self):
         f = open(self.genome_filename, "w")
-        f.write(">" + self.chrom_name + "\n" + self.genome_seq)
+        for chrom_name, genome_seq in zip(self.chrom_names, self.genome_seqs):
+            f.write(">" + chrom_name + "\n" + genome_seq + "\n")
         f.close()
 
 
@@ -256,6 +257,74 @@ class TestSingleEnd:
 
         test_data.cleanup()
 
+
+
+    def test_single_two_read_two_snp_two_chrom(self):
+        """Test whether having two chromosomes works, with reads
+        and SNPs on both works correctly"""
+                        
+        test_data = Data(read1_seqs = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                       "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"],
+                         read1_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
+                                         "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT",
+                                         "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG\n" +
+                                         "CCCCCCCCCCGCCCCCCCCCCCCCCCCCCC"],
+                         chrom_names = ['test_chrom1', 'test_chrom2'],
+                         snp_list = [['test_chrom1', 1, "A", "C"],
+                                     ['test_chrom2', 3, "G", "C"]])
+        
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    test_data.snp_dir, is_paired_end=False,
+                                    is_sorted=False)
+
+        #
+        # Verify new fastq is correct. The first base of the first read
+        # should be switched from C to an A, and the third base of second read
+        # should be switched from C to G
+        #
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 8
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq = "".join(l)
+        assert lines[1] == new_seq
+        assert lines[3] == test_data.read1_quals[0]
+
+        l = list(test_data.read1_seqs[1])
+        l[2] = 'C'
+        new_seq = "".join(l)
+
+        assert lines[5] == new_seq
+        assert lines[7] == test_data.read1_quals[1]
+        
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+        
 
     def test_single_one_read_one_indel(self):
         """Test whether 1 read overlapping indel works correctly"""
@@ -479,6 +548,7 @@ class TestSingleEnd:
         find_intersecting_snps.main(test_data.bam_filename,
                                     test_data.snp_dir, 
                                     is_paired_end=False, is_sorted=False,
+                                    max_snps=10,
                                     max_seqs=1024)
 
         #
@@ -640,15 +710,15 @@ class TestPairedEnd:
         # read1[0]          AACGAAAAGGAGAA
         # read1[1]                      AAAAAAATTTAAAA
         # SNP                            ^
-        genome_seq =  ("AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
-                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT")
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
         # read2[0]                      AACACAACAAAGAA
         # read2[1]                      AACACAACAAAGAA
         # POS           123456789012345678901234567890
         
         snp_list = [['test_chrom', 18, "A", "C"]]
         
-        test_data = Data(genome_seq=genome_seq,
+        test_data = Data(genome_seqs=genome_seq,
                          read1_seqs=read1_seqs,
                          read2_seqs=read2_seqs,
                          read1_quals=read1_quals,
@@ -738,15 +808,15 @@ class TestPairedEnd:
         # read1[0]          AACGAAAAGGAGAA
         # read1[1]                      AAAAAAATTTAAAA
         # SNP                            ^
-        genome_seq =  ("AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
-                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT")
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
         # read2[0]                      AACACAACAAAGAA
         # read2[1]        ATAAAAAATAAAAA
         # POS           123456789012345678901234567890
         
         snp_list = [['test_chrom', 18, "A", "C"]]
         
-        test_data = Data(genome_seq=genome_seq,
+        test_data = Data(genome_seqs=genome_seq,
                          read1_seqs=read1_seqs,
                          read2_seqs=read2_seqs,
                          read1_quals=read1_quals,
@@ -823,8 +893,8 @@ class TestPairedEnd:
         # read1[0]          AACGAAAAGGAGAA
         # read1[1]                      AAAAAAATTTAAAA
         # SNP                            ^
-        genome_seq =  ("AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
-                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT")
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
         # read2[0]                      AACACAACAAAGAA
         # read2[1]        ATAAAAAATAAAAA
         # INDEL                              ^         
@@ -834,7 +904,7 @@ class TestPairedEnd:
         snp_list = [['test_chrom', 18, "A", "C"],
                     ['test_chrom', 52, "G", "GTTA"]]
         
-        test_data = Data(genome_seq=genome_seq,
+        test_data = Data(genome_seqs=genome_seq,
                          read1_seqs=read1_seqs,
                          read2_seqs=read2_seqs,
                          read1_quals=read1_quals,
@@ -905,8 +975,8 @@ class TestPairedEnd:
         # read1[0]          AACGAAAAGGAGAA
         # read1[1]                      AAAAAAATTTAAAA
         # SNP                            ^
-        genome_seq =  ("AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
-                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT")
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
         # read2[0]                      AACACAACAAAGAA
         # read2[1]        ATAAAAAATAAAAA
         # SNP                   ^           ^         
@@ -917,7 +987,7 @@ class TestPairedEnd:
                     ['test_chrom', 39, "T", "G"],
                     ['test_chrom', 51, "G", "T"]]
         
-        test_data = Data(genome_seq=genome_seq,
+        test_data = Data(genome_seqs=genome_seq,
                          read1_seqs=read1_seqs,
                          read2_seqs=read2_seqs,
                          read1_quals=read1_quals,

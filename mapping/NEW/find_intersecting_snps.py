@@ -11,7 +11,8 @@ import snptable
 
 
 MAX_SEQS_DEFAULT = 10
-            
+MAX_SNPS_DEFAULT = 4
+
 
 class DataFiles(object):
     """Object to hold names and filehandles for all input / output 
@@ -124,6 +125,9 @@ class ReadStats(object):
         # number of reads discarded because secondary match
         self.discard_secondary = 0
 
+        # number of reads discarded because of too many overlapping SNPs
+        self.discard_excess_snps = 0
+        
         # number of reads discarded because too many allelic combinations
         self.discard_excess_reads = 0
         
@@ -144,6 +148,7 @@ class ReadStats(object):
                          "  different chromosome: %d\n"
                          "  indel: %d\n"
                          "  secondary alignment: %d\n"
+                         "  excess overlapping snps: %d\n"
                          "  excess allelic combinations: %d\n"
                          "KEEP reads:\n"
                          "  single-end: %d\n"
@@ -155,6 +160,7 @@ class ReadStats(object):
                           self.discard_different_chromosome,
                           self.discard_indel,
                           self.discard_secondary,
+                          self.discard_excess_snps,
                           self.discard_excess_reads,
                           self.keep_single,
                           self.keep_pair,
@@ -199,6 +205,12 @@ def parse_options():
                         "(default=%d). Reads with more allelic combinations "
                         "than MAX_SEQs are discarded" % MAX_SEQS_DEFAULT)
 
+    parser.add_argument("--max_snps", type=int, default=MAX_SNPS_DEFAULT,
+                        help="The maximum number of SNPs allowed to overlap "
+                        "a read before discarding the read. Allowing higher numbers "
+                        "will decrease speed and increase memory usage (default=%d)."
+                         % MAX_SNPS_DEFAULT)
+    
     parser.add_argument("--output_dir", default=None,
                         help="Directory to write output files to. If not "
                         "specified, output files are written to the "
@@ -266,6 +278,9 @@ def generate_reads(read_seq, ref_alleles, alt_alleles, read_pos, i):
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
+    # TODO: this would use a lot less memory if re-implemented
+    # to not use recursion
+    
     # create new version of this read with both reference and
     # alternative versions of allele at this index
     idx = read_pos[i]-1
@@ -330,7 +345,7 @@ def write_pair_fastq(fastq_file1, fastq_file2, orig_read1, orig_read2,
     
 
     
-def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
+def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT):
     cur_chrom = None
     cur_tid = None
     seen_chrom = set([])
@@ -338,8 +353,15 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
     snp_tab = snptable.SNPTable()
     read_stats = ReadStats()
     read_pair_cache = {}
-        
+    cache_size = 0
+    read_count = 0
+    
     for read in files.input_bam:
+        read_count += 1
+        # if (read_count % 100000) == 0:
+        #     sys.stderr.write("\nread_count: %d\n" % read_count)
+        #     sys.stderr.write("cache_size: %d\n" % cache_size)
+        
         if (cur_tid is None) or (read.tid != cur_tid):
             # this is a new chromosome
             cur_chrom = files.input_bam.getrname(read.tid)
@@ -349,6 +371,8 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
                                  "reads on this chromosome\n" %
                                  len(read_pair_cache))
             read_pair_cache = {}
+            cache_size = 0
+            read_count = 0
             
             if cur_chrom in seen_chrom:
                 # sanity check that input bam file is sorted
@@ -358,8 +382,9 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
             cur_tid = read.tid
             sys.stderr.write("starting chromosome %s\n" % cur_chrom)
             snp_filename = "%s/%s.snps.txt.gz" % (files.snp_dir, cur_chrom)
-
+            sys.stderr.write("reading SNPs from file '%s'\n" % snp_filename)
             snp_tab.read_file(snp_filename)
+            sys.stderr.write("processing reads\n")
 
         if read.is_secondary:
             # this is a secondary alignment (i.e. read was aligned more than
@@ -370,7 +395,8 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
         if read.is_paired:
             if read.next_reference_name is None:
                 # other side of pair not mapped...
-                process_single_read(read, read_stats, files, snp_tab, max_seqs)
+                process_single_read(read, read_stats, files, snp_tab, max_seqs,
+                                    max_snps)
             elif(read.next_reference_name == cur_chrom or
                  read.next_reference_name == "="):
                 # other pair mapped to same chrom
@@ -383,6 +409,7 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
                     read1 = read_pair_cache[read.qname]
                     read2 = read
                     del read_pair_cache[read.qname]
+                    cache_size -= 1
 
                     if read2.next_reference_start != read1.reference_start:
                         sys.stderr.write("WARNING: read pair positions "
@@ -390,23 +417,29 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=5):
                                          read.qname)
                     else:
                         process_paired_read(read1, read2, read_stats,
-                                            files, snp_tab, max_seqs)
+                                            files, snp_tab, max_seqs,
+                                            max_snps)
                 else:
                     # we need to wait for next pair
                     read_pair_cache[read.qname] = read
+
+                    cache_size += 1
+
+                    
             else:
                 # other side of pair mapped to different
                 # chromosome, discard this read
                 read_stats.discard_different_chromosome += 1
 
         else:
-            process_single_read(read, read_stats, files, snp_tab, max_seqs)
+            process_single_read(read, read_stats, files, snp_tab, max_seqs,
+                                max_snps)
                 
     
     read_stats.write(sys.stderr)
                      
 
-def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs):
+def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs, max_snps):
     """Checks if either end of read pair overlaps SNPs or indels
     and writes read pair (or generated read pairs) to appropriate 
     output files"""
@@ -432,8 +465,11 @@ def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs):
             count_ref_alt_matches(read, read_stats, snp_tab, snp_idx,
                                   snp_read_pos)
 
-            # TODO: limit recursion here by discarding reads that
-            # overlap too many SNPs            
+            # limit recursion here by discarding reads that
+            # overlap too many SNPs
+            if len(snp_read_pos) > max_snps:
+                read_stats.discard_excess_snps += 1
+                return
             read_seqs = generate_reads(read.query, ref_alleles, alt_alleles,
                                        snp_read_pos, 0)
             
@@ -495,7 +531,8 @@ def process_paired_read(read1, read2, read_stats, files, snp_tab, max_seqs):
 
     
 
-def process_single_read(read, read_stats, files, snp_tab, max_seqs):
+def process_single_read(read, read_stats, files, snp_tab, max_seqs,
+                        max_snps):
     """Check if a single read overlaps SNPs or indels, and writes
     this read (or generated read pairs) to appropriate output files"""
                 
@@ -503,6 +540,9 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs):
     snp_idx, snp_read_pos, \
         indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
 
+    sys.stderr.write("read: %s\nsnp_idx: %s\nsnp_read_pos: %s\n" %
+                     (repr(read), repr(snp_idx), repr(snp_read_pos)))
+    
     if len(indel_idx) > 0:
         # for now discard this read, we want to improve this to handle
         # the indel reads appropriately
@@ -517,8 +557,12 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs):
         count_ref_alt_matches(read, read_stats, snp_tab, snp_idx,
                               snp_read_pos)
 
-        # TODO: limit recursion, by throwing out read
-        #       if it overlaps too many SNPs
+        # limit recursion here by discarding reads that
+        # overlap too many SNPs
+        if len(snp_read_pos) > max_snps:
+            read_stats.discard_excess_snps += 1
+            return
+
         read_seqs = generate_reads(read.query, ref_alleles, alt_alleles,
                                    snp_read_pos, 0)
 
@@ -528,6 +572,10 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs):
         if read.query in unique_reads:
             unique_reads.remove(read.query)
 
+
+        sys.stderr.write("unique_reads: %s\n" % repr(unique_reads))
+
+            
         if len(unique_reads) < max_seqs:
             # write read to fastq file for remapping
             write_fastq(files.fastq_single, read, unique_reads)
@@ -552,13 +600,13 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs):
 
 def main(bam_filenames, snp_dir, is_paired_end=False,
          is_sorted=False, max_seqs=MAX_SEQS_DEFAULT,
-         output_dir=None):
+         max_snps=MAX_SNPS_DEFAULT, output_dir=None):
 
     sys.stderr.write("OUTPUT_DIR: %s\n" % output_dir)
     
     files = DataFiles(bam_filenames, snp_dir, is_sorted, is_paired_end,
                       output_dir=output_dir)
-    filter_reads(files, max_seqs=max_seqs)
+    filter_reads(files, max_seqs=max_seqs, max_snps=max_snps)
     
     
 
@@ -571,5 +619,6 @@ if __name__ == '__main__':
 
     main(options.bam_filename, options.snp_dir,
          is_paired_end=options.is_paired_end, is_sorted=options.is_sorted,
-         max_seqs=options.max_seqs, output_dir=options.output_dir)
+         max_seqs=options.max_seqs, max_snps=options.max_snps,
+         output_dir=options.output_dir)
     

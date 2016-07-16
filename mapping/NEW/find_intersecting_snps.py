@@ -10,8 +10,8 @@ import util
 import snptable
 
 
-MAX_SEQS_DEFAULT = 10
-MAX_SNPS_DEFAULT = 4
+MAX_SEQS_DEFAULT = 64
+MAX_SNPS_DEFAULT = 6
 
 
 class DataFiles(object):
@@ -270,8 +270,8 @@ def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
         else:
             # read matches neither ref nor other
             read_stats.other_count += 1
+            
     
-
 
 def generate_reads(read_seq, ref_alleles, alt_alleles, read_pos, i):
     """Recursively generate set of reads with all possible combinations

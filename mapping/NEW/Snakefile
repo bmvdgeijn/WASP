@@ -16,8 +16,6 @@ def read_samples():
         words = line.strip().split()
         samp_dict[words[0]] = (words[1], words[2])
 
-    sys.stderr.write("SAMPLES: %s\n" % repr(samp_dict.keys()))
-        
     return samp_dict
 
 
@@ -33,8 +31,6 @@ def get_chromosomes():
             if m:
                 chr_names.add(m.groups()[0])
 
-    sys.stderr.write("chromosomes: %s\n" % repr(chr_names))
-
     return chr_names
     
 
@@ -44,13 +40,18 @@ rule all:
                sample=read_samples().keys())
 
 
+## TODO:
+##   should make script that filters out SNPs that are
+##   not polymorphic in the user's sample because these
+##   generate excess numbers of allelic combinations
+## 
 rule extract_vcf_snps:
-    """makes SNP input files for find_intersecting_snps.py by extracting
-    information from VCF files"""
+    """Makes SNP input files for find_intersecting_snps.py by extracting
+    information from VCF files."""
     input:
         config["vcf_dir"]
     output:
-        expand(config["snp_dir"] + "/{chromosome}.snps.vcf.gz", chromosome=get_chromosomes())
+        expand(config["snp_dir"] + "/{chromosome}.snps.txt.gz", chromosome=get_chromosomes())
     shell:
         "mkdir -p {config[snp_dir]} ; "
         "{config[wasp_dir]}/mapping/NEW/extract_vcf_snps.sh {input} {config[snp_dir]}"
@@ -87,7 +88,7 @@ rule find_intersecting_snps_paired_end:
     """find intersecting SNPs using WASP script"""
     input:
         bam=config["output_dir"] + "/map1_sort/{sample}.bam",
-        snps=[config["snp_dir"] + "/%s.snps.vcf.gz" % s for s in get_chromosomes()]
+        snps=[config["snp_dir"] + "/%s.snps.txt.gz" % s for s in get_chromosomes()]
     output:
         fastq1=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
         fastq2=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq2.gz",
@@ -96,7 +97,7 @@ rule find_intersecting_snps_paired_end:
     shell:
         "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
         "{config[py2]} {config[wasp_dir]}/mapping/NEW/find_intersecting_snps.py "
-        "    --is_paired_end --is_sorted --output_dir {config[output_dir]}/find_intersecting_snps {input.bam} config[snp_dir]"
+        "    --is_paired_end --is_sorted --output_dir {config[output_dir]}/find_intersecting_snps {input.bam} {config[snp_dir]}"
 
 
 rule map_bowtie2_paired_end2:

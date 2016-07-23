@@ -105,26 +105,27 @@ class TestReadFile(object):
         snp_tab.read_file(data.snp_filename)
 
         # check snp_index set correctly
-        assert len(snp_tab.indel_index) == 21
-        assert snp_tab.indel_index[9] == 0
-        assert snp_tab.indel_index[19] == 1
-        assert snp_tab.indel_index[2] == 2
+        assert len(snp_tab.snp_index) == 21
+        assert snp_tab.snp_index[9] == 0
+        assert snp_tab.snp_index[19] == 1
+        assert snp_tab.snp_index[2] == 3
         
         # only 4 values of index should be non -1
-        assert np.where(snp_tab.indel_index != -1)[0].shape[0] == 3
+        assert np.where(snp_tab.snp_index != -1)[0].shape[0] == 4
 
         # check snp_allele set correctly
-        assert snp_tab.indel_allele1[0] == "A"
-        assert snp_tab.indel_allele2[0] == ""
-        assert snp_tab.indel_allele1[1] == "A"
-        assert snp_tab.indel_allele2[1] == "ATTG"
-        assert snp_tab.indel_allele1[2] == "AAA"
-        assert snp_tab.indel_allele2[2] == "A"
+        assert snp_tab.snp_allele1[0] == "A"
+        assert snp_tab.snp_allele2[0] == ""
+        assert snp_tab.snp_allele1[1] == "A"
+        assert snp_tab.snp_allele2[1] == "ATTG"
+        assert snp_tab.snp_allele1[3] == "AAA"
+        assert snp_tab.snp_allele2[3] == "A"
 
         # check that snp_pos set correctly
-        assert snp_tab.indel_pos[0] == 10
-        assert snp_tab.indel_pos[1] == 20
-        assert snp_tab.indel_pos[2] == 3
+        assert snp_tab.snp_pos[0] == 10
+        assert snp_tab.snp_pos[1] == 20
+        assert snp_tab.snp_pos[2] == 21
+        assert snp_tab.snp_pos[3] == 3
 
 
 class TestGetOverlappingSNPs:

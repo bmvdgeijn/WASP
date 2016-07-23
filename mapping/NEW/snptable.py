@@ -33,15 +33,65 @@ class SNPTable(object):
         # info for the SNP in snp_pos, snp_allele1, snp_allele2 arrays)
         self.snp_index = np.array([], dtype=np.int32)
         self.snp_pos = np.array([], dtype=np.int32)
-        self.snp_allele1 = np.array([], dtype="|S1")
-        self.snp_allele2 = np.array([], dtype="|S1")
-        self.indel_index = np.array([], dtype=np.int32)
-        self.indel_pos = np.array([], dtype=np.int32)
-        self.indel_allele1 = []
-        self.indel_allele2 = []
+        self.snp_allele1 = np.array([], dtype="|S10")
+        self.snp_allele2 = np.array([], dtype="|S10")
+        self.haplotypes = None
         self.n_snp = 0
         
-    
+
+
+    def read_h5(self, snp_tab_h5, snp_index_h5, hap_h5, chrom_name):
+        """read in SNPs and indels from HDF5 input files"""
+
+        node_name = "/%s" % chrom_name
+        
+        if node_name not in snp_tab_h5:
+            sys.stderr.write("WARNING: chromosome %s is not "
+                             "in snp_tab.h5 file, assuming no SNPs "
+                             "for this chromosome\n" % chrom_name)
+            self.clear()
+            return
+
+        # get numpy array of SNP idices
+        node = snp_index_h5.getNode(node_name)
+        self.snp_index = node[:]
+
+        # get numpy array of SNP positions
+        node = snp_tab_h5.getNode(node_name)
+        self.snp_pos = node[:]['pos']
+        self.snp_allele1 = node[:]['allele1']
+        self.snp_allele2 = node[:]['allele2']
+        self.n_snp = self.snp_pos.shape[0]
+
+        self.haplotypes = hap_h5.getNode(node_name)
+        
+        
+        
+
+    def is_snp(self, allele1, allele2):
+        """returns True if alleles appear to be 
+        single-nucleotide polymorphism, returns false
+        if appears to be an indel"""
+
+        if (len(allele1) == 1) and (len(allele2) == 1):
+            if allele1 in NUCLEOTIDES and allele2 in NUCLEOTIDES:
+                # this is a SNP
+                return True
+            else:
+                if ("-" in allele1) or ("-" in allele2):
+                    # 1bp indel
+                    return False
+                else:
+                    sys.stderr.write("WARNING: unexpected character "
+                                     "in SNP alleles:\n%s/%s\n" %
+                                     (allele1, allele2))
+                    return False                
+        
+        return False
+        
+
+
+        
     def read_file(self, filename):
         """read in SNPs and indels from text input file"""
         try:
@@ -60,9 +110,6 @@ class SNPTable(object):
         snp_allele1_list = []
         snp_allele2_list = []
         max_pos = 0
-        indel_pos_list = []
-        indel_allele1_list = []
-        indel_allele2_list = []
 
         for line in f:
             words = line.split()
@@ -73,8 +120,8 @@ class SNPTable(object):
                                  "%s\n" % (len(words), line))
 
             pos = int(words[0])
-            a1 = words[1].upper()
-            a2 = words[2].upper()
+            a1 = words[1].upper().replace("-", "")
+            a2 = words[2].upper().replace("-", "")
 
             if pos <= 0:
                 raise ValueError("expected SNP position to be >= 1:\n%s\n" %
@@ -83,28 +130,9 @@ class SNPTable(object):
             if pos > max_pos:
                 max_pos = pos
 
-            if (len(a1) == 1) and (len(a2) == 1):
-                if a1 in NUCLEOTIDES and a2 in NUCLEOTIDES:
-                    # this is a SNP
-                    snp_pos_list.append(pos)
-                    snp_allele1_list.append(a1)
-                    snp_allele2_list.append(a2)
-                else:
-                    if ("-" in a1) or ("-" in a2):
-                        # 1bp indel
-                        # reads overlapping indels are thrown out, although
-                        # we will likely handle indels better soon
-                        indel_pos_list.append(pos)
-                        indel_allele1_list.append(a1.replace("-", ""))
-                        indel_allele2_list.append(a2.replace("-", ""))
-                    else:
-                        sys.stderr.write("WARNING: unexpected character "
-                                         "in SNP:\n%s\n" % line)
-            else:
-                # this is an indel
-                indel_pos_list.append(pos)
-                indel_allele1_list.append(a1)
-                indel_allele2_list.append(a2)
+            snp_pos_list.append(pos)
+            snp_allele1_list.append(a1)
+            snp_allele2_list.append(a2)
 
         f.close()
 
@@ -112,13 +140,10 @@ class SNPTable(object):
         # lookups and use less memory
         self.snp_pos = np.array(snp_pos_list, dtype=np.int32)
         del snp_pos_list
-        self.snp_allele1 = np.array(snp_allele1_list, dtype="|S1")
+        self.snp_allele1 = np.array(snp_allele1_list, dtype="|S10")
         del snp_allele1_list
-        self.snp_allele2 = np.array(snp_allele2_list, dtype="|S1")
+        self.snp_allele2 = np.array(snp_allele2_list, dtype="|S10")
         del snp_allele2_list
-
-        self.indel_pos = np.array(indel_pos_list, dtype=np.int32)
-        del indel_pos_list
 
         # make another array that makes it easy to lookup SNPs by their position
         # on the chromosome
@@ -126,13 +151,10 @@ class SNPTable(object):
         self.snp_index[:] = SNP_UNDEF
         self.snp_index[self.snp_pos-1] = np.arange(self.snp_pos.shape[0])
 
-        self.indel_index = np.empty(max_pos, dtype=np.int32)
-        self.indel_index[:] = SNP_UNDEF
-        self.indel_index[self.indel_pos-1] = np.arange(self.indel_pos.shape[0])
-        self.indel_allele1 = indel_allele1_list
-        self.indel_allele2 = indel_allele2_list
-
         self.n_snp = self.snp_pos.shape[0]
+
+        # currently haplotypes can only be read from HDF5 file
+        self.haplotypes = None
 
     
     def get_overlapping_snps(self, read):
@@ -161,11 +183,11 @@ class SNPTable(object):
         genome_start = read.pos
         genome_end = read.pos
 
-        # index into SNP table for overlapping SNPs
+        # index into combined SNP/indel table for overlapping SNPs
         snp_idx = []
         # positions in read of overlapping SNPs
         snp_read_pos = []
-        # index into indel table for overlapping indels
+        # index into combined SNP/indel table for overlapping indels
         indel_idx = []
         # positions in read of overlapping SNPs
         indel_read_pos = []
@@ -188,19 +210,18 @@ class SNPTable(object):
                 offsets = np.where(s_idx != SNP_UNDEF)[0]
                 
                 if offsets.shape[0] > 0:
-                    # there are overlapping SNPs
-                    snp_idx.extend(s_idx[offsets])
-                    # get the offset of the SNPs into the read
-                    read_pos = offsets + read_start
-                    snp_read_pos.extend(read_pos)
-
-                # check for INDEL in this genome segment
-                i_idx = self.indel_index[s:e]
-                offsets = np.where(i_idx != SNP_UNDEF)[0]
-                if offsets.shape[0] > 0:
-                    indel_idx.extend(i_idx[offsets])
-                    read_pos = offsets + read_start
-                    indel_read_pos.extend(read_pos)
+                    # there are overlapping SNPs and/or indels
+                    
+                    for offset in offsets:
+                        read_pos = offset + read_start
+                        allele1 = self.snp_allele1[s_idx[offset]]
+                        allele2 = self.snp_allele2[s_idx[offset]]
+                        if self.is_snp(allele1, allele2):
+                            snp_idx.append(s_idx[offset])
+                            snp_read_pos.append(read_pos)
+                        else:
+                            indel_idx.append(s_idx[offset])
+                            indel_read_pos.append(read_pos)
 
             elif op == BAM_CINS:
                 # insert in read relative to reference
@@ -230,14 +251,23 @@ class SNPTable(object):
                 e = min(genome_end, self.indel_index.shape[0])
                 
                 # check for INDEL in this genome segment
-                i_idx = self.indel_index[s:e]
-                offsets = np.where(i_idx != SNP_UNDEF)[0]
+                i_idx = self.snp_index[s:e]
+                offsets = np.where(s_idx != SNP_UNDEF)[0]
+                
                 if offsets.shape[0] > 0:
-                    indel_idx.extend(i_idx[offsets])
-                    # position in read is where we last left off
-                    # in read sequence
-                    indel_read_pos.append(read_end)
-
+                    # there are overlapping SNPs and/or indels
+                    for offset in offsets:
+                        read_pos = offset + read_start
+                        allele1 = self.snp_allele1[s_idx[offset]]
+                        allele2 = self.snp_allele2[s_idx[offset]]
+                        if self.is_snp(allele1, allele2):
+                            # ignore SNP
+                            pass
+                        else:
+                            indel_idx.append(s_idx[offset])
+                            # position in read is where we last left off
+                            # in read sequence
+                            indel_read_pos.append(read_end)
             elif op == BAM_CREF_SKIP:
                 # section of skipped reference, such as intron
                 genome_end = genome_end + op_len

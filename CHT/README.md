@@ -170,9 +170,16 @@ For example, if the goal is to identify histone-mark QTLs, the target
 regions should be ChIP-seq peaks, and the test SNPs should be SNPs
 that are near-to or within the ChIP-seq peaks.
 
+*Note (added 4/25/2016):* the target regions for a single test regions should be 
+non-overlapping. Overlapping target regions can cause some reads
+to be counted multiple times in a single test and inflate the test
+statistic. We plan to add a check for this to the extract haplotype
+read counts.
+
 If the goal is to identify eQTLs, the target regions should be the
 exons of genes, and the test SNPs could be SNPs within a specified
-distance of the TSS.
+distance of the TSS. If a gene contains overlapping or duplicate
+exons these should be collapsed.
 
 We provide a script, `get_target_regions.py`, that can generate a list
 of target regions and test SNPs for ChIP-seq peaks that match

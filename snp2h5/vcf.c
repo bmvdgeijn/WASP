@@ -173,11 +173,13 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 	  /* try with '/' separator instead */
 	  n = sscanf(inner_tok, "%d/%d", &hap1, &hap2);
 
-	  if(n == 2 && warn_phase) {
-	    my_warn("%s:%d: some genotypes are unphased (delimited "
-		    "with '/' instead of '|')\n", __FILE__, __LINE__,
-		    inner_tok);
-	    warn_phase = FALSE;
+	  if(n == 2) {
+	    if(warn_phase) {
+	      my_warn("%s:%d: some genotypes are unphased (delimited "
+		      "with '/' instead of '|')\n", __FILE__, __LINE__,
+		      inner_tok);
+	      warn_phase = FALSE;
+	    }
 	  } else {
 	    if(warn_parse) {
 	      my_warn("%s:%d: could not parse some genotype "

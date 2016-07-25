@@ -40,24 +40,81 @@ rule all:
                sample=read_samples().keys())
 
 
-## TODO:
-##   should make script that filters out SNPs that are
-##   not polymorphic in the user's sample because these
-##   generate excess numbers of allelic combinations
-## 
-rule extract_vcf_snps:
-    """Makes SNP input files for find_intersecting_snps.py by extracting
-    information from VCF files."""
+        
+## Old way that used text input files (but without haplotype information)
+#
+# rule extract_vcf_snps:
+#     """Makes SNP input files for find_intersecting_snps.py by extracting
+#     information from VCF files."""
+#     input:
+#         config["vcf_dir"]
+#     output:
+#         expand(config["snp_dir"] + "/{chromosome}.snps.txt.gz", chromosome=get_chromosomes())
+#     shell:
+#         "mkdir -p {config[snp_dir]} ; "
+#         "{config[wasp_dir]}/mapping/NEW/extract_vcf_snps.sh {input} {config[snp_dir]}"
+#
+# rule find_intersecting_snps_paired_end:
+#     """find intersecting SNPs using WASP script"""
+#     input:
+#         bam=config["output_dir"] + "/map1_sort/{sample}.bam",
+#         snps=[config["snp_dir"] + "/%s.snps.txt.gz" % s for s in get_chromosomes()]
+#     output:
+#         fastq1=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
+#         fastq2=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq2.gz",
+#         keep_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.keep.bam",
+#         remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
+#     shell:
+#         "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
+#         "{config[py2]} {config[wasp_dir]}/mapping/NEW/find_intersecting_snps.py "
+#         "    --is_paired_end --is_sorted --output_dir {config[output_dir]}/find_intersecting_snps {input.bam} {config[snp_dir]}"
+
+
+rule vcf2h5:
+    """Convert VCF data files to HDF5 format"""
     input:
-        config["vcf_dir"]
+        chrom=config['chrom_info'],
+        vcfs=glob.glob(config['vcf_dir'] + "/*chr*.vcf.gz")
     output:
-        expand(config["snp_dir"] + "/{chromosome}.snps.txt.gz", chromosome=get_chromosomes())
+        snp_index=config['snp_h5_dir'] + "/snp_index.h5",
+        snp_tab=config['snp_h5_dir'] + "/snp_tab.h5",
+        haplotype=config['snp_h5_dir'] + "/haplotype.h5"
     shell:
-        "mkdir -p {config[snp_dir]} ; "
-        "{config[wasp_dir]}/mapping/NEW/extract_vcf_snps.sh {input} {config[snp_dir]}"
+        "mkdir -p {config[snp_h5_dir]}; "
+        "{config[wasp_dir]}/snp2h5/snp2h5 "
+        "  --chrom {input.chrom} "
+        "  --format vcf "
+        "  --snp_index {output.snp_index} "
+        "  --snp_tab {output.snp_tab} "
+        "  --haplotype {output.haplotype} "
+        "  {input.vcfs}"
 
-    
 
+rule find_intersecting_snps_paired_end:
+     """find intersecting SNPs using WASP script"""
+     input:
+         bam=config["output_dir"] + "/map1_sort/{sample}.bam",
+         snp_index=config["snp_h5_dir"] + "/snp_index.h5",
+         snp_tab=config["snp_h5_dir"] + "/snp_tab.h5",
+         haplotype=config['snp_h5_dir'] + "/haplotype.h5"
+     output:
+         fastq1=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
+         fastq2=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq2.gz",
+         keep_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.keep.bam",
+         remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
+     shell:
+         "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
+         "{config[py2]} {config[wasp_dir]}/mapping/NEW/find_intersecting_snps.py "
+         "    --is_paired_end "
+         "    --is_sorted "
+         "    --output_dir {config[output_dir]}/find_intersecting_snps "
+         "    --snp_tab {input.snp_tab} "
+         "    --snp_index {input.snp_index} "
+         "    --haplotype {input.haplotype} "
+         "    {input.bam}"
+
+
+         
 rule map_bowtie2_paired_end1:
     """map reads using bowtie2"""
     input:
@@ -83,21 +140,6 @@ rule sort_and_index_bam1:
         "{config[samtools]} sort -o {output[0]} {input}; "
         "{config[samtools]} index {output[0]}"
 
-
-rule find_intersecting_snps_paired_end:
-    """find intersecting SNPs using WASP script"""
-    input:
-        bam=config["output_dir"] + "/map1_sort/{sample}.bam",
-        snps=[config["snp_dir"] + "/%s.snps.txt.gz" % s for s in get_chromosomes()]
-    output:
-        fastq1=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
-        fastq2=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq2.gz",
-        keep_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.keep.bam",
-        remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
-    shell:
-        "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
-        "{config[py2]} {config[wasp_dir]}/mapping/NEW/find_intersecting_snps.py "
-        "    --is_paired_end --is_sorted --output_dir {config[output_dir]}/find_intersecting_snps {input.bam} {config[snp_dir]}"
 
 
 rule map_bowtie2_paired_end2:

@@ -373,20 +373,11 @@ def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
 
 def get_unique_haplotypes(haplotypes, snp_idx):
     """returns list of vectors of unique haplotypes for this set of SNPs"""
-
-    sys.stderr.write("haplotypes: %s\n"
-                     "snp_idx: %s\n" % (repr(haplotypes), repr(snp_idx)))
-    
     haps = haplotypes[snp_idx,:].T
-
-    sys.stderr.write("haps: %s\n"
-                     "snp_idx: %s\n" % (repr(haps), repr(snp_idx)))
-
+    
     # create view of data that joins all elements of column
     # into single void datatype
     h = np.ascontiguousarray(haps).view(np.dtype((np.void, haps.dtype.itemsize * haps.shape[1])))
-    
-    # h = haps.T.view(np.dtype(np.void, haps.dtype.itemsize * haps.shape[0]))
 
     # get index of unique columns
     _, idx = np.unique(h, return_index=True)
@@ -401,9 +392,9 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
                          haplo_tab):
     haps = get_unique_haplotypes(haplo_tab, snp_idx)
 
-    sys.stderr.write("UNIQUE haplotypes: %s\n"
-                     "read_pos: %s\n"
-                     % (repr(haps), read_pos))
+    # sys.stderr.write("UNIQUE haplotypes: %s\n"
+    #                  "read_pos: %s\n"
+    #                 % (repr(haps), read_pos))
     
     read_len = len(read_seq)
 
@@ -661,13 +652,11 @@ def process_paired_read(read1, read2, read_stats, files,
 
             if snp_tab.haplotypes:
                 # generate reads using observed set of haplotypes
-                sys.stderr.write("generating haplo reads\n")
                 read_seqs = generate_haplo_reads(read.query, snp_idx,
                                                  snp_read_pos,
                                                  ref_alleles, alt_alleles,
                                                  snp_tab.haplotypes)
             else:
-                sys.stderr.write("generating all possible reads\n")
                 # generate all possible allelic combinations of reads
                 read_seqs = generate_reads(read.query, snp_read_pos,
                                            ref_alleles, alt_alleles, 0)
@@ -739,8 +728,6 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
     snp_idx, snp_read_pos, \
         indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
 
-    sys.stderr.write("read: %s\nsnp_idx: %s\nsnp_read_pos: %s\n" %
-                     (repr(read), repr(snp_idx), repr(snp_read_pos)))
     
     if len(indel_idx) > 0:
         # for now discard this read, we want to improve this to handle
@@ -763,13 +750,11 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
             return
 
         if snp_tab.haplotypes:
-            sys.stderr.write("generating haplo reads\n")
             read_seqs = generate_haplo_reads(read.query, snp_idx,
                                              snp_read_pos,
                                              ref_alleles, alt_alleles,
                                              snp_tab.haplotypes)
         else:
-            sys.stderr.write("generating all possible reads\n")
             read_seqs = generate_reads(read.query,  snp_read_pos,
                                        ref_alleles, alt_alleles, 0)
 
@@ -778,11 +763,6 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
         unique_reads = set(read_seqs)
         if read.query in unique_reads:
             unique_reads.remove(read.query)
-            sys.stderr.write("removed query read %s\n" % read.query)
-
-        sys.stderr.write("query read: %s\n"
-                         "unique_reads: %s\n" %
-                         (read.query, repr(unique_reads)))
         
         if len(unique_reads) == 0:
             # only read generated matches original read,

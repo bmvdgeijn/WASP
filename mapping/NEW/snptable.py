@@ -200,7 +200,7 @@ class SNPTable(object):
                 # match or mismatch to reference
                 read_start = read_end + 1
                 read_end = read_start + op_len - 1
-                genome_start = genome_start + 1
+                genome_start = genome_end + 1
                 genome_end = genome_start + op_len - 1
 
                 # check for SNP in this genome segment
@@ -236,7 +236,7 @@ class SNPTable(object):
 
             elif op == BAM_CDEL:
                 # deletion in read relative to reference
-                genome_start = genome_start + 1
+                genome_start = genome_end + 1
                 genome_end   = genome_start + op_len - 1
 
                 # Read sequence does not advance, no possibility
@@ -248,10 +248,10 @@ class SNPTable(object):
                 # nested indels
 
                 s = genome_start - 1
-                e = min(genome_end, self.indel_index.shape[0])
+                e = min(genome_end, self.snp_index.shape[0])
                 
                 # check for INDEL in this genome segment
-                i_idx = self.snp_index[s:e]
+                s_idx = self.snp_index[s:e]
                 offsets = np.where(s_idx != SNP_UNDEF)[0]
                 
                 if offsets.shape[0] > 0:

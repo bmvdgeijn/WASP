@@ -447,15 +447,179 @@ class TestSingleEnd:
 
         
 
-    def test_single_one_read_one_indel(self):
-        """Test whether 1 read overlapping indel works correctly"""
-
+    def test_single_gapD_read_two_snps(self):
+        """Test whether read with D in alignment works correctly"""
         #
         # Currently WASP discards reads that overlap
         # indels. We want to improve WASP to handle indels
         # correctly, but in the meantime this test just checks
         # that the read is discarded.
         #
+
+        # create read that will align with a 'D' in CIGAR string
+        test_data = Data(read1_seqs =  ["ACTGACTGAAACTGACTGACTGACTGACTTTTTTTTTTATTTTTTTTTTTTTTTTTTT"],
+                         read1_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs = ["ACTGACTGAAAAACTGACTGACTGACTGAC\n" +
+                                        "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"],
+                         chrom_names = ['test_chrom1'],
+                         snp_list = [['test_chrom1', 1, "A", "C"],
+                                     ['test_chrom1', 15, "T", "C"]])
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+        
+        # pos:     123456789012345678901234567890
+        # genome:  ACTGACTGAAAAACTGACTGACTGACTGACTTTTTTTTTTATTTTTTTTTTTTTTTTTTT
+        # snps:    ^             ^
+        # read:    ACTGACTGAAA--CTGACTGACTGACTGACTTTTTTTTTTATTTTTTTTTTTTTTTTTTT
+        # read_pos:12345678901--23456789012345678
+        
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=False, is_sorted=False)
+
+
+        #
+        # Verify new fastq is correct. There should be 3 reads
+        # with all possible configurations of the two alleles, except
+        # for the original configuration.
+        #
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 12
+
+        seqs = [lines[1], lines[5], lines[9]]
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq1 = "".join(l)
+
+        l = list(test_data.read1_seqs[0])
+        l[12] = 'C'
+        new_seq2 = "".join(l)
+
+        # read with both non-ref alleles
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        l[12] = 'C'
+        new_seq3 = "".join(l)
+
+        assert len(seqs) == 3
+        assert new_seq1 in seqs
+        assert new_seq2 in seqs
+        assert new_seq3 in seqs
+
+        # Check the new reads are named correctly
+        assert lines[0] == "@read1.1.1.3"
+        assert lines[4] == "@read1.1.2.3"
+        assert lines[8] == "@read1.1.3.3"
+        
+        # Verify to.remap bam is the same as the input bam file.
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+
+
+    
+    def test_single_gapI_read_two_snps(self):
+        """Test whether read with I in alignment works correctly"""
+        #
+        # Currently WASP discards reads that overlap
+        # indels. We want to improve WASP to handle indels
+        # correctly, but in the meantime this test just checks
+        # that the read is discarded.
+        #
+
+        # create read that will align with a 'D' in CIGAR string
+        test_data = Data(read1_seqs =  ["ACTGACTGAAAAAAACTGACTGACTGACTGACTTTTTTTTTTATTTTTTTTTTTT"],
+                         read1_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs = ["ACTGACTGAAAAACTGACTGACTGACTGAC\n" +
+                                        "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT"],
+                         chrom_names = ['test_chrom1'],
+                         snp_list = [['test_chrom1', 1, "A", "C"],
+                                     ['test_chrom1', 15, "T", "C"]])
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+        
+        # pos:     1234567890123--45678901234567890
+        # genome:  ACTGACTGAAAAA--CTGACTGACTGACTGACTTTTTTTTTTATTTTTTTTTTTTTTTTTTT
+        # snps:    ^               ^
+        # read:    ACTGACTGAAAAAAACTGACTGACTGACTGACTTTTTTTTTTATTTTTTTTTTTTTTTTTTT
+        # read_pos:1234567890123456789012345678
+        
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=False, is_sorted=False)
+
+
+        #
+        # Verify new fastq is correct. There should be 3 reads
+        # with all possible configurations of the two alleles, except
+        # for the original configuration.
+        #
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 12
+
+        seqs = [lines[1], lines[5], lines[9]]
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq1 = "".join(l)
+
+        l = list(test_data.read1_seqs[0])
+        l[16] = 'C'
+        new_seq2 = "".join(l)
+
+        # read with both non-ref alleles
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        l[16] = 'C'
+        new_seq3 = "".join(l)
+
+        assert len(seqs) == 3
+        assert new_seq1 in seqs
+        assert new_seq2 in seqs
+        assert new_seq3 in seqs
+
+        # Check the new reads are named correctly
+        assert lines[0] == "@read1.1.1.3"
+        assert lines[4] == "@read1.1.2.3"
+        assert lines[8] == "@read1.1.3.3"
+        
+        # Verify to.remap bam is the same as the input bam file.
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+
+
+    def test_single_one_read_one_indel(self):
+        """Test whether 1 read overlapping indel works correctly"""
 
         test_data = Data(snp_list=[['test_chrom', 2, "A", "CCC"]])
         test_data.setup()
@@ -493,6 +657,9 @@ class TestSingleEnd:
         test_data.cleanup()
 
 
+
+
+        
     def test_single_two_reads_one_snp(self):
         """Test whether 2 reads (one overlapping SNP,
         one not overlapping SNP) works correctly"""

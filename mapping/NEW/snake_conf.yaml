@@ -18,11 +18,18 @@
     # directory to write all output data files to
     "output_dir" :  "/iblm/netapp/home/gmcvicker/proj/WASP/mapping/output",
 
+    # location of chromInfo file containing chromosome names and lengths
+    # (can be downloaded from UCSC genome browser)
+    "chrom_info" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/chromInfo.hg19.txt",
+
     # directory to read VCF files from (used to write SNP input files)
     "vcf_dir" : "/iblm/netapp/home/gmcvicker/data1/external/1000Genomes/GRC37/20130502",
 
-    # directory to write SNP input files to
+    # OLD way: directory to write SNP plain text input files to
     "snp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/snps",
+
+    # diretory to write SNP HDF5 input files to
+    snp_h5_dir : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/snp_h5",
 
     # path to samtools
     "samtools" : "/iblm/netapp/home/gmcvicker/anaconda2/bin/samtools",

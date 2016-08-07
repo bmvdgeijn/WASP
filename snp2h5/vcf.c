@@ -31,6 +31,9 @@ VCFInfo *vcf_info_new() {
   vcf_info->buf_size = 1024;
   vcf_info->buf = my_malloc(vcf_info->buf_size);
 
+  vcf_info->n_sample = 0;
+  vcf_info->sample_names = NULL;
+
   return vcf_info;
 }
 
@@ -39,6 +42,16 @@ VCFInfo *vcf_info_new() {
  * free memory allocated for reading lines
  */
 void vcf_info_free(VCFInfo *vcf_info) {
+  int i;
+  
+  if(vcf_info->sample_names) {
+    for(i = 0; i < vcf_info->n_sample; i++) {
+      my_free(vcf_info->sample_names[i]);
+    }
+    my_free(vcf_info->sample_names);
+  }
+
+  
   my_free(vcf_info->buf);
   my_free(vcf_info);
 }
@@ -47,35 +60,28 @@ void vcf_info_free(VCFInfo *vcf_info) {
 void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
   char *line, *cur, *token;
   int tok_num;
-  int n_fix_header;
+  int n_fix_header, i;
   
   /* const char delim[] = " \t"; */
   const char delim[] = "\t";
 
   n_fix_header = sizeof(vcf_fix_headers) / sizeof(const char *);
 
-  vcf_info->n_header_lines = 0;
+  vcf_info->n_header_line = 0;
   
   while(util_gzgetline(vcf_fh, &vcf_info->buf, &vcf_info->buf_size) != -1) {
-
-    /*
-    line = util_gzgets_line(vcf_fh);
-    if(line == NULL) {
-      my_err("%s:%d: could not read header information from file",
-	     __FILE__, __LINE__);
-    }
-    */
     line = vcf_info->buf;
   
     if(util_str_starts_with(line, "##")) {
       /* header line */
-      vcf_info->n_header_lines += 1;
+      vcf_info->n_header_line += 1;
     }
     else if(util_str_starts_with(line, "#CHROM")) {
       /* this should be last header line that contains list of fixed fields */
-      vcf_info->n_header_lines += 1;
+      vcf_info->n_header_line += 1;
 	
       cur = vcf_info->buf;
+      line = util_str_dup(vcf_info->buf);
       tok_num = 0;
       while((token = strsep(&cur, delim)) != NULL) {
 	if(tok_num < n_fix_header) {
@@ -86,13 +92,28 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
 	}
 	tok_num += 1;
       }
-      vcf_info->n_samples = tok_num - n_fix_header;
-      /* my_free(line); */
+      vcf_info->n_sample = tok_num - n_fix_header;
+
+      /*
+       * read sample names from remaining part of header
+       */
+      vcf_info->sample_names = my_malloc(sizeof(char *) * vcf_info->n_sample);
+      cur = line;
+      tok_num = 0;
+      i = 0;
+      while((token = strsep(&cur, delim)) != NULL) {
+	if(tok_num >= n_fix_header) {
+	  vcf_info->sample_names[i] = util_str_dup(token);
+	  i += 1;
+	}
+	tok_num += 1;
+      }
+      my_free(line);
+
       break;
     } else {
       my_err("expected last line in header to start with #CHROM");
     }
-    /* my_free(line); */
   }
 }
 
@@ -153,7 +174,7 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 	   __FILE__, __LINE__, vcf_info->format);
   }
   
-  expect_haps = vcf_info->n_samples * 2;
+  expect_haps = vcf_info->n_sample * 2;
   
   n_haps = 0;
   
@@ -237,7 +258,7 @@ void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
   float like_homo_ref, like_het, like_homo_alt;
   float prob_homo_ref, prob_het, prob_homo_alt, prob_sum;
 
-  expect_geno_probs = vcf_info->n_samples * 3;
+  expect_geno_probs = vcf_info->n_sample * 3;
   
   /* get index of GL token in format string*/
   gl_idx = get_format_index(vcf_info->format, "GL");
@@ -321,11 +342,11 @@ void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
  *
  * If geno_probs array is non-null genotype likelihoods are parsed and
  * stored in the provided array. The array must be of length
- * n_samples*3.
+ * n_sample*3.
  *
  * If haplotypes array is non-null phased genotypes are parsed and
  * stored in the provided array. The array must be of length
- * n_samples*2.
+ * n_sample*2.
  *
  * Returns 0 on success, -1 if at EOF.
  */
@@ -335,9 +356,10 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   int n_fix_header, ref_len, alt_len;
   size_t tok_num;
 
-  /* Used to allow space or tab delimiters here but now only allow tab. 
-   * This is because VCF specification indicates that fields should be tab-delimited, 
-   * and occasionally some fields contain spaces.
+  /* Used to allow space or tab delimiters here but now only allow
+   * tab.  This is because VCF specification indicates that fields
+   * should be tab-delimited, and occasionally some fields contain
+   * spaces.
    */
   /* const char delim[] = " \t";*/
   const char delim[] = "\t";

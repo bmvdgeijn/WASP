@@ -8,6 +8,7 @@
 
 #include "impute.h"
 #include "vcf.h"
+#include "sample.h"
 #include "snptab.h"
 #include "util.h"
 #include "memutil.h"
@@ -47,6 +48,7 @@ typedef struct {
   char *haplotype_file;
   char *snp_index_file;
   char *snp_tab_file;
+  char *sample_file;
   char **input_files;
   
   int n_input_files;
@@ -88,9 +90,9 @@ typedef struct {
 
 
 typedef struct {
-  long n_lines; /* number of lines in file (including header lines) */
+  long n_line; /* number of lines in file (including header lines) */
   long n_row;   /* number of data rows in file */
-  long n_samples; /* number of samples in file */
+  long n_sample; /* number of samples in file */
 
   long n_geno_prob_col; /* number of genotype prob columns */
   long n_haplotype_col; /* number of haplotype columns */
@@ -196,6 +198,7 @@ void parse_args(Arguments *args, int argc, char **argv) {
      {"haplotype", required_argument, 0, 'h'},
      {"snp_index", required_argument, 0, 'i'},
      {"snp_tab", required_argument, 0, 't'},
+     {"samples", required_argument, 0, 's'},
      {0,0,0,0}
    };
    args->chrom_file = NULL;
@@ -204,9 +207,10 @@ void parse_args(Arguments *args, int argc, char **argv) {
    args->haplotype_file = NULL;
    args->snp_index_file = NULL;
    args->snp_tab_file = NULL;
+   args->sample_file = NULL;
 
    while(1) {
-     c = getopt_long(argc, argv, "c:f:p:h:i:t:", loptions, NULL);
+     c = getopt_long(argc, argv, "c:f:p:h:i:t:s:", loptions, NULL);
      
      if(c == -1) {
        break;
@@ -219,6 +223,7 @@ void parse_args(Arguments *args, int argc, char **argv) {
        case 'h': args->haplotype_file = util_str_dup(optarg); break;
        case 'i': args->snp_index_file = util_str_dup(optarg); break;
        case 't': args->snp_tab_file = util_str_dup(optarg); break;
+       case 's': args->sample_file = util_str_dup(optarg); break;
        default: usage(argv); break;
      }
    }
@@ -478,21 +483,21 @@ void set_file_info(gzFile gzf, char *filename, Arguments *args, FileInfo *file_i
   
   /* count total number lines in file, this tells us number of records */
   fprintf(stderr, "counting lines in file\n");
-  file_info->n_lines = util_count_lines(filename);
-  fprintf(stderr, "  total lines: %ld\n", file_info->n_lines);
+  file_info->n_line = util_count_lines(filename);
+  fprintf(stderr, "  total lines: %ld\n", file_info->n_line);
 
   if(args->format == FORMAT_VCF) {
     /* parse VCF headers */
     fprintf(stderr, "reading VCF header\n");
     vcf_read_header(gzf, vcf);
-    fprintf(stderr, "  VCF header lines: %ld\n", vcf->n_header_lines);
+    fprintf(stderr, "  VCF header lines: %ld\n", vcf->n_header_line);
     
-    file_info->n_row = file_info->n_lines - vcf->n_header_lines;
-    file_info->n_samples = vcf->n_samples;
+    file_info->n_row = file_info->n_line - vcf->n_header_line;
+    file_info->n_sample = vcf->n_sample;
   }
   else if(args->format == FORMAT_IMPUTE) {
     /* get number of samples from first row of IMPUTE file */
-    file_info->n_row = file_info->n_lines;
+    file_info->n_row = file_info->n_line;
     n_col = impute_count_fields(gzf) - IMPUTE_FIX_HEADER;
     
     /* here we assume that the file is an IMPUTE file
@@ -506,21 +511,21 @@ void set_file_info(gzFile gzf, char *filename, Arguments *args, FileInfo *file_i
 	     "multiple of 3", __FILE__, __LINE__, n_col);
     }
     
-    file_info->n_samples = n_col / 3;
+    file_info->n_sample = n_col / 3;
     file_info->n_geno_prob_col = n_col;
 
-    /* if we used haplotype file, n_samples would be n_col/2 */
-    /* file_info->n_samples = n_col / 2; */
+    /* if we used haplotype file, n_sample would be n_col/2 */
+    /* file_info->n_sample = n_col / 2; */
     
-    impute_info->n_samples = file_info->n_samples;
+    impute_info->n_sample = file_info->n_sample;
     
   } else {
     my_err("%s:%d: unknown file format\n", __FILE__, __LINE__);
   }
   
-  fprintf(stderr, "  number of samples: %ld\n", file_info->n_samples);    
-  file_info->n_geno_prob_col = file_info->n_samples * 3;
-  file_info->n_haplotype_col = file_info->n_samples * 2;  
+  fprintf(stderr, "  number of samples: %ld\n", file_info->n_sample);    
+  file_info->n_geno_prob_col = file_info->n_sample * 3;
+  file_info->n_haplotype_col = file_info->n_sample * 2;  
 }
 
 
@@ -868,6 +873,9 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 
 
 
+
+
+
 void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	       H5MatrixInfo *gprob_info, H5MatrixInfo *haplotype_info,
 	       H5VectorInfo *snp_index_info, hid_t snp_tab_h5file) {
@@ -1017,14 +1025,84 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
 
 
 
+
+Sample *read_sample_info(Arguments *args, int *n_sample) {
+  VCFInfo *vcf;
+  gzFile gzf;
+  Sample *samples;
+  char *line;
+  int i;
+
+  *n_sample = 0;
+  samples = NULL;
+  
+  if(args->sample_file) {
+    /* read sample information from samples file */
+    *n_sample = util_count_lines(args->sample_file);
+    samples = my_malloc(sizeof(Sample) * *n_sample);
+
+    gzf = util_must_gzopen(args->input_files[0], "rb");
+    i = 0;
+    while(line = util_gzgets_line(gzf)) {
+      if(i > *n_sample) {
+	my_err("%s:%d: more sample lines than expected in file %s\n",
+	       __FILE__, __LINE__, args->sample_file);
+      }
+      util_str_strip(line);
+      util_strncpy(samples[i].name, line, sizeof(samples[i].name));
+      my_free(line);
+      i += 1;
+    }
+    if(i != *n_sample) {
+      my_err("%s:%d: expected %d lines in file, but got %d\n",
+	     __FILE__, __LINE__, *n_sample, i);
+    }
+  }
+
+  if((args->format == FORMAT_VCF) && (args->n_input_files > 0)) {
+    /* read sample names from first input file */
+    gzf = util_must_gzopen(args->input_files[0], "rb");
+    vcf = vcf_info_new();
+    vcf_read_header(gzf, vcf);
+    gzclose(gzf);
+
+    if(args->sample_file) {
+      /* verify the samples look the same */
+      if(vcf->n_sample != *n_sample) {
+	my_err("%s:%d: number of samples in VCF file %s "
+	       "does not match number if samples file %s\n",
+	       __FILE__, __LINE__, args->input_files[0],
+	       args->sample_file);	
+      }
+      /* TODO: could check whether sample names match here... */
+    } else {
+      samples = my_malloc(sizeof(Sample) * vcf->n_sample);
+      
+      for(i = 0; i < vcf->n_sample; i++) {
+	util_strncpy(samples[i].name, vcf->sample_names[i],
+		     sizeof(samples[i].name));
+      }
+      *n_sample = vcf->n_sample;
+    }
+
+    vcf_info_free(vcf);
+  }
+
+  /** TODO: handle IMPUTE format here, verify number of samples is correct? */
+  
+  return samples;
+}
+
+
 int main(int argc, char **argv) {
   FileInfo file_info;
   Arguments args;
   Chromosome *all_chroms;
-  int n_chrom;
+  int n_chrom, n_sample;
   H5MatrixInfo gprob_info, haplotype_info;
   H5VectorInfo snp_index_info;
   hid_t snp_tab_h5file;
+  Sample *samples;
 
   parse_args(&args, argc, argv);
 
@@ -1032,25 +1110,34 @@ int main(int argc, char **argv) {
   all_chroms = chrom_read_file(args.chrom_file, &n_chrom);
 
   fprintf(stderr, "long alleles will be truncated to %dbp\n", SNP_MAX_ALLELE);
+
+  /* read sample information */
+  samples = read_sample_info(&args, &n_sample);
+
+  /** TODO: write sample information to all HDF5 files **/
   
   /* create new HDF5 file(s) */
   if(args.geno_prob_file) {
     gprob_info.h5file = create_h5file(args.geno_prob_file);
     fprintf(stderr, "writing genotype probabilities to: %s\n",
 	    args.geno_prob_file);
+    sample_tab_create(gprob_info.h5file, samples, n_sample);
   }
   if(args.haplotype_file) {
     haplotype_info.h5file = create_h5file(args.haplotype_file);
     fprintf(stderr, "writing haplotypes to: %s\n",
 	    args.haplotype_file);
+    sample_tab_create(haplotype_info.h5file, samples, n_sample);
   }
   if(args.snp_index_file) {
     snp_index_info.h5file = create_h5file(args.snp_index_file);
     fprintf(stderr, "writing SNP index to: %s\n", args.snp_index_file);
+    sample_tab_create(snp_index_info.h5file, samples, n_sample);
   }
   if(args.snp_tab_file) {
     snp_tab_h5file = create_h5file(args.snp_tab_file);
     fprintf(stderr, "writing SNP table to: %s\n", args.snp_tab_file);
+    sample_tab_create(snp_tab_h5file, samples, n_sample);
   }
     
   
@@ -1070,6 +1157,8 @@ int main(int argc, char **argv) {
     
   chrom_array_free(all_chroms, n_chrom);
 
+  /* TODO: fix small mem leak: sample names never freed */
+  
   /* close HDF5 files */
   if(args.geno_prob_file) {
     H5Fclose(gprob_info.h5file);

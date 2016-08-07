@@ -63,12 +63,12 @@ long impute_count_fields(gzFile fh) {
 }
 
 
-void impute_parse_haplotypes(char *haplotypes, char *cur, long n_samples) {
+void impute_parse_haplotypes(char *haplotypes, char *cur, long n_sample) {
   long expect_n, i, val;
   char *tok;
   char delim[] = " \t";
   
-  expect_n = n_samples * 2;
+  expect_n = n_sample * 2;
 
   i = 0;
   while((tok = strsep(&cur, delim)) != NULL) {
@@ -100,12 +100,12 @@ void impute_parse_haplotypes(char *haplotypes, char *cur, long n_samples) {
 
 
 
-void impute_parse_geno_probs(float *geno_probs, char *cur, long n_samples) {
+void impute_parse_geno_probs(float *geno_probs, char *cur, long n_sample) {
   long expect_n, i, val;
   char delim[] = " \t";
   char *tok;
   
-  expect_n = n_samples * 3;
+  expect_n = n_sample * 3;
 
   i = 0;
   while((tok = strsep(&cur, delim)) != NULL) {
@@ -136,11 +136,11 @@ void impute_parse_geno_probs(float *geno_probs, char *cur, long n_samples) {
  * 
  * If geno_probs array is non-null genotype probabilities are parsed and
  * stored in the provided array. The array must be of length
- * n_samples*3.
+ * n_sample*3.
  *
  * If haplotypes array is non-null phased genotypes are parsed and
  * stored in the provided array. The array must be of length
- * n_samples*2.
+ * n_sample*2.
  *
  * IMPUTE files contain EITHER haplotypes OR genotypes so only
  * one of geno_probs or haplotypes should be non-null (at most).
@@ -202,10 +202,10 @@ int impute_read_line(gzFile fh, ImputeInfo *impute_info, SNP *snp,
 	   "both requested\n");
   }
   else if(geno_probs) {
-    impute_parse_geno_probs(geno_probs, cur, impute_info->n_samples);
+    impute_parse_geno_probs(geno_probs, cur, impute_info->n_sample);
   }
   else if(haplotypes) {
-    impute_parse_haplotypes(haplotypes, cur, impute_info->n_samples);
+    impute_parse_haplotypes(haplotypes, cur, impute_info->n_sample);
   }
 
 }

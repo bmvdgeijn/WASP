@@ -8,7 +8,7 @@ INCLUDE=-I$(HDF_INSTALL)/include
 LIBSHDF=$(EXTLIB)
 CFLAGS=-g -DH5_USE_16_API $(INCLUDE)
 
-objects=vcf.o impute.o util.o memutil.o err.o chrom.o snptab.o seq.o nuc.o
+objects=vcf.o impute.o util.o memutil.o err.o chrom.o snptab.o seq.o nuc.o sampletab.o
 
 default: all
 

@@ -40,7 +40,8 @@ class SNPTable(object):
         
 
 
-    def read_h5(self, snp_tab_h5, snp_index_h5, hap_h5, chrom_name):
+    def read_h5(self, snp_tab_h5, snp_index_h5, hap_h5, chrom_name,
+                samples=None):
         """read in SNPs and indels from HDF5 input files"""
 
         node_name = "/%s" % chrom_name
@@ -51,21 +52,101 @@ class SNPTable(object):
                              "for this chromosome\n" % chrom_name)
             self.clear()
             return
+            
+        else:
+            # get numpy array of SNP idices
+            node = snp_index_h5.getNode(node_name)
+            self.snp_index = node[:]
 
-        # get numpy array of SNP idices
-        node = snp_index_h5.getNode(node_name)
-        self.snp_index = node[:]
+            # get numpy array of SNP positions
+            node = snp_tab_h5.getNode(node_name)
+            self.snp_pos = node[:]['pos']
+            self.snp_allele1 = node[:]['allele1']
+            self.snp_allele2 = node[:]['allele2']
+            self.n_snp = self.snp_pos.shape[0]
 
-        # get numpy array of SNP positions
-        node = snp_tab_h5.getNode(node_name)
-        self.snp_pos = node[:]['pos']
-        self.snp_allele1 = node[:]['allele1']
-        self.snp_allele2 = node[:]['allele2']
-        self.n_snp = self.snp_pos.shape[0]
+            self.haplotypes = hap_h5.getNode(node_name)
+            
+            if samples:
+                # reduce set of SNPs and indels to ones that are
+                # polymorphic in provided list of samples
+                samp_idx = self.get_sample_indices(hap_h5, samples)
 
-        self.haplotypes = hap_h5.getNode(node_name)
+                hap_idx = np.empty(samp_idx.shape[0]*2, dtype=np.int)
+                hap_idx[0::2] = samp_idx*2
+                hap_idx[1::2] = samp_idx*2 + 1
+                haps = self.haplotypes[:,hap_idx]
+
+                # count number of ref and non-ref alleles,
+                # ignoring undefined (-1s)
+                nonref_count = np.apply_along_axis(np.sum, 1, haps == 1)
+                ref_count = np.apply_along_axis(np.sum, 1, haps == 0)
+                total_count = nonref_count + ref_count
+                is_polymorphic = (ref_count > 0) & (ref_count < total_count)
+
+                # reduce to set of polymorphic positions
+                sys.stderr.write("Reducing %d SNPs on chromosome "
+                                 "%s to %d positions that are polymorphic in "
+                                 "sample of %d individuals\n" %
+                                 (haps.shape[0], chrom_name, 
+                                  np.sum(is_polymorphic), len(samples)))
+                
+                self.haplotypes = haps[is_polymorphic,]
+                self.snp_pos = self.snp_pos[is_polymorphic]
+                self.snp_allele1 = self.snp_allele1[is_polymorphic]
+                self.snp_allele2 = self.snp_allele2[is_polymorphic]
+                self.n_snp = self.snp_pos.shape[0]
+
+                # regenerate index to point to reduced set of polymorphic SNPs
+                self.snp_index[:] = -1                
+                self.snp_index[self.snp_pos-1] = np.arange(self.n_snp,
+                                                           dtype=np.int32)
+                
+
+    
+    def get_hap_samples(self, h5f):
+        """Reads list of samples that are present in 'samples' table 
+        from haplotype HDF5 file"""
+        samples = None
+
+        if "/samples" in h5f:
+            samples = [row["name"] for row in h5f.root.samples]
+        else:
+            sys.stderr.write("WARNING: no samples associated with "
+                             "haplotype file %s\n" %
+                             h5f.filename)
+        return samples
+
+    
+
+
+    def get_sample_indices(self, hap_h5, samples):
+        hap_samples = self.get_hap_samples(hap_h5)
+        not_seen_samples = set(samples)
+        seen_samples = set([])
+        samp_idx = []
         
+        # get haplotype table indices of samples
+        for i in range(len(hap_samples)):
+            if hap_samples[i] in seen_samples:
+                sys.stderr.write("WARNING: sample %s is present multiple "
+                                 "times in haplotype table\n" % hap_samples[i])
+            elif hap_samples[i] in not_seen_samples:
+                # record index of this sample, add to set of samples
+                # we have already observed
+                samp_idx.append(i)
+                not_seen_samples.remove(hap_samples[i])
+                seen_samples.add(hap_samples[i])
+            else:
+                # this haplotype sample not in requested list
+                pass
+
+        if len(not_seen_samples) > 0:
+            raise ValueError("samples %s are not present in haplotype table"
+                             % ",".join(not_seen_samples))
         
+        return np.array(samp_idx, dtype=np.int)
+
         
 
     def is_snp(self, allele1, allele2):

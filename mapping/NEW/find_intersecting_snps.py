@@ -20,9 +20,9 @@ class DataFiles(object):
     datafiles"""
     
     def __init__(self, bam_filename, is_sorted, is_paired,
-                 output_dir = None, snp_dir = None,
-                 snp_tab_filename = None, snp_index_filename = None,
-                 haplotype_filename = None):
+                 output_dir=None, snp_dir=None,
+                 snp_tab_filename=None, snp_index_filename=None,
+                 haplotype_filename=None, samples=None):
         # flag indicating whether reads are paired-end
         self.is_paired = is_paired
         
@@ -71,8 +71,8 @@ class DataFiles(object):
             self.snp_tab_h5 = None
             self.snp_index_h5 = None
             self.hap_h5 = None
+
             
-        
         # separate input directory and bam filename
         tokens = self.bam_filename.split("/")
         bam_dir = "/".join(tokens[:-1])
@@ -97,10 +97,7 @@ class DataFiles(object):
             
         # TODO: could allow names of output files to be specified
         # on command line rather than appending name to prefix
-
-
         sys.stderr.write("prefix: %s\n" % self.prefix)
-
         
         if not is_sorted:
             util.sort_bam(self.bam_filename, self.prefix)
@@ -140,7 +137,8 @@ class DataFiles(object):
                                                  self.remap_filename))
 
 
-
+    
+        
     def close(self):
         """close open filehandles"""
         filehandles = [self.keep_bam, self.remap_bam, self.fastq1,
@@ -304,9 +302,20 @@ def parse_options():
     
     parser.add_argument("--haplotype",
                         help="Path to HDF5 file to read phased haplotypes "
-                        "from.",
+                        "from. When generating alternative reads "
+                        "use known haplotypes from this file rather "
+                        "than all possible allelic combinations.",
                         metavar="HAPLOTYPE_H5_FILE",
                         default=None)
+
+    parser.add_argument("--samples",
+                        help="Use only haplotypes from these samples. "
+                        "SAMPLES can either be a comma-delimited string "
+                        "of sample names or a file with one sample name "
+                        "per line. Sample names should match those "
+                        "present in the --haplotype file. Samples are "
+                        "ignored if no haplotype file is provided.",
+                        metavar="SAMPLES")
                         
     parser.add_argument("bam_filename", action='store',
                         help="Coordinate-sorted input BAM file "
@@ -325,6 +334,11 @@ def parse_options():
                          "--snp_index AND --haplotype) arguments must be "
                          "provided")
     
+    if options.samples and not options.haplotype:
+        # warn because no way to use samples if haplotype file not specified
+        sys.stderr.write("WARNING: ignoring --samples argument "
+                         "because --haplotype argument not provided")
+
     return options
 
 
@@ -510,10 +524,12 @@ def write_pair_fastq(fastq_file1, fastq_file2, orig_read1, orig_read2,
 
         i += 1
                          
-    
 
+
+        
     
-def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT):
+def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
+                 samples=None):
     cur_chrom = None
     cur_tid = None
     seen_chrom = set([])
@@ -556,7 +572,7 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT):
                 sys.stderr.write("reading SNPs from file '%s'\n" %
                                  files.snp_tab_h5.filename)
                 snp_tab.read_h5(files.snp_tab_h5, files.snp_index_h5,
-                                files.hap_h5, cur_chrom)                
+                                files.hap_h5, cur_chrom, samples)
             else:
                 snp_filename = "%s/%s.snps.txt.gz" % (files.snp_dir, cur_chrom)
                 sys.stderr.write("reading SNPs from file '%s'\n" % snp_filename)
@@ -610,8 +626,8 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT):
                 read_stats.discard_different_chromosome += 1
 
         else:
-            process_single_read(read, read_stats, files, snp_tab, max_seqs,
-                                max_snps)
+            process_single_read(read, read_stats, files, snp_tab,
+                                max_seqs, max_snps)
                 
     
     read_stats.write(sys.stderr)
@@ -749,7 +765,7 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
             read_stats.discard_excess_snps += 1
             return
 
-        if snp_tab.haplotypes:
+        if files.hap_h5:
             read_seqs = generate_haplo_reads(read.query, snp_idx,
                                              snp_read_pos,
                                              ref_alleles, alt_alleles,
@@ -790,13 +806,42 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
 
 
 
+def parse_samples(samples_str):
+    """Gets list of samples from --samples argument. This may be 
+    a comma-delimited string or a path to a file."""
 
+    if samples_str is None:
+        return None
+        
+    # first check if this is a path to a file
+    if os.path.exists(samples_str) and not os.path.isdir(samples_str):
+        samples = []
+        sys.stderr.write("reading samples from file '%s'" % samples_str)
+        f = open(samples_str)
+
+        for line in f:
+            samples.append(line.strip())
+    else:    
+        # otherwise assume comma-delimited string
+        if ("," not in samples_str and len(samples_str) > 15) \
+           or ("/" in samples_str):
+            sys.stderr.write("WARNING: --samples argument (%s) "
+                             "does not look like sample name "
+                             "but is not path to valid file. "
+                             "Assuming it is a sample name anyway."
+                             % samples_str)
+        samples = ",".split(samples_str)
+
+    return samples
+
+
+        
 def main(bam_filenames, is_paired_end=False,
          is_sorted=False, max_seqs=MAX_SEQS_DEFAULT,
          max_snps=MAX_SNPS_DEFAULT, output_dir=None,
          snp_dir=None, snp_tab_filename=None,
          snp_index_filename=None,
-         haplotype_filename=None):
+         haplotype_filename=None, samples=None):
 
     sys.stderr.write("OUTPUT_DIR: %s\n" % output_dir)
     
@@ -807,19 +852,18 @@ def main(bam_filenames, is_paired_end=False,
                       snp_index_filename=snp_index_filename,
                       haplotype_filename=haplotype_filename)
     
-    filter_reads(files, max_seqs=max_seqs, max_snps=max_snps)
+    filter_reads(files, max_seqs=max_seqs, max_snps=max_snps,
+                 samples=samples)
 
     files.close()
     
     
 
-    
-
-
-
 if __name__ == '__main__':
     options = parse_options()
 
+    samples = parse_samples(options.samples)
+    
     main(options.bam_filename,
          is_paired_end=options.is_paired_end, is_sorted=options.is_sorted,
          max_seqs=options.max_seqs, max_snps=options.max_snps,
@@ -827,6 +871,7 @@ if __name__ == '__main__':
          snp_dir=options.snp_dir,
          snp_tab_filename=options.snp_tab,
          snp_index_filename=options.snp_index,
-         haplotype_filename=options.haplotype)
+         haplotype_filename=options.haplotype,
+         samples=samples)
          
     

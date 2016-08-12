@@ -38,6 +38,7 @@ class Data(object):
                  read1_names = None,
                  read2_names = None,
                  snp_list = [['test_chrom', 1, "A", "C"]],
+                 hap_samples = ["samp1", "samp2", "samp3", "samp4"],
                  haplotypes = [[0, 1, 0, 1]]):
 
         if output_prefix is None:
@@ -61,7 +62,9 @@ class Data(object):
         self.genome_filename = self.genome_prefix + ".fa"
         self.chrom_names = list(chrom_names)
 
+        self.hap_samples = hap_samples
         self.haplotypes = haplotypes
+        
         
         self.fastq1_filename = self.prefix + "_1.fq"
         self.fastq2_filename = self.prefix + "_2.fq"
@@ -218,6 +221,21 @@ class Data(object):
             f.close()
 
 
+
+    def write_hap_samples(self, h5f):
+        """Write table containing sample names to HDF5 file"""
+        class SamplesTab(tables.IsDescription):
+            name = tables.StringCol(64)
+                
+        table = h5f.createTable(h5f.root, "samples", SamplesTab)
+
+        for samp in self.hap_samples:
+            row = table.row
+            row['name'] = samp
+            row.append()
+        
+        
+            
     def write_snp_tab_h5(self):        
         snp_tab_h5 = tables.openFile(self.snp_tab_filename, "w")
 
@@ -244,6 +262,8 @@ class Data(object):
             row['allele2'] = snp[3]
             row.append()
 
+        self.write_hap_samples(snp_tab_h5)
+        
         snp_tab_h5.close()
 
         
@@ -283,6 +303,8 @@ class Data(object):
                                          filters=zlib_filter)
             carray[:] = haps
             
+        self.write_hap_samples(hap_h5)
+
         hap_h5.close()
         
             
@@ -313,6 +335,8 @@ class Data(object):
             pos = snp[1]
             carray[pos-1] = snp_index
             snp_index += 1
+            
+        self.write_hap_samples(snp_index_h5)
 
         snp_index_h5.close()
 
@@ -1334,9 +1358,8 @@ class TestPairedEnd:
 
 
 ## 
-## TODO: test paired-end haplotypes...
+## TODO: test haplotypes when list of samples provided...
 ##
-
 
 class TestHaplotypesSingleEnd:
     """tests for single end read mapping, using known haplotypes"""
@@ -1630,6 +1653,222 @@ class TestHaplotypesSingleEnd:
         lines = read_bam(test_data.bam_keep_filename)
         assert len(lines) == 1
         assert lines[0] == ''
+        
+        test_data.cleanup()
+
+
+
+    
+        
+    def test_haplotypes_single_one_read_two_snps_samples(self):
+        """Test whether 1 read overlapping 2 SNPs works correctly"""
+
+        ##
+        ## Test with all possible combinations of haplotypes
+        ## present in data
+        ##
+        test_data = Data(snp_list = [['test_chrom', 1, "A", "C"],
+                                     ['test_chrom', 4, "G", "A"]],
+                         read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
+                         read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
+                         haplotypes=[[1,0,1,0],
+                                     [1,0,0,1]],
+                         hap_samples=["samp1", "samp2"])
+        
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    snp_tab_filename=test_data.snp_tab_filename,
+                                    snp_index_filename=test_data.snp_index_filename,
+                                    haplotype_filename=test_data.haplotype_filename,
+                                    samples=["samp1", "samp2"])
+
+        #
+        # Verify new fastq is correct. There should be 3 reads
+        # with all possible configurations of the two alleles, except
+        # for the original configuration.
+        #
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 12
+
+        seqs = [lines[1], lines[5], lines[9]]
+        sys.stderr.write("SEQS: %s\n" % repr(seqs))
+
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq1 = "".join(l)
+
+        l = list(test_data.read1_seqs[0])
+        l[3] = 'A'
+        new_seq2 = "".join(l)
+
+        # read with both non-ref alleles
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        l[3] = 'A'
+        new_seq3 = "".join(l)
+
+        assert len(seqs) == 3
+        assert new_seq1 in seqs
+        assert new_seq2 in seqs
+        assert new_seq3 in seqs
+
+
+        #
+        # Check the new reads are named correctly
+        #
+        assert lines[0] == "@read1.1.1.3"
+        assert lines[4] == "@read1.1.2.3"
+        assert lines[8] == "@read1.1.3.3"
+        
+        
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+        
+        ##
+        ## Test with all possible combinations of haplotypes
+        ## present in data, but only running on one of two samples
+        ##
+        test_data = Data(snp_list = [['test_chrom', 1, "A", "C"],
+                                     ['test_chrom', 4, "G", "A"]],
+                         read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
+                         read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
+                         haplotypes=[[1,0,1,0],
+                                     [1,0,0,1]],
+                         hap_samples=["samp1", "samp2"])
+        
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        # run using only samp2 
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    snp_tab_filename=test_data.snp_tab_filename,
+                                    snp_index_filename=test_data.snp_index_filename,
+                                    haplotype_filename=test_data.haplotype_filename,
+                                    samples=["samp2"])
+
+        # Verify new fastq is correct. There should be 2 reads
+        # representing both haplotypes from samp2
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 8
+
+        seqs = [lines[1], lines[5]]
+        sys.stderr.write("SEQS: %s\n" % repr(seqs))
+
+        # read representing 1st haplotype from samp2
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq1 = "".join(l)
+
+        
+        # read representing 2nd haplotype from samp2
+        l = list(test_data.read1_seqs[0])
+        l[3] = 'A'
+        new_seq2 = "".join(l)
+
+        assert len(seqs) == 2
+        assert new_seq1 in seqs
+        assert new_seq2 in seqs
+
+
+        #
+        # Check the new reads are named correctly
+        #
+        assert lines[0] == "@read1.1.1.2"
+        assert lines[4] == "@read1.1.2.2"
+        
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+                
+
+        # run using only samp1 
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    snp_tab_filename=test_data.snp_tab_filename,
+                                    snp_index_filename=test_data.snp_index_filename,
+                                    haplotype_filename=test_data.haplotype_filename,
+                                    samples=["samp1"])
+
+        # Verify new fastq is correct. There should be 1 read
+        # representing non-reference haplotype from samp1
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 4
+
+        seqs = [lines[1]]
+        sys.stderr.write("SEQS: %s\n" % repr(seqs))
+
+        # read representing 1st haplotype from samp1
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        l[3] = 'A'
+        new_seq1 = "".join(l)
+
+        assert new_seq1 in seqs
+
+        # Check the new read is named correctly
+        assert lines[0] == "@read1.1.1.1"
+        
+        # Verify to.remap bam is the same as the input bam file.
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
         
         test_data.cleanup()
 

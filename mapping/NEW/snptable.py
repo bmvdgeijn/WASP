@@ -71,7 +71,7 @@ class SNPTable(object):
                 # reduce set of SNPs and indels to ones that are
                 # polymorphic in provided list of samples
                 samp_idx = self.get_sample_indices(hap_h5, samples)
-
+                
                 hap_idx = np.empty(samp_idx.shape[0]*2, dtype=np.int)
                 hap_idx[0::2] = samp_idx*2
                 hap_idx[1::2] = samp_idx*2 + 1
@@ -85,7 +85,7 @@ class SNPTable(object):
                 is_polymorphic = (ref_count > 0) & (ref_count < total_count)
 
                 # reduce to set of polymorphic positions
-                sys.stderr.write("Reducing %d SNPs on chromosome "
+                sys.stderr.write("reducing %d SNPs on chromosome "
                                  "%s to %d positions that are polymorphic in "
                                  "sample of %d individuals\n" %
                                  (haps.shape[0], chrom_name, 
@@ -112,13 +112,14 @@ class SNPTable(object):
         if "/samples" in h5f:
             samples = [row["name"] for row in h5f.root.samples]
         else:
-            sys.stderr.write("WARNING: no samples associated with "
-                             "haplotype file %s\n" %
-                             h5f.filename)
+            raise ValueError("Cannot retrieve haplotypes for "
+                             "specified samples, because haplotype "
+                             "file %s does not contain 'samples' table. "
+                             "May need to regenerate haplotype HDF5 file "
+                             "using snp2h5" % h5f.filename)
         return samples
 
     
-
 
     def get_sample_indices(self, hap_h5, samples):
         hap_samples = self.get_hap_samples(hap_h5)

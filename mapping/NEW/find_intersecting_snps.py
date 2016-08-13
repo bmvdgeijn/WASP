@@ -86,8 +86,6 @@ class DataFiles(object):
             if output_dir.endswith("/"):
                 # strip trailing '/' from output dir name
                 output_dir = output_dir[:-1]
-
-        sys.stderr.write("OUTPUT_DIR: %s\n" % output_dir)
                 
         name_split = filename.split(".")
         if len(name_split) > 1:
@@ -108,6 +106,9 @@ class DataFiles(object):
         self.keep_filename = self.prefix + ".keep.bam"
         self.remap_filename = self.prefix + ".to.remap.bam"
 
+        sys.stderr.write("reading reads from:\n  %s\n" %
+                         self.bam_sort_filename)
+        
         sys.stderr.write("writing output files to:\n")
         
         if self.is_paired:
@@ -132,9 +133,8 @@ class DataFiles(object):
                                       template=self.input_bam)
         self.remap_bam = pysam.Samfile(self.remap_filename, "wb",
                                        template=self.input_bam)
-        sys.stderr.write("  %s\n  %s\n  %s\n" % (self.bam_sort_filename,
-                                                 self.keep_filename,
-                                                 self.remap_filename))
+        sys.stderr.write("  %s\n  %s\n" % (self.keep_filename,
+                                           self.remap_filename))
 
 
     
@@ -233,16 +233,16 @@ class ReadStats(object):
 
 
 def parse_options():
-    # TODO: better description
-    parser=argparse.ArgumentParser(description="Looks for SNPs and indels "
-                                   "overlapping reads. If a read overlaps "
-                                   "SNPs, alternative versions of the read "
-                                   "containing different alleles are created "
-                                   "and written to files for remapping. Reads "
-                                   "that do not overlap SNPs or indels are "
-                                   "written to a 'keep' BAM file."
-                                   "Reads that overlap indels are presently "
-                                   "discarded.")
+    
+    parser = argparse.ArgumentParser(description="Looks for SNPs and indels "
+                                     "overlapping reads. If a read overlaps "
+                                     "SNPs, alternative versions of the read "
+                                     "containing different alleles are created "
+                                     "and written to files for remapping. Reads "
+                                    "that do not overlap SNPs or indels are "
+                                     "written to a 'keep' BAM file."
+                                     "Reads that overlap indels are presently "
+                                     "discarded.")
                                    
 
     parser.add_argument("--is_paired_end", "-p", action='store_true',
@@ -309,12 +309,14 @@ def parse_options():
                         default=None)
 
     parser.add_argument("--samples",
-                        help="Use only haplotypes from these samples. "
+                        help="Use only haplotypes and SNPs that are polymorphic in these samples. "
                         "SAMPLES can either be a comma-delimited string "
-                        "of sample names or a file with one sample name "
-                        "per line. Sample names should match those "
-                        "present in the --haplotype file. Samples are "
-                        "ignored if no haplotype file is provided.",
+                        "of sample names or a path to a file with one sample name "
+                        "per line (file is assumed to be whitespace-delimited and "
+                        "first column is assumed to be sample name). "
+                        "Sample names should match those present in the "
+                        "--haplotype file. Samples are ignored if no haplotype "
+                        "file is provided.",
                         metavar="SAMPLES")
                         
     parser.add_argument("bam_filename", action='store',
@@ -666,7 +668,7 @@ def process_paired_read(read1, read2, read_stats, files,
                 read_stats.discard_excess_snps += 1
                 return
 
-            if snp_tab.haplotypes:
+            if files.hap_h5:
                 # generate reads using observed set of haplotypes
                 read_seqs = generate_haplo_reads(read.query, snp_idx,
                                                  snp_read_pos,
@@ -808,7 +810,8 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
 
 def parse_samples(samples_str):
     """Gets list of samples from --samples argument. This may be 
-    a comma-delimited string or a path to a file."""
+    a comma-delimited string or a path to a file. If a file is provided 
+    then the first column of the file is assumed to be the sample name"""
 
     if samples_str is None:
         return None
@@ -816,11 +819,20 @@ def parse_samples(samples_str):
     # first check if this is a path to a file
     if os.path.exists(samples_str) and not os.path.isdir(samples_str):
         samples = []
-        sys.stderr.write("reading samples from file '%s'" % samples_str)
-        f = open(samples_str)
+
+        if samples_str.endswith(".gz"):
+            f = gzip.open(samples_str)
+        else:
+            f = open(samples_str)
 
         for line in f:
-            samples.append(line.strip())
+            # assume first token in line is sample name
+            samples.append(line.split()[0])
+
+        sys.stderr.write("read %d sample names from file '%s'\n" %
+                         (len(samples), samples_str))
+                    
+        f.close()
     else:    
         # otherwise assume comma-delimited string
         if ("," not in samples_str and len(samples_str) > 15) \
@@ -830,7 +842,10 @@ def parse_samples(samples_str):
                              "but is not path to valid file. "
                              "Assuming it is a sample name anyway."
                              % samples_str)
-        samples = ",".split(samples_str)
+
+        samples = samples_str.split(",")
+        sys.stderr.write("SAMPLES: %s\n"% repr(samples))
+
 
     return samples
 
@@ -843,8 +858,6 @@ def main(bam_filenames, is_paired_end=False,
          snp_index_filename=None,
          haplotype_filename=None, samples=None):
 
-    sys.stderr.write("OUTPUT_DIR: %s\n" % output_dir)
-    
     files = DataFiles(bam_filenames,  is_sorted, is_paired_end,
                       output_dir=output_dir,
                       snp_dir=snp_dir,

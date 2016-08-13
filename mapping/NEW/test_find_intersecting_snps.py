@@ -81,8 +81,7 @@ class Data(object):
         self.fastq_remap_filename = self.output_prefix + ".remap.fq.gz"
         self.fastq1_remap_filename = self.output_prefix + ".remap.fq1.gz"
         self.fastq2_remap_filename = self.output_prefix + ".remap.fq2.gz"
-
-
+        
         self.snp_tab_filename = self.prefix + "_snp_tab.h5"
         self.snp_index_filename = self.prefix + "_snp_index.h5"
         self.haplotype_filename = self.prefix + "_haplotype.h5"
@@ -923,6 +922,7 @@ class TestSingleEnd:
 
 
 
+class TestCLI:
     def test_single_cli(self):
         """Make sure the command line interface
         for single-end read mapping works"""
@@ -995,6 +995,150 @@ class TestSingleEnd:
         os.remove("test_output_dir/test.sort.bam")
         os.rmdir(out_dir)
 
+
+
+    def test_single_cli_haplotypes_samples(self):
+        ##
+        ## Test with all possible combinations of haplotypes
+        ## present in data
+        ##
+        test_data = Data(snp_list = [['test_chrom', 1, "A", "C"],
+                                     ['test_chrom', 4, "G", "A"]],
+                         read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
+                         read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
+                         haplotypes=[[1,0,1,0],
+                                     [1,0,0,1]],
+                         hap_samples=["samp1", "samp2"])
+        
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        command = ['python', 'find_intersecting_snps.py',
+                   test_data.bam_filename, 
+                   '--haplotype', test_data.haplotype_filename,
+                   '--snp_tab', test_data.snp_tab_filename,
+                   '--snp_index', test_data.snp_index_filename,
+                   '--samples', 'samp1,samp2']
+        
+        subprocess.check_call(command)
+
+        # Verify new fastq is correct. There should be 3 reads
+        # with all possible configurations of the two alleles, except
+        # for the original configuration.
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 12
+
+        seqs = [lines[1], lines[5], lines[9]]
+        sys.stderr.write("SEQS: %s\n" % repr(seqs))
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq1 = "".join(l)
+
+        l = list(test_data.read1_seqs[0])
+        l[3] = 'A'
+        new_seq2 = "".join(l)
+
+        # read with both non-ref alleles
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        l[3] = 'A'
+        new_seq3 = "".join(l)
+
+        assert len(seqs) == 3
+        assert new_seq1 in seqs
+        assert new_seq2 in seqs
+        assert new_seq3 in seqs
+
+
+        # Check the new reads are named correctly
+        assert lines[0] == "@read1.1.1.3"
+        assert lines[4] == "@read1.1.2.3"
+        assert lines[8] == "@read1.1.3.3"
+        
+
+        # Verify to.remap bam is the same as the input bam file.
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+
+        # repeat test, but use samples file instead of
+        # sample names on command line
+        hap_samples = ["samp1", "samp2"]
+        test_data = Data(snp_list = [['test_chrom', 1, "A", "C"],
+                                     ['test_chrom', 4, "G", "A"]],
+                         read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
+                         read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
+                         haplotypes=[[1,0,1,0],
+                                     [1,0,0,1]],
+                         hap_samples=hap_samples)
+        
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        samp_filename = test_data.data_dir + "/samples.txt"
+        f = open(samp_filename, 'w')
+        for samp in hap_samples:
+            f.write("%s testdata\n" % samp)
+
+        f.close()
+        command = ['python', 'find_intersecting_snps.py',
+                   test_data.bam_filename, 
+                   '--haplotype', test_data.haplotype_filename,
+                   '--snp_tab', test_data.snp_tab_filename,
+                   '--snp_index', test_data.snp_index_filename,
+                   '--samples', samp_filename]
+        
+        subprocess.check_call(command)
+        
+        # Verify new fastq is correct. There should be 3 reads
+        # with all possible configurations of the two alleles, except
+        # for the original configuration.
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 12
+
+        seqs = [lines[1], lines[5], lines[9]]
+        sys.stderr.write("SEQS: %s\n" % repr(seqs))
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq1 = "".join(l)
+
+        l = list(test_data.read1_seqs[0])
+        l[3] = 'A'
+        new_seq2 = "".join(l)
+
+        # read with both non-ref alleles
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        l[3] = 'A'
+        new_seq3 = "".join(l)
+
+        assert len(seqs) == 3
+        assert new_seq1 in seqs
+        assert new_seq2 in seqs
+        assert new_seq3 in seqs
+
+        os.unlink(samp_filename)
+        test_data.cleanup()
 
 
 

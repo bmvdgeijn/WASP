@@ -6,18 +6,17 @@ import glob
 
 def read_samples():
     """Function to get names and fastq paths from a sample file specified
-    in the configuration. Input file is expected to have 3 columns:
-    <unique_sample_id> <fastq1_path> <fastq2_path>. Modify this function
+    in the configuration. Input file is expected to have 4 columns:
+    <1000genomes_id> <unique_sample_id> <fastq1_path> <fastq2_path>. Modify this function
     as needed to provide a dictionary of sample_id keys and (fastq1, fastq1) 
     values"""
     f = open(config['sample_file'], "r")
     samp_dict = {}
     for line in f:
         words = line.strip().split()
-        samp_dict[words[0]] = (words[1], words[2])
+        samp_dict[words[1]] = (words[2], words[3])
 
     return samp_dict
-
 
 
 def get_chromosomes():
@@ -111,6 +110,7 @@ rule find_intersecting_snps_paired_end:
          "    --snp_tab {input.snp_tab} "
          "    --snp_index {input.snp_index} "
          "    --haplotype {input.haplotype} "
+         "    --samples {config[sample_file]} "
          "    {input.bam}"
 
 

@@ -91,8 +91,7 @@ void usage(char **argv) {
 
 
 void parse_args(Arguments *args, int argc, char **argv) {
-  int c, i;
-  char *format_str = NULL;
+  int c;
   
    static struct option loptions[] = {
      {"chrom",     required_argument, 0, 'c'},

@@ -64,7 +64,7 @@ long impute_count_fields(gzFile fh) {
 
 
 void impute_parse_haplotypes(char *haplotypes, char *cur, long n_sample) {
-  long expect_n, i, val;
+  long expect_n, i;
   char *tok;
   char delim[] = " \t";
   
@@ -101,7 +101,7 @@ void impute_parse_haplotypes(char *haplotypes, char *cur, long n_sample) {
 
 
 void impute_parse_geno_probs(float *geno_probs, char *cur, long n_sample) {
-  long expect_n, i, val;
+  long expect_n, i;
   char delim[] = " \t";
   char *tok;
   
@@ -150,7 +150,7 @@ void impute_parse_geno_probs(float *geno_probs, char *cur, long n_sample) {
 int impute_read_line(gzFile fh, ImputeInfo *impute_info, SNP *snp,
 		     float *geno_probs, char *haplotypes) {
   char *cur, *token;
-  int n_fix_header, ref_len, alt_len;
+  int alt_len;
   size_t tok_num;
   const char delim[] = " \t";
 
@@ -208,4 +208,5 @@ int impute_read_line(gzFile fh, ImputeInfo *impute_info, SNP *snp,
     impute_parse_haplotypes(haplotypes, cur, impute_info->n_sample);
   }
 
+  return 0;
 }

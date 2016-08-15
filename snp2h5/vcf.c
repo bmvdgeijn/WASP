@@ -485,4 +485,6 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   }
 
   /* my_free(line); */
+
+  return 0;
 }

@@ -16,7 +16,8 @@
  * that describes the HDF5 table used to store Samples data.
  *
  */
-SampleTab *sample_tab_new(hid_t h5file, size_t n_record) {
+SampleTab *sample_tab_new(hid_t h5file, const char *chrom_name,
+			  size_t n_record) {
   herr_t status;
   SampleTab *tab;
   Sample sample_desc;
@@ -40,8 +41,8 @@ SampleTab *sample_tab_new(hid_t h5file, size_t n_record) {
   tab->field_offset[0] = HOFFSET(Sample, name);
     
   /* title and name of table */
-  tab->title = util_str_dup("samples");
-  tab->name = util_str_dup("samples");
+  tab->title = util_str_concat(chrom_name, " samples", NULL);
+  tab->name = util_str_concat("samples_", chrom_name, NULL);
 
   /* set chunk size and compression */
   tab->chunk_size = SAMPLETAB_CHUNK_SIZE;
@@ -56,7 +57,9 @@ SampleTab *sample_tab_new(hid_t h5file, size_t n_record) {
 			  tab->chunk_size, NULL, tab->compress, NULL);
   
   if(status < 0) {
-    my_err("%s:%d: could not create samples table\n", __FILE__, __LINE__);
+    my_err("%s:%d: could not create samples table "
+	   "for chromosome %s\n", chrom_name,
+	   __FILE__, __LINE__);
   }
 
   return tab;
@@ -64,8 +67,6 @@ SampleTab *sample_tab_new(hid_t h5file, size_t n_record) {
 
 
 void sample_tab_free(SampleTab *tab) {
-  int i;
-  
   H5Tclose(tab->name_type);
   my_free(tab->title);
   my_free(tab->name);
@@ -78,17 +79,40 @@ void sample_tab_free(SampleTab *tab) {
  * Creates a new samples table HDF5 file pointed to by h5file handle
  * and populates it using provided array of samples
  */
-SampleTab *sample_tab_create(hid_t h5file, Sample *samples, size_t n_sample) {
+SampleTab *sample_tab_create(hid_t h5file, const char *chrom_name,
+			     Sample *samples, size_t n_sample) {
   SampleTab *tab;
   int i;
 
-  tab = sample_tab_new(h5file, n_sample);
+  tab = sample_tab_new(h5file, chrom_name, n_sample);
   
   for(i = 0; i < n_sample; i++) {
-    sample_tab_append_row(tab, &samples[i]);
+    sample_tab_append_row(tab,  &samples[i]);
   }
   
   return tab;
+}
+
+
+
+SampleTab *sample_tab_from_names(hid_t h5file, const char *chrom_name,
+				 char **sample_names, size_t n_sample) {
+  Sample *samples;
+  SampleTab *samp_tab;
+  int i;
+  
+  samples = my_malloc(sizeof(Sample) * n_sample);
+      
+  for(i = 0; i < n_sample; i++) {
+    util_strncpy(samples[i].name, sample_names[i],
+		 sizeof(samples[i].name));
+  }
+
+  samp_tab = sample_tab_create(h5file, chrom_name, samples, n_sample);
+  
+  my_free(samples);
+
+  return samp_tab;
 }
 
 

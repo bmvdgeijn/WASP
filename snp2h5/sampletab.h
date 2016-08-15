@@ -42,8 +42,14 @@ typedef struct {
 } SampleTab;
 
 
-SampleTab *sample_tab_new(hid_t h5file, size_t n_record);
-SampleTab *sample_tab_from_names(hid_t h5file, const char *sample_names,
+SampleTab *sample_tab_new(hid_t h5file, const char *chrom_name,
+			  size_t n_record);
+
+SampleTab *sample_tab_create(hid_t h5file, const char *chrom_name,
+			     Sample *samples, size_t n_sample);
+
+SampleTab *sample_tab_from_names(hid_t h5file, const char *chrom_name,
+				 char **sample_names,
 				 size_t n_sample);
 
 void sample_tab_free(SampleTab *tab);

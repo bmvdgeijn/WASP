@@ -70,7 +70,8 @@ class SNPTable(object):
             if samples:
                 # reduce set of SNPs and indels to ones that are
                 # polymorphic in provided list of samples
-                samp_idx = self.get_sample_indices(hap_h5, samples)
+                samp_idx = self.get_sample_indices(hap_h5, chrom_name,
+                                                   samples)
                 
                 hap_idx = np.empty(samp_idx.shape[0]*2, dtype=np.int)
                 hap_idx[0::2] = samp_idx*2
@@ -104,25 +105,28 @@ class SNPTable(object):
                 
 
     
-    def get_hap_samples(self, h5f):
+    def get_hap_samples(self, h5f, chrom_name):
         """Reads list of samples that are present in 'samples' table 
         from haplotype HDF5 file"""
         samples = None
 
-        if "/samples" in h5f:
-            samples = [row["name"] for row in h5f.root.samples]
+        node_name = "/samples_%s" % chrom_name
+        
+        if node_name in h5f:
+            node = h5f.getNode(node_name)
+            samples = [row["name"] for row in node]
         else:
             raise ValueError("Cannot retrieve haplotypes for "
                              "specified samples, because haplotype "
-                             "file %s does not contain 'samples' table. "
+                             "file %s does not contain '%s' table. "
                              "May need to regenerate haplotype HDF5 file "
-                             "using snp2h5" % h5f.filename)
+                             "using snp2h5" % (h5f.filename, node_name))
         return samples
 
     
 
-    def get_sample_indices(self, hap_h5, samples):
-        hap_samples = self.get_hap_samples(hap_h5)
+    def get_sample_indices(self, hap_h5, chrom_name, samples):
+        hap_samples = self.get_hap_samples(hap_h5, chrom_name)
         not_seen_samples = set(samples)
         seen_samples = set([])
         samp_idx = []
@@ -143,8 +147,10 @@ class SNPTable(object):
                 pass
 
         if len(not_seen_samples) > 0:
-            raise ValueError("samples %s are not present in haplotype table"
-                             % ",".join(not_seen_samples))
+            sys.stderr.write("WARNING: the following samples are not "
+                             "present in haplotype table for chromosome "
+                             "%s: %s" %
+                             (chrom_name, ",".join(not_seen_samples)))
         
         return np.array(samp_idx, dtype=np.int)
 

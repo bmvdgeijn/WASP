@@ -180,6 +180,10 @@ class ReadStats(object):
         # number of reads discarded because too many allelic combinations
         self.discard_excess_reads = 0
         
+        # reads where we expected to see other pair, but it was missing
+        # possibly due to read-pairs with different names
+        self.discard_missing_pair = 0
+        
         # number of single reads kept
         self.keep_single = 0
         # number of read pairs kept
@@ -199,6 +203,7 @@ class ReadStats(object):
                          "  secondary alignment: %d\n"
                          "  excess overlapping snps: %d\n"
                          "  excess allelic combinations: %d\n"
+                         "  missing pairs (e.g. mismatched read names): %d\n"
                          "KEEP reads:\n"
                          "  single-end: %d\n"
                          "  pairs: %d\n"
@@ -211,6 +216,7 @@ class ReadStats(object):
                           self.discard_secondary,
                           self.discard_excess_snps,
                           self.discard_excess_reads,
+                          self.discard_missing_pair,
                           self.keep_single,
                           self.keep_pair,
                           self.remap_single,
@@ -226,7 +232,7 @@ class ReadStats(object):
             if mismatch_pct > 10.0:
                 sys.stderr.write("WARNING: many read SNP overlaps do not match "
                                  "either allele (%.1f%%). SNP coordinates "
-                                 "in input file xmay be incorrect.\n" %
+                                 "in input file may be incorrect.\n" %
                                  mismatch_pct)
     
 
@@ -445,12 +451,28 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
             
             cur_pos = read_pos[i] + 1
 
-        if read_len > cur_pos:
+        if read_len >= cur_pos:
             # add final segment
             new_read.append(read_seq[cur_pos-1:read_len])
-
+            
         if not missing_data:
-            new_read_list.append("".join(new_read))
+            new_seq = "".join(new_read)
+
+            # sanity check: read should be same length as original
+            if len(new_seq) != read_len:
+                raise ValueError("Expected read len to be %d but "
+                                 "got %d.\n"
+                                 "ref_alleles: %s\n"
+                                 "alt_alleles: %s\n"
+                                 "read_pos: %s\n"
+                                 "snp_idx: %s\n"
+                                 "haps: %s\n" 
+                                 % (read_len, len(new_seq),
+                                    repr(ref_alleles), repr(alt_alleles),
+                                    repr(read_pos), repr(snp_idx),
+                                    repr(haps)))
+
+            new_read_list.append("".join(new_seq))
 
     return new_read_list
 
@@ -515,7 +537,7 @@ def write_pair_fastq(fastq_file1, fastq_file2, orig_read1, orig_read2,
         pos_str = "%d-%d" % (min(orig_read1.pos+1, orig_read2.pos+1),
                              max(orig_read1.pos+1, orig_read2.pos+1))
         
-        name = "%s.%s.%d.%d" % (orig_read1.qname, pos_str, i+1, n_pair)
+        name = "%s.%s.%d.%d" % (orig_read1.qname, pos_str, i, n_pair)
         
         fastq_file1.write("@%s\n%s\n+%s\n%s\n" %
                           (name, pair[0], name, orig_read1.qual))
@@ -556,6 +578,7 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
                 sys.stderr.write("WARNING: failed to find pairs for %d "
                                  "reads on this chromosome\n" %
                                  len(read_pair_cache))
+                read_stats.discard_missing_pair += len(read_pair_cache)
             read_pair_cache = {}
             cache_size = 0
             read_count = 0
@@ -596,9 +619,13 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
             elif(read.next_reference_name == cur_chrom or
                  read.next_reference_name == "="):
                 # other pair mapped to same chrom
+
+                # sys.stderr.write("flag: %s" % read.flag)
                 if not read.is_proper_pair:
+                    # sys.stderr.write(' => improper\n')
                     read_stats.discard_improper_pair += 1
                     continue
+                # sys.stderr.write(' => proper\n')
 
                 if read.qname in read_pair_cache:
                     # we already saw prev pair, retrieve from cache
@@ -630,7 +657,12 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
         else:
             process_single_read(read, read_stats, files, snp_tab,
                                 max_seqs, max_snps)
-                
+
+    if len(read_pair_cache) != 0:
+        sys.stderr.write("WARNING: failed to find pairs for %d "
+                         "reads on this chromosome\n" %
+                         len(read_pair_cache))
+        read_stats.discard_missing_pair += len(read_pair_cache)
     
     read_stats.write(sys.stderr)
                      
@@ -729,7 +761,7 @@ def process_paired_read(read1, read2, read_stats, files,
         # BAM that is not coordinate sorted. Possibly remove this...
         files.remap_bam.write(read1)
         files.remap_bam.write(read2)
-        read_stats.keep_pair += 1
+        read_stats.remap_pair += 1
         
 
         
@@ -795,6 +827,7 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
             # this is probably not necessary with new implmentation
             # but kept for consistency with previous version of script
             files.remap_bam.write(read)
+            read_stats.remap_single += 1
         else:
             # discard read
             read_stats.discard_excess_reads += 1
@@ -876,6 +909,8 @@ if __name__ == '__main__':
     options = parse_options()
 
     samples = parse_samples(options.samples)
+
+    sys.stderr.write("command line: %s\n" % " ".join(sys.argv))
     
     main(options.bam_filename,
          is_paired_end=options.is_paired_end, is_sorted=options.is_sorted,

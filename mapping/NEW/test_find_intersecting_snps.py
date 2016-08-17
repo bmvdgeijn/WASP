@@ -222,16 +222,18 @@ class Data(object):
 
 
     def write_hap_samples(self, h5f):
-        """Write table containing sample names to HDF5 file"""
+        """Write tables containing sample names to HDF5 file"""
         class SamplesTab(tables.IsDescription):
             name = tables.StringCol(64)
-                
-        table = h5f.createTable(h5f.root, "samples", SamplesTab)
 
-        for samp in self.hap_samples:
-            row = table.row
-            row['name'] = samp
-            row.append()
+        for chrom_name in self.chrom_names:
+            table = h5f.createTable(h5f.root, "samples_%s" % chrom_name,
+                                    SamplesTab)
+
+            for samp in self.hap_samples:
+                row = table.row
+                row['name'] = samp
+                row.append()
         
         
             
@@ -1643,6 +1645,57 @@ class TestHaplotypesSingleEnd:
         old_lines = read_bam(test_data.bam_filename)
         new_lines = read_bam(test_data.bam_keep_filename)
         assert old_lines == new_lines
+
+
+        # Test with SNP at one before last position in read
+        # since there was a bug with this situation
+        test_data = Data(snp_list = [['test_chrom', 29, "A", "C"]],
+                         hap_samples = ["samp1", "samp2", "samp3", "samp4"],
+                         haplotypes = [[0, 1, 0, 1]])
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    snp_tab_filename=test_data.snp_tab_filename,
+                                    snp_index_filename=test_data.snp_index_filename,
+                                    haplotype_filename=test_data.haplotype_filename)
+                                    
+
+        #
+        # Verify new fastq is correct. The last base of the first read
+        # should be switched from a C to an A.
+        #
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 4
+
+        l = list(test_data.read1_seqs[0])
+        l[28] = 'C'
+        new_seq = "".join(l)
+
+        assert lines[1] == new_seq
+        assert lines[3] == test_data.read1_quals[0]
+
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
 
         
         test_data.cleanup()

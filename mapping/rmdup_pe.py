@@ -77,6 +77,37 @@ def main(input_bam, output_bam):
 
 
 
+def update_read_cache(cur_by_mpos, keep_cache, discard_cache,
+                      read_stats, outfile):
+    for mpos, read_list in cur_by_mpos.items():
+        # only keep one read from list with same pos,mate_pos pair
+        # shuffle order of reads in list and take first
+        # as 'keep' read
+        random.shuffle(read_list)
+        keep_read = read_list.pop()
+        if keep_read.qname in keep_cache:
+            raise ValueError("read %s is already "
+                             "in keep cache" % keep_read.qname)
+        keep_cache[keep_read.qname] = keep_read
+
+        # rest of reads get discarded
+        for discard_read in read_list:
+            # corner case: if reads are completely overlapping
+            # (same start pos) then we either want to keep both
+            # or discard both right now
+            if discard_read.qname in discard_cache:
+                # discard both reads from pair
+                del discard_cache[discard_read.qname]
+            elif discard_read.qname == keep_read.qname:
+                # keep both reads from pair
+                read_stats.keep_pair += 1
+                outfile.write(keep_read)
+                outfile.write(discard_read)
+                del keep_cache[keep_read.qname]
+            else:
+                discard_cache[discard_read.qname] = discard_read
+
+    
 def filter_reads(infile, outfile):
     read_stats = ReadStats()
     
@@ -87,9 +118,8 @@ def filter_reads(infile, outfile):
     keep_cache = {}
     # name of reads to discard
     discard_cache = {}
+    cur_by_mpos = {}
 
-    keep_cache_size = 0
-    discard_cache_size = 0
     read_count = 0
 
     # current position on chromosome
@@ -105,17 +135,26 @@ def filter_reads(infile, outfile):
             # this is a new chromosome
             cur_chrom = infile.getrname(read.tid)
 
-            if keep_cache_size + discard_cache_size != 0:
+            if cur_pos:
+                update_read_cache(cur_by_mpos, keep_cache, discard_cache,
+                                  read_stats, outfile)
+            
+            if len(keep_cache) + len(discard_cache) != 0:
                 sys.stderr.write("WARNING: failed to find pairs for %d "
                                  "reads on this chromosome\n" %
-                                 (keep_cache_size + discard_cache_size))
-                read_stats.discard_missing_pair += keep_cache_size + \
-                                                   discard_cache_size
-
+                                 (len(keep_cache) + len(discard_cache)))
+                read_stats.discard_missing_pair += len(keep_cache) + \
+                                                   len(discard_cache)
+                
+                sys.stderr.write("keep_cache:\n")
+                for r in keep_cache.values():
+                    sys.stderr.write("  %s\n" % r.qname)
+                sys.stderr.write("discard_cache:\n")
+                for r in discard_cache.values():
+                    sys.stderr.write("  %s\n" % r.qname)
+                                    
             keep_cache = {}
             discard_cache = {}
-            keep_cache_size = 0
-            discard_cache_size = 0
             cur_pos = None
             cur_by_mpos = {}
             read_count = 0
@@ -136,13 +175,13 @@ def filter_reads(infile, outfile):
             continue
 
         if (not read.is_paired) or (read.next_reference_name is None):
-            read_stats.discard_single +=1
+            read_stats.discard_single += 1
             continue
 
         if (read.next_reference_name != cur_chrom) and \
            (read.next_reference_name != "="):
             # other side of pair mapped to different chromosome
-            read.stats.discard_different_chromosome += 1
+            read_stats.discard_different_chromosome += 1
             continue
 
         if not read.is_proper_pair:
@@ -156,25 +195,8 @@ def filter_reads(infile, outfile):
         if cur_pos is None or read.pos > cur_pos:
             # we have advanced to a new start position
             # decide which of reads at last position to keep or discard
-            for mpos, read_list in cur_by_mpos.items():
-                # only keep one read from list with same pos,mate_pos pair
-                # shuffle order of reads in list and take first
-                # as 'keep' read
-                random.shuffle(read_list)
-                keep_read = read_list.pop()
-                if keep_read.qname in keep_cache:
-                    raise ValueError("read %s is already "
-                                     "in keep cache" % keep_read.qname)
-                keep_cache[keep_read.qname] = keep_read
-                keep_cache_size += 1
-                
-                # rest of reads get discarded
-                for discard_read in read_list:
-                    if discard_read in discard_cache:
-                        raise ValueError("read %s is already in discard cache" %
-                                         discard_read.qname)
-                    discard_cache[discard_read.qname] = discard_read
-                    discard_cache_size += 1
+            update_read_cache(cur_by_mpos, keep_cache, discard_cache,
+                              read_stats, outfile)
 
             # create new list of reads at current position
             cur_pos = read.pos
@@ -185,7 +207,6 @@ def filter_reads(infile, outfile):
             read1 = keep_cache[read.qname]
             read2 = read
             del keep_cache[read.qname]
-            keep_cache_size -= 1
 
             if read2.next_reference_start != read1.reference_start:
                 sys.stderr.write("WARNING: read pair positions "
@@ -199,7 +220,6 @@ def filter_reads(infile, outfile):
             # we already saw prev side of pair, but decided to discard
             # because read duplicated
             del discard_cache[read.qname]
-            discard_cache_size -= 1
             read_stats.discard_dup += 1
 
         else:
@@ -211,12 +231,18 @@ def filter_reads(infile, outfile):
             else:
                 cur_by_mpos[read.mpos] = [read]
 
-    if (keep_cache_size + discard_cache_size) != 0:
+    # final update of read cache is just to cache strange corner case
+    # where final read pair on chromosome were overlapping (same start pos)
+    if cur_pos:
+        update_read_cache(cur_by_mpos, keep_cache, discard_cache,
+                          read_stats, outfile)
+                                 
+    if (len(keep_cache) + len(discard_cache)) != 0:
         sys.stderr.write("WARNING: failed to find pairs for %d "
                          "keep reads and %d discard reads on this "
-                         "chromosome\n" % (keep_cache_size, discard_cache_size))
+                         "chromosome\n" % (len(keep_cache), len(discard_cache)))
         
-        read_stats.discard_missing_pair += keep_cache_size + discard_cache_size
+        read_stats.discard_missing_pair += len(keep_cache) + len(discard_cache)
 
     read_stats.write(sys.stderr)
     

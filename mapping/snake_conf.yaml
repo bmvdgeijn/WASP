@@ -16,7 +16,7 @@
     "wasp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP",
 
     # directory to write all output data files to
-    "output_dir" :  "/iblm/netapp/home/gmcvicker/proj/WASP/mapping/output",
+    "output_dir" :  "/iblm/netapp/home/gmcvicker/data1/external/Grubert2015/WASP",
 
     # location of chromInfo file containing chromosome names and lengths
     # (can be downloaded from UCSC genome browser)

@@ -35,12 +35,13 @@ def get_chromosomes():
 
 rule all:
     input:
-        expand(config["output_dir"] + "/merge/{sample}.keep.merge.sort.bam",
+        expand(config["output_dir"] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam",
                sample=read_samples().keys())
 
 
         
-## Old way that used text input files (but without haplotype information)
+## Here are rules to use text input files for SNPs instead of
+## HDF5 files (that include haplotype information)
 #
 # rule extract_vcf_snps:
 #     """Makes SNP input files for find_intersecting_snps.py by extracting
@@ -51,7 +52,7 @@ rule all:
 #         expand(config["snp_dir"] + "/{chromosome}.snps.txt.gz", chromosome=get_chromosomes())
 #     shell:
 #         "mkdir -p {config[snp_dir]} ; "
-#         "{config[wasp_dir]}/mapping/NEW/extract_vcf_snps.sh {input} {config[snp_dir]}"
+#         "{config[wasp_dir]}/mapping/extract_vcf_snps.sh {input} {config[snp_dir]}"
 #
 # rule find_intersecting_snps_paired_end:
 #     """find intersecting SNPs using WASP script"""
@@ -65,7 +66,7 @@ rule all:
 #         remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
 #     shell:
 #         "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
-#         "{config[py2]} {config[wasp_dir]}/mapping/NEW/find_intersecting_snps.py "
+#         "{config[py2]} {config[wasp_dir]}/mapping/find_intersecting_snps.py "
 #         "    --is_paired_end --is_sorted --output_dir {config[output_dir]}/find_intersecting_snps {input.bam} {config[snp_dir]}"
 
 
@@ -103,7 +104,7 @@ rule find_intersecting_snps_paired_end:
          remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
      shell:
          "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
-         "{config[py2]} {config[wasp_dir]}/mapping/NEW/find_intersecting_snps.py "
+         "{config[py2]} {config[wasp_dir]}/mapping/find_intersecting_snps.py "
          "    --is_paired_end "
          "    --is_sorted "
          "    --output_dir {config[output_dir]}/find_intersecting_snps "
@@ -177,7 +178,7 @@ rule filter_remapped_reads:
         keep_bam=config['output_dir'] + "/filter_remapped_reads/{sample}.keep.bam"
     shell:
         "mkdir -p {config[output_dir]}/filter_remapped_reads ; "
-        "{config[py2]} {config[wasp_dir]}/mapping/NEW/filter_remapped_reads.py "
+        "{config[py2]} {config[wasp_dir]}/mapping/filter_remapped_reads.py "
         "  {input.to_remap_bam} {input.remap_bam} {output.keep_bam}"
 
     
@@ -188,7 +189,7 @@ rule merge_bams:
         keep2=config['output_dir'] + "/filter_remapped_reads/{sample}.keep.bam"
     output:
         merge=config['output_dir'] + "/merge/{sample}.keep.merge.bam",
-        sort=config['output_dir'] + "/merge/{sample}.keep.merge.sort.bam",
+        sort=config['output_dir'] + "/merge/{sample}.keep.merge.sort.bam"
     shell:
         "mkdir -p {config[output_dir]}/merge ; "
         "{config[samtools]} merge {output.merge} {input.keep1} {input.keep2}; "
@@ -196,7 +197,20 @@ rule merge_bams:
         "{config[samtools]} index {output.sort}"
 
     
-# TODO: rule to remove duplicate reads
+rule rmdup_pe:
+    """remove duplicate read pairs"""
+    input:
+        config['output_dir'] + "/merge/{sample}.keep.merge.sort.bam"
+    output:
+        rmdup=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.bam",
+        sort=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam"
+    shell:
+        "mkdir -p {config[output_dir]}/rmdup ; "
+        "{config[py2]} {config[wasp_dir]}/mapping/rmdup_pe.py {input} {output.rmdup} ;"
+        "{config[samtools]} sort -o {output.sort} {output.rmdup}; "
+        "{config[samtools]} index {output.sort}"
+        
+
 
 # TODO: rule to write out summary of allele-specific reads
 

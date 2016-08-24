@@ -35,7 +35,7 @@ def get_chromosomes():
 
 rule all:
     input:
-        expand(config["output_dir"] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam",
+        expand(config['output_dir'] + "/as_counts/{sample}.as_counts.txt.gz",
                sample=read_samples().keys())
 
 
@@ -212,5 +212,21 @@ rule rmdup_pe:
         
 
 
-# TODO: rule to write out summary of allele-specific reads
+rule get_as_counts:
+    """get allele-specific read counts for SNPs"""
+    input:
+         bam=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam",
+         snp_index=config["snp_h5_dir"] + "/snp_index.h5",
+         snp_tab=config["snp_h5_dir"] + "/snp_tab.h5",
+         haplotype=config['snp_h5_dir'] + "/haplotype.h5"
+    output:
+        config['output_dir'] + "/as_counts/{sample}.as_counts.txt.gz"
+    shell:
+        "mkdir -p {config[output_dir]}/as_counts ; "
+        "{config[py2]} {config[wasp_dir]}/mapping/get_as_counts.py "
+        "  --snp_tab {input.snp_tab} "
+        "  --snp_index {input.snp_index} "
+        "  --haplotype {input.haplotype} "
+        "  --samples {config[sample_file]} "
+        "  {input.bam} | gzip > {output}"
 

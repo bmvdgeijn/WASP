@@ -8,7 +8,9 @@ import pysam
 import util
 import snptable
 
+import tables
 
+import os
 
 def write_results(out_f, chrom_name, snp_tab, ref_matches,
                   alt_matches, oth_matches):
@@ -25,7 +27,50 @@ def write_results(out_f, chrom_name, snp_tab, ref_matches,
 def write_header(out_f):
     out_f.write("CHROM SNP.POS REF.ALLELE ALT.ALLELE OTHER.COUNT "
                 "ALT.COUNT OTH.COUNT\n")
+
+
     
+def parse_samples(samples_str):
+    """Gets list of samples from --samples argument. This may be 
+    a comma-delimited string or a path to a file. If a file is provided 
+    then the first column of the file is assumed to be the sample name"""
+
+    if samples_str is None:
+        return None
+        
+    # first check if this is a path to a file
+    if os.path.exists(samples_str) and not os.path.isdir(samples_str):
+        samples = []
+
+        if samples_str.endswith(".gz"):
+            f = gzip.open(samples_str)
+        else:
+            f = open(samples_str)
+
+        for line in f:
+            # assume first token in line is sample name
+            samples.append(line.split()[0])
+
+        sys.stderr.write("read %d sample names from file '%s'\n" %
+                         (len(samples), samples_str))
+                    
+        f.close()
+    else:    
+        # otherwise assume comma-delimited string
+        if ("," not in samples_str and len(samples_str) > 15) \
+           or ("/" in samples_str):
+            sys.stderr.write("WARNING: --samples argument (%s) "
+                             "does not look like sample name "
+                             "but is not path to valid file. "
+                             "Assuming it is a sample name anyway."
+                             % samples_str)
+
+        samples = samples_str.split(",")
+        sys.stderr.write("SAMPLES: %s\n"% repr(samples))
+
+
+    return samples
+
 
 
 def parse_options():
@@ -47,22 +92,75 @@ def parse_options():
                                      "extract_haplotype_read_counts.py "
                                      "script).")
 
-    parser.add_argument("bam_filename",
-                        help="Sorted BAM file containing reads")
-    
-    parser.add_argument("snp_dir",
-                        help=("Directory containing SNPs. "
+
+    parser.add_argument("--snp_dir", action='store', 
+                        help=("Directory containing SNP text files "
                               "This directory should contain one file per "
                               "chromosome named like chr<#>.snps.txt.gz. "
                               "Each file should contain 3 columns: position "
-                              "RefAllele AltAllele"))
+                              "RefAllele AltAllele"),
+                        default=None)
+        
+
+    parser.add_argument("--snp_tab",
+                        help="Path to HDF5 file to read SNP information "
+                        "from. Each row of SNP table contains SNP name "
+                        "(rs_id), position, allele1, allele2.",
+                        metavar="SNP_TABLE_H5_FILE",
+                        default=None)
+    
+    parser.add_argument("--snp_index",
+                        help="Path to HDF5 file containing SNP index. The "
+                        "SNP index is used to convert the genomic position "
+                        "of a SNP to its corresponding row in the haplotype "
+                        "and snp_tab HDF5 files.",
+                        metavar="SNP_INDEX_H5_FILE",
+                        default=None)
+    
+    parser.add_argument("--haplotype",
+                        help="Path to HDF5 file to read phased haplotypes "
+                        "from. When generating alternative reads "
+                        "use known haplotypes from this file rather "
+                        "than all possible allelic combinations.",
+                        metavar="HAPLOTYPE_H5_FILE",
+                        default=None)
+
+    parser.add_argument("--samples",
+                        help="Use only haplotypes and SNPs that are "
+                        "polymorphic in these samples. "
+                        "SAMPLES can either be a comma-delimited string "
+                        "of sample names or a path to a file with one sample "
+                        "name per line (file is assumed to be "
+                        "whitespace-delimited and first column is assumed to "
+                        "be sample name). Sample names should match those "
+                        "present in the --haplotype file. Samples are "
+                        "ignored if no haplotype file is provided.",
+                        metavar="SAMPLES", default=None)
+                        
+    parser.add_argument("bam_filename", action='store',
+                        help="Coordinate-sorted input BAM file "
+                        "containing mapped reads.")
 
 
-    return parser.parse_args()
+    options = parser.parse_args()
+    
+    if options.snp_dir:
+        if(options.snp_tab or options.snp_index or options.haplotype):
+            parser.error("expected --snp_dir OR (--snp_tab, --snp_index and "
+                         "--haplotype) arguments but not both")
+    else:
+        if not (options.snp_tab and options.snp_index and options.haplotype):
+            parser.error("either --snp_dir OR (--snp_tab, "
+                         "--snp_index AND --haplotype) arguments must be "
+                         "provided")
+     
+    return options
                         
     
 
-def main(bam_filename, snp_dir):
+def main(bam_filename, snp_dir=None, snp_tab_filename=None,
+         snp_index_filename=None, haplotype_filename=None, samples=None):
+
     out_f = sys.stdout
     
     bam = pysam.Samfile(bam_filename)
@@ -79,6 +177,19 @@ def main(bam_filename, snp_dir):
     snp_ref_match = None
     snp_alt_match = None
     snp_other_match = None
+
+
+    if snp_tab_filename:
+        if (not snp_index_filename) or (not haplotype_filename):
+            raise ValueError("--snp_index and --haplotype must be provided "
+                             "if --snp_tab is provided")
+        snp_tab_h5 = tables.openFile(snp_tab_filename, "r")
+        snp_index_h5 = tables.openFile(snp_index_filename, "r")
+        hap_h5 = tables.openFile(haplotype_filename, "r")
+    else:
+        snp_tab_h5 = None
+        snp_index_h5 = None
+        hap_h5 = None
     
     for read in bam:
         if (cur_tid is None) or (read.tid != cur_tid):
@@ -98,15 +209,27 @@ def main(bam_filename, snp_dir):
             seen_chrom.add(cur_chrom)
             cur_tid = read.tid
             sys.stderr.write("starting chromosome %s\n" % cur_chrom)
-            snp_filename = "%s/%s.snps.txt.gz" % (snp_dir, cur_chrom)
+
+            # read SNPs for next chromomsome
+            if snp_tab_h5:
+                # read SNPs from HDF5 files, reduce to set that are
+                # polymorphic in specified samples
+                snp_tab.read_h5(snp_tab_h5, snp_index_h5, hap_h5,
+                                cur_chrom, samples=samples)
+            elif snp_dir:
+                # read SNPs from text file
+                snp_filename = "%s/%s.snps.txt.gz" % (snp_dir, cur_chrom)
+                snp_tab.read_file(snp_filename)
+            else:
+                raise ValueError("--snp_dir OR (--snp_tab, --snp_index, "
+                                 "and --hap_h5) must be defined")
+
+            sys.stderr.write("read %d SNPs\n" % snp_tab.n_snp)
             
-            # clear SNP table and results, read next SNP filename
-            snp_tab.read_file(snp_filename)
+            # clear SNP table and results             
             snp_ref_match = np.zeros(snp_tab.n_snp, dtype=np.int16)
             snp_alt_match = np.zeros(snp_tab.n_snp, dtype=np.int16)
             snp_oth_match = np.zeros(snp_tab.n_snp, dtype=np.int16)
-
-            sys.stderr.write("read %d SNPs\n" % snp_tab.n_snp)
                  
         if read.is_secondary:
             # this is a secondary alignment (i.e. read was aligned more than
@@ -140,7 +263,14 @@ def main(bam_filename, snp_dir):
 
 if __name__ == "__main__":
     options = parse_options()
-
-    main(options.bam_filename, options.snp_dir)
+    samples = parse_samples(options.samples)
+    
+    main(options.bam_filename, 
+         snp_dir=options.snp_dir,
+         snp_tab_filename=options.snp_tab,
+         snp_index_filename=options.snp_index,
+         haplotype_filename=options.haplotype,
+         samples=samples)
+    
 
     

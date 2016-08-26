@@ -247,29 +247,21 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 
 
 
-void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
-		      char *cur) {
-  /* char delim[] = " \t"; */
+/**
+ * get genotype probabilities by parsing and converting genotype likelihoods
+ * (GL) from VCF line
+ */
+void vcf_parse_gl(VCFInfo *vcf_info, float *geno_probs, char *cur, long gl_idx) {
   char delim[] = "\t";
   char inner_delim[] = ":";
   char *tok, *inner_tok, *inner_cur;
   char gtype[VCF_MAX_FORMAT];
-  long gl_idx, i, n, n_geno_probs, expect_geno_probs;
+  long  i, n, n_geno_probs, expect_geno_probs;
   float like_homo_ref, like_het, like_homo_alt;
   float prob_homo_ref, prob_het, prob_homo_alt, prob_sum;
 
   expect_geno_probs = vcf_info->n_sample * 3;
   
-  /* get index of GL token in format string*/
-  gl_idx = get_format_index(vcf_info->format, "GL");
-  if(gl_idx == -1) {
-    my_err("%s:%d: VCF format string does not specify GL token so cannot "
-	   "obtain genotype probabilities. Format string: '%s'.\n"
-	   "To use this file, you must run snp2h5 without "
-	   "the --geno_prob option.", __FILE__, __LINE__,
-	   vcf_info->format);
-  }
-
   n_geno_probs = 0;
   
   while((tok = strsep(&cur, delim)) != NULL) {
@@ -332,7 +324,95 @@ void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
     my_err("%s:%d: expected %ld genotype likelihoods per line, but got "
 	   "%ld", __FILE__, __LINE__, expect_geno_probs, n_geno_probs);
   }
+}  
+
+
+/**
+ * get genotype probabilities by parsing GP token from VCF line
+ */
+void vcf_parse_gp(VCFInfo *vcf_info, float *geno_probs, char *cur, long gp_idx) {
+  char delim[] = "\t";
+  char inner_delim[] = ":";
+  char *tok, *inner_tok, *inner_cur;
+  char gtype[VCF_MAX_FORMAT];
+  long  i, n, n_geno_probs, expect_geno_probs;
+  float prob_homo_ref, prob_het, prob_homo_alt, prob_sum;
+
+  expect_geno_probs = vcf_info->n_sample * 3;
   
+  n_geno_probs = 0;
+  
+  while((tok = strsep(&cur, delim)) != NULL) {
+    /* each genotype string is delimited by ':'
+     * each GP portion is delimited by ','
+     */
+    util_strncpy(gtype, tok, sizeof(gtype));
+
+    i = 0;
+    inner_cur = gtype;
+    while((i <= gp_idx) && (inner_tok = strsep(&inner_cur, inner_delim)) != NULL) {
+      if(i == gp_idx) {
+	n = sscanf(inner_tok, "%g,%g,%g", &prob_homo_ref, &prob_het,
+		   &prob_homo_alt);
+
+	if(n != 3) {
+	  if(strcmp(inner_tok, ".") == 0) {
+	    /* '.' indicates missing data
+	     * set all probabilities to 0.333
+	     */
+	    prob_homo_ref = prob_het = prob_homo_alt = 0.333;
+	  } else {
+	    my_err("%s:%d: failed to parse genotype probabilities from "
+		   "string '%s'", __FILE__, __LINE__, inner_tok);
+	  }
+	}
+	
+	/* check that probs sum to 1.0, normalize if they don't */
+	prob_sum = prob_homo_ref + prob_het + prob_homo_alt;
+	if((prob_sum > 1.001) || (prob_sum < 0.999)) {
+	  prob_homo_ref = prob_homo_ref / prob_sum;
+	  prob_het = prob_het / prob_sum;
+	  prob_homo_alt = prob_homo_alt / prob_sum;
+     	}
+	geno_probs[n_geno_probs] = prob_homo_ref;
+	geno_probs[n_geno_probs + 1] = prob_het;
+	geno_probs[n_geno_probs + 2] = prob_homo_alt;
+
+	n_geno_probs += 3;
+      }
+
+      i++;
+    }
+  }
+
+  if(n_geno_probs != expect_geno_probs) {
+    my_err("%s:%d: expected %ld genotype probabilities per line, but got "
+	   "%ld", __FILE__, __LINE__, expect_geno_probs, n_geno_probs);
+  }
+}  
+
+
+void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs, char *cur) {
+  long gl_idx, gp_idx;
+
+  /* get index of GP and GL tokens in format string */
+  gp_idx = get_format_index(vcf_info->format, "GP");
+  gl_idx = get_format_index(vcf_info->format, "GL");
+  
+  if((gl_idx == -1) && (gp_idx == -1)) {
+    my_err("%s:%d: VCF format string does not specify GL or GP token "
+	   "so cannot obtain genotype probabilities. Format string: '%s'.\n"
+	   "To use this file, you must run snp2h5 without "
+	   "the --geno_prob option.", __FILE__, __LINE__,
+	   vcf_info->format);
+  }
+
+  if(gp_idx > -1) {
+    vcf_parse_gp(vcf_info, geno_probs, cur, gp_idx);
+    return;
+  }
+
+  vcf_parse_gl(vcf_info, geno_probs, cur, gl_idx);  
 }
 
 

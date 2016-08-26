@@ -1,5 +1,3 @@
-
-
 import sys
 import argparse
 import numpy as np
@@ -13,20 +11,43 @@ import tables
 import os
 
 def write_results(out_f, chrom_name, snp_tab, ref_matches,
-                  alt_matches, oth_matches):
+                  alt_matches, oth_matches, geno_sample):
+
+    haps = None
+    has_haps = False
     
+    if geno_sample:
+        # get index for this sample in the haplotype table
+        samp_idx_dict = dict(zip(snp_tab.samples,
+                                 range(len(snp_tab.samples))))
+
+        if geno_sample in samp_idx_dict:
+            idx = samp_idx_dict[geno_sample]
+            geno_hap_idx = np.array([idx*2, idx*2+1], dtype=np.int)
+            haps = snp_tab.haplotypes[:,geno_hap_idx]
+            has_haps = True
+            sys.stderr.write("geno_hap_idx: %s\n" % repr(geno_hap_idx))
+        else:
+            sys.stderr.write("WARNING: sample %s is not present for "
+                             "chromosome %s" % (geno_sample, chrom_name))
+            haps = None
+            has_haps = False
+
     for i in range(snp_tab.n_snp):
-        out_f.write("%s %d %s %s %d %d %d\n" % (chrom_name, snp_tab.snp_pos[i],
-                                             snp_tab.snp_allele1[i],
-                                             snp_tab.snp_allele2[i],
-                                             ref_matches[i],
-                                             alt_matches[i],
-                                             oth_matches[i]))
+        if has_haps:
+            geno_str = "%d|%d" % (haps[i, 0], haps[i, 1])
+        else:
+            geno_str = "NA"
+        out_f.write("%s %d %s %s %s %d %d %d\n" %
+                    (chrom_name, snp_tab.snp_pos[i],
+                     snp_tab.snp_allele1[i], snp_tab.snp_allele2[i],
+                     geno_str, ref_matches[i], alt_matches[i],
+                     oth_matches[i]))
 
 
 def write_header(out_f):
-    out_f.write("CHROM SNP.POS REF.ALLELE ALT.ALLELE OTHER.COUNT "
-                "ALT.COUNT OTH.COUNT\n")
+    out_f.write("CHROM SNP.POS REF.ALLELE ALT.ALLELE GENOTYPE REF.COUNT "
+                "ALT.COUNT OTHER.COUNT\n")
 
 
     
@@ -72,6 +93,8 @@ def parse_samples(samples_str):
     return samples
 
 
+    
+
 
 def parse_options():
     parser = argparse.ArgumentParser(description="This script outputs "
@@ -83,7 +106,7 @@ def parse_options():
                                      "is written to stdout, with a single "
                                      "header row and the following "
                                      "columns: <chromosome> <snp_position> "
-                                     "<ref_allele> <alt_allele> "
+                                     "<ref_allele> <alt_allele> <genotype> "
                                      "<ref_allele_count> <alt_allele_count> "
                                      "<other_count>. Reads that overlap "
                                      "multiple SNPs will be counted multiple "
@@ -133,10 +156,24 @@ def parse_options():
                         "name per line (file is assumed to be "
                         "whitespace-delimited and first column is assumed to "
                         "be sample name). Sample names should match those "
-                        "present in the --haplotype file. Samples are "
+                        "present in the haplotype HDF5 file. Samples are "
                         "ignored if no haplotype file is provided.",
                         metavar="SAMPLES", default=None)
-                        
+
+
+    parser.add_argument("--genotype_sample",
+                        metavar="GENO_SAMPLE",
+                        help="output genotypes for sample with name "
+                        "GENO_SAMPLE alongside allele-specific counts. "
+                        "GENO_SAMPLE must match one "
+                        "of the names present in the haplotype HDF5 file. "
+                        "If the --samples argument is provided then "
+                        "GENO_SAMPLE must also be one of the specified "
+                        "samples. If --genotype_sample is "
+                        "not provided or the GENO_SAMPLE does not match any "
+                        "of the samples in haplotype file then NA is "
+                        "output for genotype.", default=None)
+        
     parser.add_argument("bam_filename", action='store',
                         help="Coordinate-sorted input BAM file "
                         "containing mapped reads.")
@@ -159,7 +196,8 @@ def parse_options():
     
 
 def main(bam_filename, snp_dir=None, snp_tab_filename=None,
-         snp_index_filename=None, haplotype_filename=None, samples=None):
+         snp_index_filename=None, haplotype_filename=None, samples=None,
+         geno_sample=None):
 
     out_f = sys.stdout
     
@@ -178,6 +216,13 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
     snp_alt_match = None
     snp_other_match = None
 
+    
+    if geno_sample and not haplotype_filename:
+        sys.stderr.write("WARNING: cannot obtain genotypes for sample "
+                         "%s without --haplotype argument\n")
+        geno_sample = None
+
+    sys.stderr.write("GENOTYPE_SAMPLE: %s\n" % geno_sample)
 
     if snp_tab_filename:
         if (not snp_index_filename) or (not haplotype_filename):
@@ -190,7 +235,7 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
         snp_tab_h5 = None
         snp_index_h5 = None
         hap_h5 = None
-    
+        
     for read in bam:
         if (cur_tid is None) or (read.tid != cur_tid):
             # this is a new chromosome
@@ -198,7 +243,7 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
             if cur_chrom:
                 # write out results from last chromosome
                 write_results(out_f, cur_chrom, snp_tab, snp_ref_match,
-                              snp_alt_match, snp_oth_match)
+                              snp_alt_match, snp_oth_match, geno_sample)
             
             cur_chrom = bam.getrname(read.tid)
             
@@ -216,6 +261,9 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
                 # polymorphic in specified samples
                 snp_tab.read_h5(snp_tab_h5, snp_index_h5, hap_h5,
                                 cur_chrom, samples=samples)
+                
+                    
+
             elif snp_dir:
                 # read SNPs from text file
                 snp_filename = "%s/%s.snps.txt.gz" % (snp_dir, cur_chrom)
@@ -230,6 +278,7 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
             snp_ref_match = np.zeros(snp_tab.n_snp, dtype=np.int16)
             snp_alt_match = np.zeros(snp_tab.n_snp, dtype=np.int16)
             snp_oth_match = np.zeros(snp_tab.n_snp, dtype=np.int16)
+                
                  
         if read.is_secondary:
             # this is a secondary alignment (i.e. read was aligned more than
@@ -255,7 +304,7 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
     if cur_chrom:
         # write results for final chromosome
         write_results(out_f, cur_chrom, snp_tab, snp_ref_match,
-                      snp_alt_match, snp_oth_match)
+                      snp_alt_match, snp_oth_match, geno_sample)
 
 
     
@@ -270,7 +319,7 @@ if __name__ == "__main__":
          snp_tab_filename=options.snp_tab,
          snp_index_filename=options.snp_index,
          haplotype_filename=options.haplotype,
-         samples=samples)
+         samples=samples, geno_sample=options.genotype_sample)
     
 
     

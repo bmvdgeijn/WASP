@@ -18,6 +18,18 @@ def read_samples():
 
     return samp_dict
 
+def read_1kg_samples():
+    f = open(config['sample_file'], "r")
+    samp_dict = {}
+    for line in f:
+        words = line.strip().split()
+        samp_dict[words[1]] = words[0]
+
+    return samp_dict
+
+SAMP_TO_1KG = read_1kg_samples()
+
+
 
 def get_chromosomes():
     """Gets list of chromosomes with from VCF files"""
@@ -211,14 +223,16 @@ rule rmdup_pe:
         "{config[samtools]} index {output.sort}"
         
 
-
+        
 rule get_as_counts:
     """get allele-specific read counts for SNPs"""
     input:
          bam=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam",
          snp_index=config["snp_h5_dir"] + "/snp_index.h5",
          snp_tab=config["snp_h5_dir"] + "/snp_tab.h5",
-         haplotype=config['snp_h5_dir'] + "/haplotype.h5"
+         haplotype=config['snp_h5_dir'] + "/haplotype.h5",
+    params:
+         samp1kg=lambda wildcards: SAMP_TO_1KG[wildcards.sample]
     output:
         config['output_dir'] + "/as_counts/{sample}.as_counts.txt.gz"
     shell:
@@ -228,5 +242,6 @@ rule get_as_counts:
         "  --snp_index {input.snp_index} "
         "  --haplotype {input.haplotype} "
         "  --samples {config[sample_file]} "
+        "  --genotype_sample {params.samp1kg} "
         "  {input.bam} | gzip > {output}"
 

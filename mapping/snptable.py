@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import gzip
 import pysam
-
+import operator
 
 NUCLEOTIDES = set(['A', 'C', 'T', 'G'])
 SNP_UNDEF = -1
@@ -64,14 +64,13 @@ class SNPTable(object):
             self.snp_allele1 = node[:]['allele1']
             self.snp_allele2 = node[:]['allele2']
             self.n_snp = self.snp_pos.shape[0]
-
+            self.samples = self.get_h5_samples(hap_h5, chrom_name)
             self.haplotypes = hap_h5.getNode(node_name)
             
             if samples:
                 # reduce set of SNPs and indels to ones that are
                 # polymorphic in provided list of samples
-                samp_idx = self.get_sample_indices(hap_h5, chrom_name,
-                                                   samples)
+                samp_idx_dict, samp_idx = self.get_h5_sample_indices(hap_h5, chrom_name, samples)
                 
                 hap_idx = np.empty(samp_idx.shape[0]*2, dtype=np.int)
                 hap_idx[0::2] = samp_idx*2
@@ -91,6 +90,12 @@ class SNPTable(object):
                                  "sample of %d individuals\n" %
                                  (haps.shape[0], chrom_name, 
                                   np.sum(is_polymorphic), len(samples)))
+
+                # make filtered and ordered samples for this chromosome
+                # that corresponds to order of haplotypes
+                sorted_samps = sorted(samp_idx_dict.items(),
+                                      key=operator.itemgetter(1))
+                self.samples = [x[0] for x in sorted_samps]
                 
                 self.haplotypes = haps[is_polymorphic,]
                 self.snp_pos = self.snp_pos[is_polymorphic]
@@ -105,7 +110,7 @@ class SNPTable(object):
                 
 
     
-    def get_hap_samples(self, h5f, chrom_name):
+    def get_h5_samples(self, h5f, chrom_name):
         """Reads list of samples that are present in 'samples' table 
         from haplotype HDF5 file"""
         samples = None
@@ -124,12 +129,18 @@ class SNPTable(object):
         return samples
 
     
-
-    def get_sample_indices(self, hap_h5, chrom_name, samples):
-        hap_samples = self.get_hap_samples(hap_h5, chrom_name)
+    
+    def get_h5_sample_indices(self, hap_h5, chrom_name, samples):
+        """returns the indices of the the specified samples in the 
+        HDF5 haplotype file. Indices are returned in a dictionary
+        keyed on sample and as an array. Samples that are not 
+        found in the haplotype HDF5 file for the specified chromosome 
+        are not included in the dict or the array."""
+        hap_samples = self.get_h5_samples(hap_h5, chrom_name)
         not_seen_samples = set(samples)
         seen_samples = set([])
         samp_idx = []
+        samp_idx_dict = {}
         
         # get haplotype table indices of samples
         for i in range(len(hap_samples)):
@@ -140,6 +151,7 @@ class SNPTable(object):
                 # record index of this sample, add to set of samples
                 # we have already observed
                 samp_idx.append(i)
+                samp_idx_dict[hap_samples[i]] = i
                 not_seen_samples.remove(hap_samples[i])
                 seen_samples.add(hap_samples[i])
             else:
@@ -152,7 +164,7 @@ class SNPTable(object):
                              "%s: %s" %
                              (chrom_name, ",".join(not_seen_samples)))
         
-        return np.array(samp_idx, dtype=np.int)
+        return samp_idx_dict, np.array(samp_idx, dtype=np.int)
 
         
 
@@ -302,6 +314,7 @@ class SNPTable(object):
                     
                     for offset in offsets:
                         read_pos = offset + read_start
+                        
                         allele1 = self.snp_allele1[s_idx[offset]]
                         allele2 = self.snp_allele2[s_idx[offset]]
                         if self.is_snp(allele1, allele2):

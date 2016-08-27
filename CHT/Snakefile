@@ -263,7 +263,7 @@ rule fit_bnb_coef:
     output:
         config['base_dir'] + "/CHT/bnb_coef.txt"
     shell:
-        "{config[py2]} {config[wasp_dir]}/CHT/fit_bnb_coefficients_v4.py "
+        "{config[py2]} {config[wasp_dir]}/CHT/fit_bnb_coefficients.py "
         "  --min_as_counts {config[min_as_count]}"
         "  --sample 2000 --seed 1234 {input.cht_input} {output}"
 

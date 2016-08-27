@@ -7,14 +7,15 @@
     # py2 is a bit of a hack so that python2 scripts can be called
     # by snakemake (which is written in python3). The value should
     # do whatever is needed to setup a python2 environment and
-    # call the python2 interpreter. This might, for example, involve
-    # setting the PATH environment variable
+    # call the python2 interpreter. Depending on your system configuration,
+    # this might involve setting the PATH environment variable or
+    # just calling python2
     "py2" : "PATH=$HOME/anaconda2/bin:$PATH; python ",
 
     # Rscript should set environment as appropriate and call Rscript interpreter
     "Rscript" : "PATH=$HOME/anaconda2/bin:$PATH; Rscript ",
 
-    # WASP directory (should have trailing '/')
+    # WASP directory
     "wasp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP",
 
 
@@ -34,7 +35,7 @@
     # file containing sample identifiers for impute or VCF SNP file
     "snp_samples" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/YRI_samples.txt",
 
-    # directory containing fasta files for genome assembly
+    # directory containing bowtie2 index
     # one file per chromosome
     "fasta_dir" : "/iblm/netapp/data1/external/GRC37/chroms",
 

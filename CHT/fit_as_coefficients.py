@@ -71,7 +71,7 @@ def open_input_files(in_filename):
                              % line)
             exit(2)
         if filename.endswith(".gz"):
-            f = gzip.open(filename)
+            f = gzip.open(filename, "rt")
         else:
             f = open(filename)
 

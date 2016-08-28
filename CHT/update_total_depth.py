@@ -54,29 +54,37 @@ def parse_options():
 
     parser.add_argument("--seq", required=True,
                         help="Path to HDF5 file containing "
-                        "genome sequence. (Can be created "
-                        "using fasta2h5 program)",
+                        "genome sequence. Used to calculate GC content "
+                        "of each region. Can be created "
+                        "using fasta2h5 program.",
                         metavar="SEQ_H5_FILE")
     
     parser.add_argument("-i", "--fit_in_file", action='store',
                         dest='fit_in_file', default=None,
-                        help="read coefficients from specified file")
+                        help="Read coefficients from specified file "
+                        "rather than estimating them.")
     
     parser.add_argument("-o", "--fit_out_file", action='store',
                         dest='fit_out_file', default=None,
-                        help="only fit the model and write "
-                        "coefficients to specified file ")
+                        help="Estimate coefficients and write them "
+                        "to specified file, but do not adjust read counts.")
     
     parser.add_argument("-m", "--min_counts", action='store', 
-                        type=int,
-                        dest='min_counts', default=0,
-                        help="minimum counts to use row ")
+                        type=int, dest='min_counts', default=0,
+                        help="only use rows with at least min_counts for fitting")
     
     parser.add_argument("--skip", action='store', type=int,
                         dest='skips', default=0,
-                        help="lines to skip between each "
-                        "used for calculation")
+                        help="specify a number of rows to skip between each row "
+                        "used for estimating coefficients.")
+
+    dflt_sample = 10000
+    parser.add_argument("--sample", action='store', type=int,
+                        default=dflt_sample, help="randomly sample this many rows "
+                        "and use them for fitting coefficients. Specify 0 if all "
+                        "rows are to be used. (default=%d)" % dflt_sample)
     
+
     return parser.parse_args()
 
 
@@ -101,10 +109,11 @@ def main():
 
     sys.stderr.write("Updating totals\n")
     if args.fit_out_file:
-        write_splines(coefs_list,args.fit_out_file)
+        write_splines(coefs_list, args.fit_out_file)
     else:
         outlist = [line.strip() for 
                    line in open(args.outfile_list,"r")]
+        
         update_totals(inlist, outlist, count_table, coefs_list,
                       keep_list)
 
@@ -150,7 +159,7 @@ def get_at_gc_count(seq_h5, chrm, start, end):
 
     
 def load_data(inlist, seq_h5_filename, min_counts, skips):
-    infiles = open_files(inlist, "r")
+    infiles = open_files(inlist, "rt")
 
     seq_h5 = tables.openFile(seq_h5_filename, "r")
     
@@ -195,11 +204,12 @@ def load_data(inlist, seq_h5_filename, min_counts, skips):
             else:
                 num_NAs += 1
             for skip in range(skips):
+                # skip lines
                 line = infiles[ind].readline()
             line = infiles[ind].readline()
 
             if not line:
-                end_of_file=True
+                end_of_file = True
             else:
                 info_list[ind] = line.strip().split()
 
@@ -318,7 +328,7 @@ def splinefit(arg, x1, x2,  y):
 
 def update_totals(inlist, outlist, count_table, coefs_table,
                   keep_list):
-    infiles = open_files(inlist,"r")
+    infiles = open_files(inlist,"rt")
     outfiles = open_files(outlist,"w")
     row = 0
     count_row = 0
@@ -340,7 +350,9 @@ def update_totals(inlist, outlist, count_table, coefs_table,
                     has_NAs=True
                     break
 
-                adj_tot = calc_adjusted_totals(count_table[count_row,0], count_table[count_row, 1], coefs_table[ind])
+                adj_tot = calc_adjusted_totals(count_table[count_row, 0],
+                                               count_table[count_row, 1],
+                                               coefs_table[ind])
                 adj_tot_list.append(max(adj_tot, -1000000))
                 
             for ind in range(len(infiles)):
@@ -358,7 +370,7 @@ def update_totals(inlist, outlist, count_table, coefs_table,
             count_row+=1
         else:
             for ind in range(len(infiles)):
-                line=infiles[ind].readline()
+                line = infiles[ind].readline()
         row += 1
     for infile in infiles:
         infile.close()

@@ -277,7 +277,7 @@ def lookup_individual_index(options, ind_name):
     to lookup information in the genotype and haplotype tables"""
     sys.stderr.write("reading list of individuals from %s\n" % 
                      options.samples)
-    f = open(options.samples)
+    f = open(options.samples, "r")
 
     idx = 0
     for line in f:
@@ -530,10 +530,13 @@ def main():
     genomewide_read_counts = get_genomewide_count(data_files.read_count_h5,
                                                   chrom_list)
 
+
+    unknown_chrom = set([])
+    
     if args.input_file.endswith(".gz"):
-        f = gzip.open(args.input_file)
+        f = gzip.open(args.input_file, "rt")
     else:
-        f = open(args.input_file)
+        f = open(args.input_file, "r")
 
     line_count = 0
 
@@ -557,7 +560,22 @@ def main():
             continue
         
         chrom_name = words[0]
-        chrom = chrom_dict[chrom_name]
+        if chrom_name in chrom_dict:
+            chrom = chrom_dict[chrom_name]
+        else:
+            if not chrom_name.startswith("chr"):
+                # try adding 'chr' to front of name
+                new_chrom_name = "chr" + chrom_name
+                if new_chrom_name in chrom_dict:
+                    chrom_name = new_chrom_name
+                    chrom = chrom_dict[chrom_name]
+                else:
+                    # can't figure out this chromosome name
+                    if not chrom_name in unknown_chrom:
+                        unknown_chrom.add(chrom_name)
+                        sys.stderr.write("WARNING: unknown chromosome '%s'")
+                    continue
+                    
         
         region_list = get_target_regions(args, chrom, words)
 

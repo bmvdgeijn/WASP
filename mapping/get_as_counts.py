@@ -29,7 +29,7 @@ def write_results(out_f, chrom_name, snp_tab, ref_matches,
             sys.stderr.write("geno_hap_idx: %s\n" % repr(geno_hap_idx))
         else:
             sys.stderr.write("WARNING: sample %s is not present for "
-                             "chromosome %s" % (geno_sample, chrom_name))
+                             "chromosome %s\n" % (geno_sample, chrom_name))
             haps = None
             has_haps = False
 
@@ -261,9 +261,6 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
                 # polymorphic in specified samples
                 snp_tab.read_h5(snp_tab_h5, snp_index_h5, hap_h5,
                                 cur_chrom, samples=samples)
-                
-                    
-
             elif snp_dir:
                 # read SNPs from text file
                 snp_filename = "%s/%s.snps.txt.gz" % (snp_dir, cur_chrom)
@@ -311,8 +308,11 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
 
 
 if __name__ == "__main__":
+    sys.stderr.write("command: %s\n" % " ".join(sys.argv))
+
     options = parse_options()
     samples = parse_samples(options.samples)
+
     
     main(options.bam_filename, 
          snp_dir=options.snp_dir,

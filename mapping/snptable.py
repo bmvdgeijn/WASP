@@ -37,6 +37,7 @@ class SNPTable(object):
         self.snp_allele2 = np.array([], dtype="|S10")
         self.haplotypes = None
         self.n_snp = 0
+        self.samples = []
         
 
 

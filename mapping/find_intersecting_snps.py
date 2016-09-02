@@ -244,9 +244,9 @@ def parse_options():
                                      "overlapping reads. If a read overlaps "
                                      "SNPs, alternative versions of the read "
                                      "containing different alleles are created "
-                                     "and written to files for remapping. Reads "
-                                    "that do not overlap SNPs or indels are "
-                                     "written to a 'keep' BAM file."
+                                     "and written to files for remapping. "
+                                     "Reads that do not overlap SNPs or indels "
+                                     "are written to a 'keep' BAM file."
                                      "Reads that overlap indels are presently "
                                      "discarded.")
                                    
@@ -267,8 +267,9 @@ def parse_options():
     parser.add_argument("--max_seqs", type=int, default=MAX_SEQS_DEFAULT,
                         help="The maximum number of sequences with different "
                         "allelic combinations to consider remapping "
-                        "(default=%d). Read pairs with more allelic combinations "
-                        "than MAX_SEQs are discarded" % MAX_SEQS_DEFAULT)
+                        "(default=%d). Read pairs with more allelic "
+                        "combinations than MAX_SEQs are discarded" %
+                        MAX_SEQS_DEFAULT)
 
     parser.add_argument("--max_snps", type=int, default=MAX_SNPS_DEFAULT,
                         help="The maximum number of SNPs allowed to overlap "
@@ -287,7 +288,12 @@ def parse_options():
                               "This directory should contain one file per "
                               "chromosome named like chr<#>.snps.txt.gz. "
                               "Each file should contain 3 columns: position "
-                              "RefAllele AltAllele"),
+                              "RefAllele AltAllele. This option should "
+                              "only be used if --snp_tab, --snp_index, "
+                              "and --haplotype arguments are not used."
+                              " If this argument is provided, all possible "
+                              "allelic combinations are used (rather "
+                              "than set of observed haplotypes).",
                         default=None)
         
 
@@ -315,12 +321,13 @@ def parse_options():
                         default=None)
 
     parser.add_argument("--samples",
-                        help="Use only haplotypes and SNPs that are polymorphic in these samples. "
+                        help="Use only haplotypes and SNPs that are "
+                        "polymorphic in these samples. "
                         "SAMPLES can either be a comma-delimited string "
-                        "of sample names or a path to a file with one sample name "
-                        "per line (file is assumed to be whitespace-delimited and "
-                        "first column is assumed to be sample name). "
-                        "Sample names should match those present in the "
+                        "of sample names or a path to a file with one sample "
+                        "name per line (file is assumed to be whitespace-"
+                        "delimited and first column is assumed to be sample "
+                        "name). Sample names should match those present in the "
                         "--haplotype file. Samples are ignored if no haplotype "
                         "file is provided.",
                         metavar="SAMPLES")

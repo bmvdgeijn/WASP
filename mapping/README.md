@@ -114,32 +114,32 @@ Use find_intersecting_snps.py to identify reads that may have mapping biases
 #### Usage:
        positional arguments:
             bam_filename          Coordinate-sorted input BAM file containing
-	                          mapped reads.
+                                  mapped reads.
 
        optional arguments:
              -h, --help            show this help message and exit
              --is_paired_end, -p   Indicates that reads are paired-end (default
-	                           is single).
+                                   is single).
              --is_sorted, -s       Indicates that the input BAM file is
 	                           coordinate-sorted (default is False).
-             --max_seqs MAX_SEQS   The maximum number of sequences with
-	                           different allelic combinations to consider
-				   remapping (default=64). Read pairs with
-				   more allelic combinations than MAX_SEQs are
-				   discarded
+             --max_seqs MAX_SEQS   The maximum number of sequences with 
+                                   different allelic combinations to consider
+                                   remapping (default=64). Read pairs wi
+                                   more allelic combinations than MAX_SEQs are
+                                   discarded
              --max_snps MAX_SNPS   The maximum number of SNPs allowed to
-	                           overlap a read before discarding the read.
-				   Allowing higher numbers will decrease speed
-				   and increase memory usage (default=6).
+                                   overlap a read before discarding the read.
+                                   Allowing higher numbers will decrease speed
+                                   and increase memory usage (default=6).
              --output_dir OUT_DIR  Directory to write output files to. If not
-	                           specified, output files are written to the
-				   same directory as the input BAM file.
+                                   specified, output files are written to the
+                                   same directory as the input BAM file.
              --snp_dir SNP_DIR     Directory containing SNP text files This
-	                           directory should contain one file per
-				   chromosome named like chr<#>.snps.txt.gz.
-				   Each file should contain 3 columns: position
-				   RefAllele AltAllele. This option should
-				   only be used if --snp_tab, --snp_index,
+                                   directory should contain one file per
+                                   chromosome named like chr<#>.snps.txt
+                                   Each file should contain 3 columns: position
+                                   RefAllele AltAllele. This option should
+                                   only be used if --snp_tab, --snp_index,
                                    and --haplotype arguments are not used.
                                    If this argument is provided, all possible
                                    allelic combinations are used (rather
@@ -150,42 +150,42 @@ Use find_intersecting_snps.py to identify reads that may have mapping biases
                                    allele1, allele2.
              --snp_index SNP_INDEX_H5_FILE
                                    Path to HDF5 file containing SNP index.
-				   The SNP index is used to convert the
-				   genomic position of a SNP to
+                                   The SNP index is used to convert the
+                                   genomic position of a SNP to
                                    its corresponding row in the haplotype and
-				   snp_tab HDF5 files.
+                                   snp_tab HDF5 files.
              --haplotype HAPLOTYPE_H5_FILE
                                    Path to HDF5 file to read phased haplotypes
-				   from. When generating alternative reads use
-				   known haplotypes from this file rather than
-				   all possible allelic combinations.
+                                   from. When generating alternative reads use
+                                   known haplotypes from this file rather than
+                                   all possible allelic combinations.
              --samples SAMPLES     Use only haplotypes and SNPs that are
-	                           polymorphic in these samples. SAMPLES can
-				   either be a comma-delimited string of sample
-				   names or a path to a file with one
+                                   polymorphic in these samples. SAMPLES can
+                                   either be a comma-delimited string of sample
+                                   names or a path to a file with one
                                    sample name per line (file is assumed to be
                                    whitespace-delimited and first column is
-				   assumed to be sample name). Sample names
-				   should match those present in the
-				   --haplotype file. Samples are ignored if no
+                                   assumed to be sample name). Sample names
+                                   should match those present in the
+                                   --haplotype file. Samples are ignored if no
                                    haplotype file is provided.
 
 
 #### Output:
-        PREFIX.keep.bam - bamfile with reads that did not intersect SNPs
-	                  or indels that can be kept without remapping
-	PREFIX.to.remap.bam - bamfile with original reads that overlapped SNPs
-	                  that need to be remapped
-	PREFIX.remap.fq.gz - fastq file containing the reads with flipped
-	                  alleles to remap. If paired-end option is used
-			  two files ending with .fq1.gz and .fq2.gz are output.
-        (PREFIX is the name of the input file, excluding the trailing .bam)
+         PREFIX.keep.bam - bamfile with reads that did not intersect SNPs
+                          or indels that can be kept without remapping
+         PREFIX.to.remap.bam - bamfile with original reads that overlapped SNPs
+                          that need to be remapped
+         PREFIX.remap.fq.gz - fastq file containing the reads with flipped
+                          alleles to remap. If paired-end option is used
+                          two files ending with .fq1.gz and .fq2.gz are output.
+         (PREFIX is the name of the input file, excluding the trailing .bam)
 	
-	Note: Reads that overlap indels are currently excluded and
-	will not be present in any of the 'remap' files or the
-	input.keep.bam file. For this reason the total number of reads
-	will not add up to the number of reads provided in the
-	input.sort.bam file.
+         Note: Reads that overlap indels are currently excluded and
+         will not be present in any of the 'remap' files or the
+         input.keep.bam file. For this reason the total number of reads
+         will not add up to the number of reads provided in the
+         input.sort.bam file.
 
 
 Step 4
@@ -198,12 +198,12 @@ used by the aligner. For example the read trimming arguments to bowtie
 modify the reads that are output by bowtie.
 
 ### Example:
-       bowtie2 -x bowtie2_index/hg37 \
+         bowtie2 -x bowtie2_index/hg37 \
                    -1 find_intersecting_snps/${SAMPLE_NAME}_1.remap.fq.gz \
                    -2 find_intersecting_snps/${SAMPLE_NAME}_2.remap.fq.gz \
                | samtools view -b -q 10 - > map2/${SAMPLE_NAME}.bam
-       samtools sort -o map2/${SAMPLE_NAME}.sort.bam map2/${SAMPLE_NAME}.bam
-       samtools index map2/${SAMPLE_NAME}.sort.bam
+         samtools sort -o map2/${SAMPLE_NAME}.sort.bam map2/${SAMPLE_NAME}.bam
+         samtools index map2/${SAMPLE_NAME}.sort.bam
 
 
 Step 5
@@ -213,11 +213,11 @@ of the allelic versions of the reads fail to map back to the same
 location as the original read.
 
 #### Usage:
-       filter_remapped_reads.py [-h] to_remap_bam remap_bam keep_bam
+         filter_remapped_reads.py [-h] to_remap_bam remap_bam keep_bam
        
-       positional arguments:
+         positional arguments:
            to_remap_bam  input BAM file containing original set of reads that
-	                 needed to be remapped after having their alleles
+           needed to be remapped after having their alleles
 			 flipped. This file is output by the
 			 find_intersecting_snps.py script.
            remap_bam     input BAM file containing remapped reads (with flipped
@@ -225,8 +225,7 @@ location as the original read.
            keep_bam      output BAM file to write filtered set of reads to
 
 #### Example:
-
-       python mapping/filter_remapped_reads.py \
+         python mapping/filter_remapped_reads.py \
            find_intersection_snps/${SAMPLE_NAME}.to.remap.bam \
            map2/${SAMPLE_NAME}.sort.bam \
            filter_remapped_reads/${SAMPLE_NAME}.keep.bam
@@ -240,13 +239,12 @@ can be merged for a complete set of mappability-filtered aligned reads.
 The merged file should then be sorted and indexed:
 
 #### Example:
-
-	samtools merge merge/${SAMPLE_NAME}.keep.merge.bam \
-	               filter_remapped_reads/${SAMPLE_NAME}.keep.bam  \
-	               find_intersecting_snps/${SAMPLE_NAME}.keep.bam
-	samtools sort -o  merge/${SAMPLE_NAME}.keep.merge.sort.bam \
-	                  merge/${SAMPLE_NAME}.keep.merge.bam 
-	samtools index ${SAMPLE_NAME}.keep.merged.sort.bam
+         samtools merge merge/${SAMPLE_NAME}.keep.merge.bam \
+                  filter_remapped_reads/${SAMPLE_NAME}.keep.bam  \
+                  find_intersecting_snps/${SAMPLE_NAME}.keep.bam
+         samtools sort -o  merge/${SAMPLE_NAME}.keep.merge.sort.bam \
+                  merge/${SAMPLE_NAME}.keep.merge.bam 
+         samtools index ${SAMPLE_NAME}.keep.merged.sort.bam
 
 
 Step 7
@@ -260,10 +258,10 @@ reads. The script discards duplicate reads at random (independent of
 their score). The input BAM or SAM file must be sorted.
 
 #### Usage:
-	# for single end reads:
-	python rmdup.py <sorted.input.bam> <output.bam>
-	# for paired-end reads:
-	python rmdup_pe.py <sorted.input.bam> <output.bam>
+         # for single end reads:
+         python rmdup.py <sorted.input.bam> <output.bam>
+         # for paired-end reads:
+         python rmdup_pe.py <sorted.input.bam> <output.bam>
 	
 ## Testing
 

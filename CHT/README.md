@@ -382,5 +382,5 @@ The following example shows how the first 2 PCs can be used as covariates (repla
 ## Contact
 
 For questions about the combined haplotype test, please contact Graham McVicker 
-(gpm@stanford.edu) or Bryce van de Geijn (bmvdgeijn@uchicago.edu).
+(gmcvicker@salk.edu) or Bryce van de Geijn (vandegeijn@hsph.harvard.edu).
 

@@ -1,0 +1,51 @@
+#
+# This is the Snakemake configuration file that specifies paths and 
+# and options for the Combined Haplotype Pipeline
+#
+
+{
+    # py2 is a bit of a hack so that python2 scripts can be called
+    # by snakemake (which is written in python3). The value should
+    # do whatever is needed to setup a python2 environment and
+    # call the python2 interpreter. Depending on your system configuration,
+    # this might involve setting the PATH environment variable or
+    # just calling python2
+    "py2" : "PATH=$HOME/anaconda2/bin:$PATH; python ",
+
+    # Rscript should set environment as appropriate and call Rscript interpreter
+    "Rscript" : "PATH=$HOME/anaconda2/bin:$PATH; Rscript ",
+
+    # WASP directory
+    "wasp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP",
+
+
+    # directory to write all output data files to
+    "base_dir" :  "/iblm/netapp/home/gmcvicker/proj/WASP/CHT/output",
+
+    # minimum number of allele-specific reads (combined across individuals)
+    # required to perform combined test on a region
+    "min_as_count" : "10",
+
+    # location of chromInfo file containing chromosome names and lengths
+    # (can be downloaded from UCSC genome browser)
+    "chrom_info" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/chromInfo.hg19.txt",
+
+    # directory containing impute or VCF SNP files
+    "snp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes",
+    # file containing sample identifiers for impute or VCF SNP file
+    "snp_samples" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/YRI_samples.txt",
+
+    # directory containing bowtie2 index
+    # one file per chromosome
+    "fasta_dir" : "/iblm/netapp/data1/external/GRC37/chroms",
+
+    # text file containing sample identifiers for the subset of
+    # samples that are used in study (one per line)
+    "samples_file" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/H3K27ac/samples.txt",
+
+    # directory containing BAM files
+    "bam_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/H3K27ac",
+
+    # postfix of BAM files
+    "bam_postfix" : ".keep.rmdup.bam"
+}

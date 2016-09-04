@@ -31,6 +31,9 @@ VCFInfo *vcf_info_new() {
   vcf_info->buf_size = 1024;
   vcf_info->buf = my_malloc(vcf_info->buf_size);
 
+  vcf_info->n_sample = 0;
+  vcf_info->sample_names = NULL;
+
   return vcf_info;
 }
 
@@ -39,6 +42,16 @@ VCFInfo *vcf_info_new() {
  * free memory allocated for reading lines
  */
 void vcf_info_free(VCFInfo *vcf_info) {
+  int i;
+  
+  if(vcf_info->sample_names) {
+    for(i = 0; i < vcf_info->n_sample; i++) {
+      my_free(vcf_info->sample_names[i]);
+    }
+    my_free(vcf_info->sample_names);
+  }
+
+  
   my_free(vcf_info->buf);
   my_free(vcf_info);
 }
@@ -47,35 +60,28 @@ void vcf_info_free(VCFInfo *vcf_info) {
 void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
   char *line, *cur, *token;
   int tok_num;
-  int n_fix_header;
+  int n_fix_header, i;
   
   /* const char delim[] = " \t"; */
   const char delim[] = "\t";
 
   n_fix_header = sizeof(vcf_fix_headers) / sizeof(const char *);
 
-  vcf_info->n_header_lines = 0;
+  vcf_info->n_header_line = 0;
   
   while(util_gzgetline(vcf_fh, &vcf_info->buf, &vcf_info->buf_size) != -1) {
-
-    /*
-    line = util_gzgets_line(vcf_fh);
-    if(line == NULL) {
-      my_err("%s:%d: could not read header information from file",
-	     __FILE__, __LINE__);
-    }
-    */
     line = vcf_info->buf;
   
     if(util_str_starts_with(line, "##")) {
       /* header line */
-      vcf_info->n_header_lines += 1;
+      vcf_info->n_header_line += 1;
     }
     else if(util_str_starts_with(line, "#CHROM")) {
       /* this should be last header line that contains list of fixed fields */
-      vcf_info->n_header_lines += 1;
+      vcf_info->n_header_line += 1;
 	
       cur = vcf_info->buf;
+      line = util_str_dup(vcf_info->buf);
       tok_num = 0;
       while((token = strsep(&cur, delim)) != NULL) {
 	if(tok_num < n_fix_header) {
@@ -86,13 +92,28 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
 	}
 	tok_num += 1;
       }
-      vcf_info->n_samples = tok_num - n_fix_header;
-      /* my_free(line); */
+      vcf_info->n_sample = tok_num - n_fix_header;
+
+      /*
+       * read sample names from remaining part of header
+       */
+      vcf_info->sample_names = my_malloc(sizeof(char *) * vcf_info->n_sample);
+      cur = line;
+      tok_num = 0;
+      i = 0;
+      while((token = strsep(&cur, delim)) != NULL) {
+	if(tok_num >= n_fix_header) {
+	  vcf_info->sample_names[i] = util_str_dup(token);
+	  i += 1;
+	}
+	tok_num += 1;
+      }
+      my_free(line);
+
       break;
     } else {
       my_err("expected last line in header to start with #CHROM");
     }
-    /* my_free(line); */
   }
 }
 
@@ -134,6 +155,7 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 			  char *cur) {
   int gt_idx, hap1, hap2, i, n;
   static int warn_phase = TRUE;
+  static int warn_parse = TRUE;
   long expect_haps, n_haps;
   char gt_str[VCF_MAX_FORMAT];
   
@@ -152,7 +174,7 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 	   __FILE__, __LINE__, vcf_info->format);
   }
   
-  expect_haps = vcf_info->n_samples * 2;
+  expect_haps = vcf_info->n_sample * 2;
   
   n_haps = 0;
   
@@ -172,14 +194,20 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 	  /* try with '/' separator instead */
 	  n = sscanf(inner_tok, "%d/%d", &hap1, &hap2);
 
-	  if(n == 2 && warn_phase) {
-	    my_warn("%s:%d: some genotypes are unphased (delimited "
-		    "with '/' instead of '|')\n", __FILE__, __LINE__,
-		    inner_tok);
-	    warn_phase = FALSE;
+	  if(n == 2) {
+	    if(warn_phase) {
+	      my_warn("%s:%d: some genotypes are unphased (delimited "
+		      "with '/' instead of '|')\n", __FILE__, __LINE__,
+		      inner_tok);
+	      warn_phase = FALSE;
+	    }
 	  } else {
-	    my_warn("%s:%d: could not parse genotype string '%s'\n",
-		    __FILE__, __LINE__, inner_tok);
+	    if(warn_parse) {
+	      my_warn("%s:%d: could not parse some genotype "
+		      "strings that look like: '%s'\n", __FILE__, __LINE__,
+		      inner_tok);
+	      warn_parse = FALSE;
+	    }
 	    hap1 = VCF_GTYPE_MISSING;
 	    hap2 = VCF_GTYPE_MISSING;
 	  }
@@ -219,29 +247,21 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 
 
 
-void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
-		      char *cur) {
-  /* char delim[] = " \t"; */
+/**
+ * get genotype probabilities by parsing and converting genotype likelihoods
+ * (GL) from VCF line
+ */
+void vcf_parse_gl(VCFInfo *vcf_info, float *geno_probs, char *cur, long gl_idx) {
   char delim[] = "\t";
   char inner_delim[] = ":";
   char *tok, *inner_tok, *inner_cur;
   char gtype[VCF_MAX_FORMAT];
-  long gl_idx, i, n, n_geno_probs, expect_geno_probs;
+  long  i, n, n_geno_probs, expect_geno_probs;
   float like_homo_ref, like_het, like_homo_alt;
   float prob_homo_ref, prob_het, prob_homo_alt, prob_sum;
 
-  expect_geno_probs = vcf_info->n_samples * 3;
+  expect_geno_probs = vcf_info->n_sample * 3;
   
-  /* get index of GL token in format string*/
-  gl_idx = get_format_index(vcf_info->format, "GL");
-  if(gl_idx == -1) {
-    my_err("%s:%d: VCF format string does not specify GL token so cannot "
-	   "obtain genotype probabilities. Format string: '%s'.\n"
-	   "To use this file, you must run snp2h5 without "
-	   "the --geno_prob option.", __FILE__, __LINE__,
-	   vcf_info->format);
-  }
-
   n_geno_probs = 0;
   
   while((tok = strsep(&cur, delim)) != NULL) {
@@ -304,7 +324,95 @@ void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
     my_err("%s:%d: expected %ld genotype likelihoods per line, but got "
 	   "%ld", __FILE__, __LINE__, expect_geno_probs, n_geno_probs);
   }
+}  
+
+
+/**
+ * get genotype probabilities by parsing GP token from VCF line
+ */
+void vcf_parse_gp(VCFInfo *vcf_info, float *geno_probs, char *cur, long gp_idx) {
+  char delim[] = "\t";
+  char inner_delim[] = ":";
+  char *tok, *inner_tok, *inner_cur;
+  char gtype[VCF_MAX_FORMAT];
+  long  i, n, n_geno_probs, expect_geno_probs;
+  float prob_homo_ref, prob_het, prob_homo_alt, prob_sum;
+
+  expect_geno_probs = vcf_info->n_sample * 3;
   
+  n_geno_probs = 0;
+  
+  while((tok = strsep(&cur, delim)) != NULL) {
+    /* each genotype string is delimited by ':'
+     * each GP portion is delimited by ','
+     */
+    util_strncpy(gtype, tok, sizeof(gtype));
+
+    i = 0;
+    inner_cur = gtype;
+    while((i <= gp_idx) && (inner_tok = strsep(&inner_cur, inner_delim)) != NULL) {
+      if(i == gp_idx) {
+	n = sscanf(inner_tok, "%g,%g,%g", &prob_homo_ref, &prob_het,
+		   &prob_homo_alt);
+
+	if(n != 3) {
+	  if(strcmp(inner_tok, ".") == 0) {
+	    /* '.' indicates missing data
+	     * set all probabilities to 0.333
+	     */
+	    prob_homo_ref = prob_het = prob_homo_alt = 0.333;
+	  } else {
+	    my_err("%s:%d: failed to parse genotype probabilities from "
+		   "string '%s'", __FILE__, __LINE__, inner_tok);
+	  }
+	}
+	
+	/* check that probs sum to 1.0, normalize if they don't */
+	prob_sum = prob_homo_ref + prob_het + prob_homo_alt;
+	if((prob_sum > 1.001) || (prob_sum < 0.999)) {
+	  prob_homo_ref = prob_homo_ref / prob_sum;
+	  prob_het = prob_het / prob_sum;
+	  prob_homo_alt = prob_homo_alt / prob_sum;
+     	}
+	geno_probs[n_geno_probs] = prob_homo_ref;
+	geno_probs[n_geno_probs + 1] = prob_het;
+	geno_probs[n_geno_probs + 2] = prob_homo_alt;
+
+	n_geno_probs += 3;
+      }
+
+      i++;
+    }
+  }
+
+  if(n_geno_probs != expect_geno_probs) {
+    my_err("%s:%d: expected %ld genotype probabilities per line, but got "
+	   "%ld", __FILE__, __LINE__, expect_geno_probs, n_geno_probs);
+  }
+}  
+
+
+void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs, char *cur) {
+  long gl_idx, gp_idx;
+
+  /* get index of GP and GL tokens in format string */
+  gp_idx = get_format_index(vcf_info->format, "GP");
+  gl_idx = get_format_index(vcf_info->format, "GL");
+  
+  if((gl_idx == -1) && (gp_idx == -1)) {
+    my_err("%s:%d: VCF format string does not specify GL or GP token "
+	   "so cannot obtain genotype probabilities. Format string: '%s'.\n"
+	   "To use this file, you must run snp2h5 without "
+	   "the --geno_prob option.", __FILE__, __LINE__,
+	   vcf_info->format);
+  }
+
+  if(gp_idx > -1) {
+    vcf_parse_gp(vcf_info, geno_probs, cur, gp_idx);
+    return;
+  }
+
+  vcf_parse_gl(vcf_info, geno_probs, cur, gl_idx);  
 }
 
 
@@ -314,11 +422,11 @@ void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs,
  *
  * If geno_probs array is non-null genotype likelihoods are parsed and
  * stored in the provided array. The array must be of length
- * n_samples*3.
+ * n_sample*3.
  *
  * If haplotypes array is non-null phased genotypes are parsed and
  * stored in the provided array. The array must be of length
- * n_samples*2.
+ * n_sample*2.
  *
  * Returns 0 on success, -1 if at EOF.
  */
@@ -328,9 +436,10 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   int n_fix_header, ref_len, alt_len;
   size_t tok_num;
 
-  /* Used to allow space or tab delimiters here but now only allow tab. 
-   * This is because VCF specification indicates that fields should be tab-delimited, 
-   * and occasionally some fields contain spaces.
+  /* Used to allow space or tab delimiters here but now only allow
+   * tab.  This is because VCF specification indicates that fields
+   * should be tab-delimited, and occasionally some fields contain
+   * spaces.
    */
   /* const char delim[] = " \t";*/
   const char delim[] = "\t";
@@ -456,4 +565,6 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   }
 
   /* my_free(line); */
+
+  return 0;
 }

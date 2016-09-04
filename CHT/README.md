@@ -93,11 +93,15 @@ the [1000 Genomes website](http://www.1000genomes.org/data#DataAccess).
 
 ##  Workflow
 
-An example workflow is provided in [example_workflow.sh](../example_workflow.sh)
-script. This workflow uses data in the [example_data directory](../example_data).
+We now provide a Snakemake workflow that can be used to run the entire
+CHT pipeline. For more information see the [Snakemake README](README.snakemake.md)
+
+An example workflow in the form of a shell script is also provided in
+[example_workflow.sh](../example_workflow.sh) script. This workflow uses
+data in the [example_data directory](../example_data).
 
 Some of the input files that we used for our paper can be downloaded from 
-[here](http://eqtl.uchicago.edu/histone_mods/haplotype_read_counts/). 
+[here](http://eqtl.uchicago.edu/histone_mods/).
 
 The following steps can be used to generate input files and run the
 Combined Haplotype Test. The examples given below use the example
@@ -166,9 +170,16 @@ For example, if the goal is to identify histone-mark QTLs, the target
 regions should be ChIP-seq peaks, and the test SNPs should be SNPs
 that are near-to or within the ChIP-seq peaks.
 
+*Note (added 4/25/2016):* the target regions for a single test regions should be 
+non-overlapping. Overlapping target regions can cause some reads
+to be counted multiple times in a single test and inflate the test
+statistic. We plan to add a check for this to the extract haplotype
+read counts.
+
 If the goal is to identify eQTLs, the target regions should be the
 exons of genes, and the test SNPs could be SNPs within a specified
-distance of the TSS.
+distance of the TSS. If a gene contains overlapping or duplicate
+exons these should be collapsed.
 
 We provide a script, `get_target_regions.py`, that can generate a list
 of target regions and test SNPs for ChIP-seq peaks that match
@@ -371,5 +382,5 @@ The following example shows how the first 2 PCs can be used as covariates (repla
 ## Contact
 
 For questions about the combined haplotype test, please contact Graham McVicker 
-(gpm@stanford.edu) or Bryce van de Geijn (bmvdgeijn@uchicago.edu).
+(gmcvicker@salk.edu) or Bryce van de Geijn (vandegeijn@hsph.harvard.edu).
 

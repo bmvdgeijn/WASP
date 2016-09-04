@@ -22,11 +22,11 @@ the alternate and reference allele at every SNP position in the provided
 SNP HDF5 data files. The read counts are stored in specified HDF5 output
 files.
 
-Additionally counts of all reads are stored in another track (at the 
+Additionally counts of all reads are stored in another track (at the
 left-most position of the reads).
 
 This program does not perform filtering of reads based on mappability.
-It is assumed that the inpute BAM files are filtered appropriately prior to 
+It is assumed that the inpute BAM files are filtered appropriately prior to
 calling this script.
 
 Reads that overlap known indels are not included in allele-specific
@@ -37,7 +37,7 @@ usage: bam2h5.py OPTIONS BAM_FILE1 [BAM_FILE2 ...]
 
 BAM Files:
      Aligned reads are read from one or more BAM files. The provided
-     BAM files must be sorted and indexed. 
+     BAM files must be sorted and indexed.
 
 Input Options:
      --chrom CHROM_TXT_FILE [required]
@@ -62,8 +62,8 @@ Input Options:
      --haplotype HAPLOTYPE_H5_FILE [optional]
        Path to HDF5 file to read phased haplotypes from.
        If supplied, when read overlaps multiple SNPs counts are randomly
-       assigned to ONE of the overlapping HETEROZYGOUS SNPs; if not supplied 
-       counts are randomly assigned to ONE of overlapping SNPs (regardless of 
+       assigned to ONE of the overlapping HETEROZYGOUS SNPs; if not supplied
+       counts are randomly assigned to ONE of overlapping SNPs (regardless of
        their genotype).
 
      --samples SAMPLES_TXT_FILE [optional]
@@ -82,7 +82,7 @@ Output Options:
      --data_type uint8|uint16
        Data type of stored counts; uint8 takes up less disk
        space but has a maximum value of 255 (default=uint8).
-     
+
      --ref_as_counts REF_AS_COUNT_H5_FILE [required]
        Path to HDF5 file to write counts of reads that match reference allele.
        Allele-specific counts are stored at the position of the SNP.
@@ -127,7 +127,7 @@ BAM_CPAD       = 6 # P
 BAM_CEQUAL     = 7 # =
 BAM_CDIFF      = 8 # X
 
-BAM_CIGAR_DICT = {0 : "M", 
+BAM_CIGAR_DICT = {0 : "M",
                   1 : "I",
                   2 : "D",
                   3 : "N",
@@ -151,9 +151,9 @@ def create_carray(h5f, chrom, data_type):
         atom = tables.UInt16Atom(dflt=0)
     else:
         raise NotImplementedError("unsupported datatype %s" % data_type)
-        
+
     zlib_filter = tables.Filters(complevel=1, complib="zlib")
-    
+
     # create CArray for this chromosome
     shape = [chrom.length]
     carray = h5f.createCArray(h5f.root, chrom.name,
@@ -175,7 +175,7 @@ def is_indel(snp):
 
 
 def dump_read(f, read):
-    cigar_str = " ".join(["%s:%d" % (BAM_CIGAR_DICT[c[0]], c[1]) 
+    cigar_str = " ".join(["%s:%d" % (BAM_CIGAR_DICT[c[0]], c[1])
                           for c in read.cigar])
 
     f.write("pos: %d\n"
@@ -190,7 +190,7 @@ def dump_read(f, read):
             "seq: %s\n"
             % (read.pos, read.aend, read.alen, read.qstart, read.qend,
                read.qlen, read.rlen, read.tlen, cigar_str, read.seq))
-    
+
 
 
 
@@ -231,8 +231,8 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
     Returns a tuple containing 4 elements: [0] the index of the SNP in
     the SNP table, [1] the offset into the read sequence, [2] flag
     indicating whether the read was 'split' (i.e. was a spliced
-    read), [3] flag indicating whether read overlaps known indel. 
-    If there are no overlapping SNPs or the read cannot be processed, 
+    read), [3] flag indicating whether read overlaps known indel.
+    If there are no overlapping SNPs or the read cannot be processed,
     (None, None, is_split, overlap_indel) is returned instead.
     """
     read_offsets = []
@@ -244,7 +244,7 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
     n_match_segments = 0
     is_split = False
     overlap_indel = False
-    
+
     for cig in read.cigar:
         op = cig[0]
         op_len = cig[1]
@@ -253,7 +253,7 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             # this is a block of match/mismatch in read alignment
             read_end = read_start_idx + op_len
             genome_end = genome_start_idx + op_len
-            
+
             # get offsets of any SNPs that this read overlaps
             idx = snp_index_array[genome_start_idx:genome_end]
             is_def = np.where(idx != SNP_UNDEF)[0]
@@ -262,14 +262,14 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
 
             read_start_idx = read_end
             genome_start_idx = genome_end
-            
+
             n_match_segments += 1
         elif op == BAM_CREF_SKIP:
             # spliced read, skip over this region of genome
             genome_start_idx += op_len
             is_split = True
         elif op == BAM_CSOFT_CLIP:
-            # end of read is soft-clipped, which means it is 
+            # end of read is soft-clipped, which means it is
             # present in read, but not used in alignment
             read_start_idx += op_len
         elif op == BAM_CHARD_CLIP:
@@ -278,15 +278,15 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             pass
         else:
             sys.stderr.write("skipping because contains CIGAR code %s "
-                             " which is not currently implemented" % 
+                             " which is not currently implemented" %
                              BAM_CIGAR_DICT[op])
-            
+
     # are any of the SNPs indels? If so, discard.
     for i in snp_idx:
         if is_indel(snp_tab[i]):
             overlap_indel = True
             return (None, None, is_split, overlap_indel)
-            
+
     n_overlap_snps = len(read_offsets)
     if n_overlap_snps == 0:
         # no SNPs overlap this read
@@ -294,7 +294,7 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
 
     if hap_tab:
         # genotype info is provided by haplotype table
-        # pull out subset of overlapping SNPs that are heterozygous 
+        # pull out subset of overlapping SNPs that are heterozygous
         # in this individual
         het_read_offsets = []
         het_snp_idx = []
@@ -306,7 +306,7 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
                                  "individuals in haplotype_tab (%d). probably "
                                  "need to specify --population or use a different "
                                  "--samples_tab" % (ind_idx, hap_tab.shape[1]/2))
-            
+
             if haps[0] != haps[1]:
                 # this is a het
                 het_read_offsets.append(read_offset)
@@ -321,12 +321,12 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
         if n_overlap_hets == 1:
             # only one overlapping SNP is a het
             return (het_snp_idx[0], het_read_offsets[0], is_split, overlap_indel)
-        
+
         # choose ONE overlapping HETEROZYGOUS SNP randomly to add counts to
         # we don't want to count same read multiple times
-        r = np.random.randint(0, n_overlap_hets-1)
+        r = np.random.randint(0, n_overlap_hets)
         return (het_snp_idx[r], het_read_offsets[r], is_split, overlap_indel)
-    
+
     else:
         # We don't have haplotype tab, so we don't know which SNPs are
         # heterozygous in this individual. But we can still tell
@@ -335,16 +335,16 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
         if n_overlap_snps == 1:
             return (snp_idx[0], read_offsets[0], is_split, overlap_indel)
         else:
-            r = np.random.randint(0, n_overlap_snps-1)
+            r = np.random.randint(0, n_overlap_snps)
             return (snp_idx[r], read_offsets[r], is_split, overlap_indel)
 
 
 
-    
+
 def add_read_count(read, chrom, ref_array, alt_array, other_array,
-                   read_count_array, snp_index_array, snp_tab, hap_tab, 
+                   read_count_array, snp_index_array, snp_tab, hap_tab,
                    warned_pos, max_count, ind_idx):
-    
+
     # pysam positions start at 0
     start = read.pos+1
     end = read.aend
@@ -360,15 +360,15 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
         sys.stderr.write("WARNING skipping read: handling of "
                          "partially mapped reads not implemented\n")
         return
-    
-    # look for SNPs that overlap mapped read position, and if there 
+
+    # look for SNPs that overlap mapped read position, and if there
     # are more than one, choose one at random
     snp_idx, read_offset, is_split, overlap_indel = \
       choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx)
 
     if overlap_indel:
         return
-      
+
     # store counts of reads at start position
     if read_count_array[start-1] < max_count:
         read_count_array[start-1] += 1
@@ -377,16 +377,16 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
             sys.stderr.write("WARNING read count at position %d "
                              "exceeds max %d\n" % (start, max_count))
             warned_pos[start] = True
-        
-      
+
+
     if snp_idx is None:
         return
-    
+
     snp = snp_tab[snp_idx]
-    
+
     base = read.seq[read_offset]
     snp_pos = snp['pos']
-    
+
     if base == snp['allele1']:
         # matches reference allele
         if ref_array[snp_pos-1] < max_count:
@@ -410,9 +410,9 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
         elif not snp_pos in warned_pos:
             sys.stderr.write("WARNING other allele count at position %d "
                              "exceeds max %d\n" % (snp_pos, max_count))
-    
-        
-    
+
+
+
 
 
 
@@ -432,7 +432,7 @@ def parse_args():
                         metavar="CHROM_TXT_FILE",
                         required=True)
 
-    
+
     parser.add_argument("--snp_index",
                         help="Path to HDF5 file containing SNP index. The "
                         "SNP index is used to convert the genomic position "
@@ -447,7 +447,7 @@ def parse_args():
                         "(rs_id), position, allele1, allele2.",
                         metavar="SNP_TABLE_H5_FILE",
                         required=True)
-                        
+
     parser.add_argument("--haplotype",
                         help=" Path to HDF5 file to read phased haplotypes "
                         "from. If supplied, when read overlaps multiple SNPs "
@@ -476,14 +476,14 @@ def parse_args():
                         "with --samples argument.",
                         metavar="INDIVIDUAL",
                         default=None)
-    
+
     parser.add_argument("--data_type",
                         help="Data type of counts stored in HDF5 files. "
                         "uint8 requires less disk space but has a "
                         "maximum value of 255."
-                        "(default=uint8)", choices=("uint8", "uint16"), 
+                        "(default=uint8)", choices=("uint8", "uint16"),
                         default="uint8")
-             
+
     parser.add_argument("--ref_as_counts",
                         help="Path to HDF5 file to write counts of reads "
                         "that match reference allele. Allele-specific counts "
@@ -492,14 +492,14 @@ def parse_args():
                         metavar="REF_AS_COUNT_H5_FILE",
                         required=True)
 
-    parser.add_argument("--alt_as_counts", 
+    parser.add_argument("--alt_as_counts",
                         help="Path to HDF5 file to write counts of reads "
                         "that match alternate allele. Allele-specific counts "
                         "are stored at the position of the SNP.",
                         metavar="ALT_AS_COUNT_H5_FILE",
                         required=True)
 
-    parser.add_argument("--other_as_counts", 
+    parser.add_argument("--other_as_counts",
                         help="Path to HDF5 file to write counts of reads "
                         "that match neither reference nor alternate allele. "
                         "Allele-specific counts are stored at the position "
@@ -514,10 +514,10 @@ def parse_args():
                        "of the mapped read.",
                        metavar="READ_COUNT_H5_FILE",
                        required=True)
-                       
+
     parser.add_argument("bam_filenames", action="store", nargs="+",
                         help="BAM file(s) to read mapped reads from. "
-                        "BAMs must be sorted and indexed.")    
+                        "BAMs must be sorted and indexed.")
 
     args = parser.parse_args()
 
@@ -525,10 +525,10 @@ def parse_args():
             parser.error("--indidivual and --samples arguments "
                          "must also be provided when --haplotype argument "
                          "is provided")
-    
+
 
     return args
-    
+
 
 
 
@@ -541,14 +541,14 @@ def lookup_individual_index(samples_file, ind_name, population=None):
         p = population.lower()
     else:
         p = None
-    
+
     idx = 0
     for line in f:
         if line.startswith("samples"):
             # header line
             continue
-        
-        words = line.rstrip().split()        
+
+        words = line.rstrip().split()
         name = words[0].replace("NA", "")
 
         if len(words) > 1:
@@ -560,18 +560,18 @@ def lookup_individual_index(samples_file, ind_name, population=None):
             group = words[2].lower()
         else:
             group = ""
-        
+
         # if specified, only consider a single population or group
         if p and pop != p and group != p:
             continue
-        
+
         if name == ind_name:
             f.close()
             return idx
-    
+
         idx += 1
-    
-    
+
+
     raise ValueError("individual %s (with population=%s) "
                      "is not in samples file %s" %
                      (ind_name, population, samples_file))
@@ -591,7 +591,7 @@ def main():
     else:
         hap_h5 = None
         ind_idx = None
-    
+
     ref_count_h5 = tables.openFile(args.ref_as_counts, "w")
     alt_count_h5 = tables.openFile(args.alt_as_counts, "w")
     other_count_h5 = tables.openFile(args.other_as_counts, "w")
@@ -600,10 +600,10 @@ def main():
     output_h5 = [ref_count_h5, alt_count_h5, other_count_h5, read_count_h5]
 
     chrom_dict = {}
-        
+
     # initialize every chromosome in output files
     chrom_list = chromosome.get_all_chromosomes(args.chrom)
-    
+
     for chrom in chrom_list:
         for out_file in output_h5:
             create_carray(out_file, chrom, args.data_type)
@@ -619,7 +619,7 @@ def main():
         dtype = np.uint16
     else:
         raise NotImplementedError("unsupported datatype %s" % args.data_type)
-    
+
     for chrom in chrom_list:
         sys.stderr.write("%s\n" % chrom.name)
 
@@ -638,18 +638,18 @@ def main():
             hap_tab = hap_h5.getNode("/%s" % chrom.name)
         else:
             hap_tab = None
-        
+
         # initialize count arrays for this chromosome to 0
         ref_carray = get_carray(ref_count_h5, chrom)
         alt_carray = get_carray(alt_count_h5, chrom)
         other_carray = get_carray(other_count_h5, chrom)
         read_count_carray = get_carray(read_count_h5, chrom)
-        
+
         ref_array = np.zeros(chrom.length, dtype)
         alt_array = np.zeros(chrom.length, dtype)
         other_array = np.zeros(chrom.length, dtype)
         read_count_array = np.zeros(chrom.length, dtype)
-        
+
         # loop over all BAM files, pulling out reads
         # for this chromosome
         for bam_filename in args.bam_filenames:
@@ -659,16 +659,16 @@ def main():
 
             for read in get_sam_iter(samfile, chrom):
                 count += 1
-                if count == 10000:                        
+                if count == 10000:
                     sys.stderr.write(".")
                     count = 0
 
-                add_read_count(read, chrom, ref_array, alt_array, 
-                               other_array, read_count_array, 
+                add_read_count(read, chrom, ref_array, alt_array,
+                               other_array, read_count_array,
                                snp_index_array, snp_tab, hap_tab,
                                warned_pos, max_count, ind_idx)
 
-            # store results for this chromosome        
+            # store results for this chromosome
             ref_carray[:] = ref_array
             alt_carray[:] = alt_array
             other_carray[:] = other_array
@@ -678,22 +678,22 @@ def main():
             samfile.close()
 
     # set track statistics and close HDF5 files
-    
+
     sys.stderr.write("setting statistics for each chromosome\n")
     for h5f in output_h5:
         chromstat.set_stats(h5f, chrom_list)
         h5f.close()
 
     snp_tab_h5.close()
-    snp_index_h5.close()    
+    snp_index_h5.close()
     if hap_h5:
         hap_h5.close()
 
 
     sys.stderr.write("done\n")
 
-    
+
 main()
-        
-        
-    
+
+
+

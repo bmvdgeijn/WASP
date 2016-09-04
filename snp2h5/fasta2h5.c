@@ -91,8 +91,7 @@ void usage(char **argv) {
 
 
 void parse_args(Arguments *args, int argc, char **argv) {
-  int c, i;
-  char *format_str = NULL;
+  int c;
   
    static struct option loptions[] = {
      {"chrom",     required_argument, 0, 'c'},
@@ -243,14 +242,14 @@ void parse_fasta(Arguments *args, H5VectorInfo *seq_vec_info) {
   for(i = 0; i < args->n_input_files; i++) {
     chrom = chrom_guess_from_file(args->input_files[i],
 				  all_chroms, n_chrom);
-    
-    fprintf(stderr, "chromosome: %s, length: %ldbp\n",
-	    chrom->name, chrom->len);
-    
+        
     if(chrom == NULL) {
       my_err("%s:%d: could not guess chromosome from filename "
 	     "%s\n", __FILE__, __LINE__, args->input_files[i]);
     }
+
+    fprintf(stderr, "chromosome: %s, length: %ldbp\n",
+	    chrom->name, chrom->len);
 
     /* seq sequence from fasta file */
     seq_read_fasta_from_file(seq, args->input_files[i]);

@@ -37,6 +37,7 @@ SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name,
   H5Tset_size(tab->name_type, SNP_MAX_NAME);
   /* no longer store chromosome as each chromosome
    * gets its own table 
+   */
   /* tab->chrom_type = H5Tcopy(H5T_C_S1);
    * H5Tset_size(tab->chrom_type, SNP_MAX_CHROM);
    */
@@ -90,8 +91,6 @@ SNPTab *snp_tab_new(hid_t h5file, const char *chrom_name,
 
 
 void snp_tab_free(SNPTab *tab) {
-  int i;
-  
   H5Tclose(tab->allele_type);
   H5Tclose(tab->name_type);
   my_free(tab->title);

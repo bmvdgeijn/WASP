@@ -1,0 +1,45 @@
+#
+# This is the Snakemake configuration file that specifies paths and 
+# and options for the mapping pipeline
+#
+
+{
+    # py2 is a hack so that python2 scripts can be called
+    # by snakemake (which is written in python3). The value should
+    # be a command to do whatever is needed to setup a python2 environment and
+    # call the python2 interpreter. Depending on your system configuration,
+    # this might involve setting the PATH environment variable or
+    # just calling python2
+    "py2" : "PATH=$HOME/anaconda2/bin:$PATH; python ",
+
+    # WASP directory containing scripts
+    "wasp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP",
+
+    # directory to write all output data files to
+    "output_dir" :  "/iblm/netapp/home/gmcvicker/data1/external/Grubert2015/WASP",
+
+    # location of chromInfo file containing chromosome names and lengths
+    # (can be downloaded from UCSC genome browser)
+    "chrom_info" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/chromInfo.hg19.txt",
+
+    # directory to read VCF files from (used to write SNP input files)
+    "vcf_dir" : "/iblm/netapp/home/gmcvicker/data1/external/1000Genomes/GRC37/20130502",
+
+    # OLD way: directory to write SNP plain text input files to
+    "snp_dir" : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/snps",
+
+    # directory to write SNP HDF5 input files to
+    snp_h5_dir : "/iblm/netapp/home/gmcvicker/proj/WASP/examples/example_data/genotypes/snp_h5",
+
+    # path to samtools
+    "samtools" : "/iblm/netapp/home/gmcvicker/anaconda2/bin/samtools",
+
+    # path to bowtie2 aligner
+    "bowtie2" : "/iblm/netapp/home/gmcvicker/anaconda2/bin/bowtie2",
+
+    # prefix for bowtie2 reference genome index
+    "bowtie2_index" : "/iblm/netapp/data1/external/GRC37/combined/bowtie2_index/hg37",
+
+    # sample file containing sample names and paths to fastq files
+    "sample_file" : "/iblm/netapp/data1/external/Grubert2015/sample_paths_H3K27ac.1000G_only.txt"
+}

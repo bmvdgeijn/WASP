@@ -11,8 +11,8 @@
 #define VCF_MAX_FORMAT 1024
 
 typedef struct {
-  int n_samples;
-  long n_header_lines;
+  int n_sample;
+  long n_header_line;
 
   /* records true length of ref / alt alleles, which can be
    * truncated by limited buffer size of SNP datastructure
@@ -25,6 +25,7 @@ typedef struct {
   char info[VCF_MAX_FILTER];
   char format[VCF_MAX_FORMAT];
 
+  char **sample_names;
 
   /* used for reading lines */
   size_t buf_size;

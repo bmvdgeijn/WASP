@@ -11,7 +11,7 @@
 
 
 typedef struct {
-  int n_samples;
+  int n_sample;
 
   /* used for reading lines */
   size_t buf_size;

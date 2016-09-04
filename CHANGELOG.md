@@ -23,6 +23,7 @@ Changes include:
 * improved speed of many CHT pipeline steps
 * improved stability of CHT dispersion parameter estimation
 * added Snakemake workflows for both mapping and CHT pipelines
+* added qqplot.R script to CHT workflow
 
 
 Version 0.1

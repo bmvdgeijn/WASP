@@ -1,0 +1,247 @@
+
+configfile: "snake_conf.yaml"
+
+import glob
+
+
+def read_samples():
+    """Function to get names and fastq paths from a sample file specified
+    in the configuration. Input file is expected to have 4 columns:
+    <1000genomes_id> <unique_sample_id> <fastq1_path> <fastq2_path>. Modify this function
+    as needed to provide a dictionary of sample_id keys and (fastq1, fastq1) 
+    values"""
+    f = open(config['sample_file'], "r")
+    samp_dict = {}
+    for line in f:
+        words = line.strip().split()
+        samp_dict[words[1]] = (words[2], words[3])
+
+    return samp_dict
+
+def read_1kg_samples():
+    f = open(config['sample_file'], "r")
+    samp_dict = {}
+    for line in f:
+        words = line.strip().split()
+        samp_dict[words[1]] = words[0]
+
+    return samp_dict
+
+SAMP_TO_1KG = read_1kg_samples()
+
+
+
+def get_chromosomes():
+    """Gets list of chromosomes with from VCF files"""
+    filenames = os.listdir(config['vcf_dir'])
+
+    chr_names = set([])
+    for filename in filenames:
+        if filename.endswith(".vcf.gz"):
+            m = re.match(".*(chr[0-9A-Z]+).*", filename)
+            if m:
+                chr_names.add(m.groups()[0])
+
+    return chr_names
+    
+
+rule all:
+    input:
+        expand(config['output_dir'] + "/as_counts/{sample}.as_counts.txt.gz",
+               sample=read_samples().keys())
+
+
+        
+## Here are rules to use text input files for SNPs instead of
+## HDF5 files (that include haplotype information)
+#
+# rule extract_vcf_snps:
+#     """Makes SNP input files for find_intersecting_snps.py by extracting
+#     information from VCF files."""
+#     input:
+#         config["vcf_dir"]
+#     output:
+#         expand(config["snp_dir"] + "/{chromosome}.snps.txt.gz", chromosome=get_chromosomes())
+#     shell:
+#         "mkdir -p {config[snp_dir]} ; "
+#         "{config[wasp_dir]}/mapping/extract_vcf_snps.sh {input} {config[snp_dir]}"
+#
+# rule find_intersecting_snps_paired_end:
+#     """find intersecting SNPs using WASP script"""
+#     input:
+#         bam=config["output_dir"] + "/map1_sort/{sample}.bam",
+#         snps=[config["snp_dir"] + "/%s.snps.txt.gz" % s for s in get_chromosomes()]
+#     output:
+#         fastq1=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
+#         fastq2=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq2.gz",
+#         keep_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.keep.bam",
+#         remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
+#     shell:
+#         "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
+#         "{config[py2]} {config[wasp_dir]}/mapping/find_intersecting_snps.py "
+#         "    --is_paired_end --is_sorted --output_dir {config[output_dir]}/find_intersecting_snps {input.bam} {config[snp_dir]}"
+
+
+rule vcf2h5:
+    """Convert VCF data files to HDF5 format"""
+    input:
+        chrom=config['chrom_info'],
+        vcfs=glob.glob(config['vcf_dir'] + "/*chr*.vcf.gz")
+    output:
+        snp_index=config['snp_h5_dir'] + "/snp_index.h5",
+        snp_tab=config['snp_h5_dir'] + "/snp_tab.h5",
+        haplotype=config['snp_h5_dir'] + "/haplotype.h5"
+    shell:
+        "mkdir -p {config[snp_h5_dir]}; "
+        "{config[wasp_dir]}/snp2h5/snp2h5 "
+        "  --chrom {input.chrom} "
+        "  --format vcf "
+        "  --snp_index {output.snp_index} "
+        "  --snp_tab {output.snp_tab} "
+        "  --haplotype {output.haplotype} "
+        "  {input.vcfs}"
+
+
+rule find_intersecting_snps_paired_end:
+     """find intersecting SNPs using WASP script"""
+     input:
+         bam=config["output_dir"] + "/map1_sort/{sample}.bam",
+         snp_index=config["snp_h5_dir"] + "/snp_index.h5",
+         snp_tab=config["snp_h5_dir"] + "/snp_tab.h5",
+         haplotype=config['snp_h5_dir'] + "/haplotype.h5"
+     output:
+         fastq1=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
+         fastq2=config["output_dir"] + "/find_intersecting_snps/{sample}.remap.fq2.gz",
+         keep_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.keep.bam",
+         remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
+     shell:
+         "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
+         "{config[py2]} {config[wasp_dir]}/mapping/find_intersecting_snps.py "
+         "    --is_paired_end "
+         "    --is_sorted "
+         "    --output_dir {config[output_dir]}/find_intersecting_snps "
+         "    --snp_tab {input.snp_tab} "
+         "    --snp_index {input.snp_index} "
+         "    --haplotype {input.haplotype} "
+         "    --samples {config[sample_file]} "
+         "    {input.bam}"
+
+
+         
+rule map_bowtie2_paired_end1:
+    """map reads using bowtie2"""
+    input:
+        fastq1=lambda wildcards: read_samples()[wildcards.sample][0],
+        fastq2=lambda wildcards: read_samples()[wildcards.sample][1]
+    output:
+        config["output_dir"] + "/map1/{sample}.bam"
+    shell:
+        "mkdir -p " + config["output_dir"] + "/map1 ; "
+        "{config[bowtie2]} -x {config[bowtie2_index]} -1 {input.fastq1} -2 {input.fastq2} "
+        "| {config[samtools]} view -b -q 10 - > {output} "
+
+
+rule sort_and_index_bam1:
+    """sort and index bam generated by first mapping step"""
+    input:
+        config["output_dir"] + "/map1/{sample}.bam"
+    output:
+        config["output_dir"] + "/map1_sort/{sample}.bam",
+        config["output_dir"] + "/map1_sort/{sample}.bam.bai"
+    shell:
+        "mkdir -p {config[output_dir]}/map1_sort ; "
+        "{config[samtools]} sort -o {output[0]} {input}; "
+        "{config[samtools]} index {output[0]}"
+
+
+
+rule map_bowtie2_paired_end2:
+    """map reads a second time using bowtie2"""
+    input:
+        fastq1=config['output_dir'] + "/find_intersecting_snps/{sample}.remap.fq1.gz",
+        fastq2=config['output_dir'] + "/find_intersecting_snps/{sample}.remap.fq2.gz"
+    output:
+        config["output_dir"] + "/map2/{sample}.bam"
+    shell:
+        "mkdir -p " + config["output_dir"] + "/map2 ; "
+        "{config[bowtie2]} -x {config[bowtie2_index]} -1 {input.fastq1} -2 {input.fastq2} "
+        "| {config[samtools]} view -b -q 10 - > {output}"
+        
+
+rule sort_and_index_bam2:
+    """sort and index bam generated by second mapping step"""
+    input:
+        config["output_dir"] + "/map2/{sample}.bam"
+    output:
+        config["output_dir"] + "/map2_sort/{sample}.bam",
+        config["output_dir"] + "/map2_sort/{sample}.bam.bai"
+    shell:
+        "mkdir -p {config[output_dir]}/map2_sort ; "
+        "{config[samtools]} sort -o {output[0]} {input} ; "
+        "{config[samtools]} index {output[0]}"
+
+
+rule filter_remapped_reads:
+    """filter reads from second mapping step"""
+    input:
+        to_remap_bam=config['output_dir'] + "/find_intersecting_snps/{sample}.to.remap.bam",
+        remap_bam=config['output_dir'] + "/map2_sort/{sample}.bam",
+    output:
+        keep_bam=config['output_dir'] + "/filter_remapped_reads/{sample}.keep.bam"
+    shell:
+        "mkdir -p {config[output_dir]}/filter_remapped_reads ; "
+        "{config[py2]} {config[wasp_dir]}/mapping/filter_remapped_reads.py "
+        "  {input.to_remap_bam} {input.remap_bam} {output.keep_bam}"
+
+    
+rule merge_bams:
+    """merge 'keep' BAM files from mapping steps 1 and 2, then sort and index"""
+    input:
+        keep1=config['output_dir'] + "/find_intersecting_snps/{sample}.keep.bam",
+        keep2=config['output_dir'] + "/filter_remapped_reads/{sample}.keep.bam"
+    output:
+        merge=config['output_dir'] + "/merge/{sample}.keep.merge.bam",
+        sort=config['output_dir'] + "/merge/{sample}.keep.merge.sort.bam"
+    shell:
+        "mkdir -p {config[output_dir]}/merge ; "
+        "{config[samtools]} merge {output.merge} {input.keep1} {input.keep2}; "
+        "{config[samtools]} sort -o {output.sort} {output.merge}; "
+        "{config[samtools]} index {output.sort}"
+
+    
+rule rmdup_pe:
+    """remove duplicate read pairs"""
+    input:
+        config['output_dir'] + "/merge/{sample}.keep.merge.sort.bam"
+    output:
+        rmdup=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.bam",
+        sort=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam"
+    shell:
+        "mkdir -p {config[output_dir]}/rmdup ; "
+        "{config[py2]} {config[wasp_dir]}/mapping/rmdup_pe.py {input} {output.rmdup} ;"
+        "{config[samtools]} sort -o {output.sort} {output.rmdup}; "
+        "{config[samtools]} index {output.sort}"
+        
+
+        
+rule get_as_counts:
+    """get allele-specific read counts for SNPs"""
+    input:
+         bam=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam",
+         snp_index=config["snp_h5_dir"] + "/snp_index.h5",
+         snp_tab=config["snp_h5_dir"] + "/snp_tab.h5",
+         haplotype=config['snp_h5_dir'] + "/haplotype.h5",
+    params:
+         samp1kg=lambda wildcards: SAMP_TO_1KG[wildcards.sample]
+    output:
+        config['output_dir'] + "/as_counts/{sample}.as_counts.txt.gz"
+    shell:
+        "mkdir -p {config[output_dir]}/as_counts ; "
+        "{config[py2]} {config[wasp_dir]}/mapping/get_as_counts.py "
+        "  --snp_tab {input.snp_tab} "
+        "  --snp_index {input.snp_index} "
+        "  --haplotype {input.haplotype} "
+        "  --samples {config[sample_file]} "
+        "  --genotype_sample {params.samp1kg} "
+        "  {input.bam} | gzip > {output}"
+

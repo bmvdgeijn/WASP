@@ -1,354 +1,230 @@
-import glob
-import gzip
+import sys
 import os
 import subprocess
 
-from find_intersecting_snps import *
-from filter_remapped_reads import *
+import filter_remapped_reads
+import util
+#
+# filter_remapped_reads.py
+#  INPUT FILES: 
+#   to_remap_bam - input BAM file containing original set of reads
+#                  that need to be remapped after having their alleles flipped
+#
+#   remap_bam - input BAM file containing remapped reads. Read names in this
+#               file should be delimited with the '.' character and 
+#               contain the following fields:
+#                  <orig_name>.<coordinate>.<read_number>.<total_read_number>
+#
+#               For single-end reads <coordinate> is the left end of the read
+#               (e.g. 16052611)
+#               For paired-end reads the coordinate is the start of the 
+#               the left read and start of the right read:
+#               (e.g. 16052611-16052734)
+#               
+#
+#
+# OUTPUT FILES:
+#   keep_bam - ouput BAM file containing reads that are retained
+#              after filtering
+#          
+#
 
+
+#
+# TODO: need to verify that interleaved read pairs handled appropriately
+# TODO: need to test single end reads
+#
+#
+
+
+def write_sam_header(f):
+    f.write("@HD	VN:1.0	SO:coordinate\n")
+    f.write("@SQ	SN:chr22	LN:51304566\n")
+    f.write('@PG	ID:bowtie2	PN:bowtie2	VN:2.2.6	CL:"/iblm/netapp/home/gmcvicker/anaconda2/bin/bowtie2-align-s --wrapper basic-0 -x /iblm/netapp/data1/external/GRC37/combined/bowtie2_index/hg37 -1 /tmp/16686.inpipe1 -2 /tmp/16686.inpipe2\n')
+
+
+
+
+def write_to_remap_bam_pe(data_dir="test_data", bam_filename="test_data/test.to.remap.bam"):
+    sam_lines = ["SRR1658224.34085432	163	chr22	16052611	12	101M	=	16052734	224	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+                 "SRR1658224.34085432	83	chr22	16052734	12	101M	=	16052611	-224	TCCTGACAGCATGTGCCCAAGGTGGTCAGGATACAGCTTGCTTCTATATATTTTAGGGAGAAAATACATCAGCCTGTAAACAAAAAATTAAATTCTAAGGT	DDDDDDDDDDDDDDEDEEEFFFFHHFHHIIFIIJJJJIJJJJJJJJJJIIJJJIIIJIJIJJJJIFIIIJJIJJJJJJJIIJJJJJJJHHHHHFFFFFCCC	AS:i:0	XS:i:-12	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-11	YT:Z:CP",
+                 "SRR1658224.34975561	99	chr22	16071944	12	101M	=	16072163	320	ATTTATTTATTTATTTATTATTGGGACAGAGTCTCACTCTGTCCCCCAGACTGGAGTCCAGTGACATGATCTCAGCTCACTGCAACCTCTGCCTCGTGGGT	CCCFFFFFHHHHHJJJJJJJJJJJJIJJJJIEHIJJJJJJJIIJJJJJIJJJJJJJJJJIJHIJIJJJJIJJJJJHHHHHHFFFFFECEEEEDDDDDDBBD	AS:i:-5	XS:i:-22	XN:i:0	XM:i:1	XO:i:0	XG:i:0	NM:i:1	MD:Z:89C11	YS:i:0	YT:Z:CP",
+                 "SRR1658224.34975561	147	chr22	16072163	12	101M	=	16071944	-320	GTCTCAAACTTCTGACCTCAGGTGATCCACCCACCTCGACCTCCCAAAGTGCTGGGATTACAGGCACTAGGTCCCTAAATTAGAGCCATATTCTTTAATGT	DDBCDEDCDCCDCC?DDDDDDDBACBDA<FFB:6HIIJIIJIIJJJJJJJJJJJJIJJIHJJJJJIJJJJJJJJJJJJJJJJJJJJJJHHHGGFFFFFCCC	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-5	YT:Z:CP",
+                 "SRR1658224.7462188	163	chr22	16235410	17	101M	=	16235625	316	AGATAATTGTCTTATTTTTTTAAAAAAAGAGTAACTTTATATTATGGAATTCATAATATTTGAGACTATAATGCATGACATAAATAGTATAAAGGAGAGAG	CC@FFFFFHHHHHJJJJJJJJJJJJJJJJIJBGIJJJJJJJJJJJJJIJIFIJJJJJJJJJHHHHGFFFFFFEEEEDEEDDDDDEED@CFFFEDDD?ABB?	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-5	YT:Z:CP",
+                 "SRR1658224.7462188	83	chr22	16235625	17	101M	=	16235410	-316	TTCAAAAGATGGTATATGCATTAATATTTTCATACAACTTCCAGCTTTTGTTTTTCTTCATTTAATTTTATTTATTTATTTATTTTTGAGATGGAGTCTCG	CBDDDDECEEDEFFFDFFFHHHHHHHJJIIJJIHIHFHGHJJJJJJJGJJJJJIJJJIIJJJJJJJJJJJJJJJJJJJJJJJJJJJJJHHHHHFFFDFCCC	AS:i:-5	XS:i:-39	XN:i:0	XM:i:1	XO:i:0	XG:i:0	NM:i:1	MD:Z:15G85	YS:i:0	YT:Z:CP",
+                 "SRR1658224.31153145	163	chr22	16235410	17	101M	=	16235625	316	AGATAATTGTCTTATTTTTTTAAAAAAAGAGTAACTTTATATTATGGAATTCATAATATTTGAGACTATAATGCATGACATAAATAGTATAAAGGAGAGAG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJJIJFHIJJJJJJJJJJJIJIJJFHIJJJJJJJJHHHHHFFFFFFEDEEEEEDDDDDEED@DEEEEDDDDDDB2	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-2	YT:Z:CP",
+                 "SRR1658224.31153145	83	chr22	16235625	17	101M	=	16235410	-316	TTCAAAAGATGGTATGTGCATTAATATTTTCATACAACTTCCAGTTTTTGTTTTTCTTCATTTAATTTTATTTATTTATTTATTTTTGAGATGGAGTCTCG	DDDDDDDDEEEEEEFFFFFFHHHHGHHJJIJJJIIJIJIHJHF@(JJJJJJJJJJJJIIIIJJJJJJJIJJJJJJJJJJJJJJJJJJJHHHHHFFFDFCCC	AS:i:-2	XS:i:-36	XN:i:0	XM:i:1	XO:i:0	XG:i:0	NM:i:1	MD:Z:44C56	YS:i:0	YT:Z:CP",
+                 "SRR1658224.25014179	163	chr22	16236979	31	101M	=	16237137	259	ATGTTTTTTAAGATTTAATATTACTTTTTCCAACATCTTTTTATCCTCAAGTTTTTTATATTCCTGTTGTATTTTTTTATAGATAATAACTCCTGTTGAAT	CCCFFFFFHHHHFIJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJHGIJJJJJJJJIJJJJJJJHHHHHHHDCDDECDEEDDEDDDDDDDDDDCDC	AS:i:0	XS:i:-28	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:0	YT:Z:CP",
+                 "SRR1658224.25014179	83	chr22	16237137	31	101M	=	16236979	-259	TCATCGAACTACATTAATAAAATAATATAGCTTGATAATGAAGTAGGCTGAGAATAATCTCATACAAAACCAATAACAAATTTTGAAATACATTTACTTGC	CEFFFFFHHHHHHHHJJJJJJJJJIHJIJIJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJIIJJJIHJJJJJJIJJJJJJJJJJJJHHHHHFDDFFCCC	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:0	YT:Z:CP",
+                 "readpair1	163	chr22	100	12	101M	=	200	201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+                 "readpair2	163	chr22	150	12	101M	=	250	201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+                 "readpair1	83	chr22	200	12	101M	=	100	-201	TCCTGACAGCATGTGCCCAAGGTGGTCAGGATACAGCTTGCTTCTATATATTTTAGGGAGAAAATACATCAGCCTGTAAACAAAAAATTAAATTCTAAGGT	DDDDDDDDDDDDDDEDEEEFFFFHHFHHIIFIIJJJJIJJJJJJJJJJIIJJJIIIJIJIJJJJIFIIIJJIJJJJJJJIIJJJJJJJHHHHHFFFFFCCC	AS:i:0	XS:i:-12	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-11	YT:Z:CP",        
+                 "readpair2	163	chr22	250	12	101M	=	150	-201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP"]          
+
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+        
+    # write temporary file in SAM format, before converting to BAM
+    sam_filename = data_dir + "/tmp.sam"
+    f = open(sam_filename, "w")
+    write_sam_header(f)
+    for line in sam_lines:
+        f.write(line + "\n")
+    f.close()
+
+    subprocess.check_call("samtools view -b %s > %s" % (sam_filename, bam_filename), shell=True)
+
+
+    
+def write_remap_bam_pe(data_dir="test_data", bam_filename="test_data/test.remap.bam"):
+    sam_lines = [
+        # Read pair expected to map 2 times and maps to correct location 2 times
+        "SRR1658224.34085432.16052611-16052734.1.2	163	chr22	16052611	12	101M	=	16052734	224	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+        "SRR1658224.34085432.16052611-16052734.1.2	83	chr22	16052734	12	101M	=	16052611	-224	TCCTGACAGCATGTGCCCAAGGTGGTCAGGATACAGCTTGCTTCTATATATTTTAGGGAGAAAATACATCAGCCTGTAAACAAAAAATTAAATTCTAAGGT	DDDDDDDDDDDDDDEDEEEFFFFHHFHHIIFIIJJJJIJJJJJJJJJJIIJJJIIIJIJIJJJJIFIIIJJIJJJJJJJIIJJJJJJJHHHHHFFFFFCCC	AS:i:0	XS:i:-12	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-11	YT:Z:CP",
+        "SRR1658224.34085432.16052611-16052734.2.2	163	chr22	16052611	12	101M	=	16052734	224	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+        "SRR1658224.34085432.16052611-16052734.2.2	83	chr22	16052734	12	101M	=	16052611	-224	TCCTGACAGCATGTGCCCAAGGTGGTCAGGATACAGCTTGCTTCTATATATTTTAGGGAGAAAATACATCAGCCTGTAAACAAAAAATTAAATTCTAAGGT	DDDDDDDDDDDDDDEDEEEFFFFHHFHHIIFIIJJJJIJJJJJJJJJJIIJJJIIIJIJIJJJJIFIIIJJIJJJJJJJIIJJJJJJJHHHHHFFFFFCCC	AS:i:0	XS:i:-12	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-11	YT:Z:CP",
+        
+
+        # Read pair expected to map 2 times, but only maps 1 time
+        "SRR1658224.34975561.16071944-16072163.2.2	99	chr22	16071944	12	101M	=	16072163	320	ATTTATTTATTTATTTATTATTGGGACAGAGTCTCACTCTGTCCCCCAGACTGGAGTCCAGTGACATGATCTCAGCTCACTGCAACCTCTGCCTCGTGGGT	CCCFFFFFHHHHHJJJJJJJJJJJJIJJJJIEHIJJJJJJJIIJJJJJIJJJJJJJJJJIJHIJIJJJJIJJJJJHHHHHHFFFFFECEEEEDDDDDDBBD	AS:i:-5	XS:i:-22	XN:i:0	XM:i:1	XO:i:0	XG:i:0	NM:i:1	MD:Z:89C11	YS:i:0	YT:Z:CP",
+        "SRR1658224.34975561.16071944-16072163.2.2	147	chr22	16072163	12	101M	=	16071944	-320	GTCTCAAACTTCTGACCTCAGGTGATCCACCCACCTCGACCTCCCAAAGTGCTGGGATTACAGGCACTAGGTCCCTAAATTAGAGCCATATTCTTTAATGT	DDBCDEDCDCCDCC?DDDDDDDBACBDA<FFB:6HIIJIIJIIJJJJJJJJJJJJIJJIHJJJJJIJJJJJJJJJJJJJJJJJJJJJJHHHGGFFFFFCCC	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-5	YT:Z:CP",
+
+
+        # Read pair expected to map 2 times, but only 1/2 of 2nd pair maps back to same location
+        "SRR1658224.7462188.16235410-16235625.1.2	163	chr22	16235410	17	101M	=	16235625	316	AGATAATTGTCTTATTTTTTTAAAAAAAGAGTAACTTTATATTATGGAATTCATAATATTTGAGACTATAATGCATGACATAAATAGTATAAAGGAGAGAG	CC@FFFFFHHHHHJJJJJJJJJJJJJJJJIJBGIJJJJJJJJJJJJJIJIFIJJJJJJJJJHHHHGFFFFFFEEEEDEEDDDDDEED@CFFFEDDD?ABB?	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-5	YT:Z:CP",
+        "SRR1658224.7462188.16235410-16235625.1.2	83	chr22	16235625	17	101M	=	16235410	-316	TTCAAAAGATGGTATATGCATTAATATTTTCATACAACTTCCAGCTTTTGTTTTTCTTCATTTAATTTTATTTATTTATTTATTTTTGAGATGGAGTCTCG	CBDDDDECEEDEFFFDFFFHHHHHHHJJIIJJIHIHFHGHJJJJJJJGJJJJJIJJJIIJJJJJJJJJJJJJJJJJJJJJJJJJJJJJHHHHHFFFDFCCC	AS:i:-5	XS:i:-39	XN:i:0	XM:i:1	XO:i:0	XG:i:0	NM:i:1	MD:Z:15G85	YS:i:0	YT:Z:CP",
+        "SRR1658224.7462188.16235410-16235625.2.2	163	chr22	16235410	17	101M	*	0	0	AGATAATTGTCTTATTTTTTTAAAAAAAGAGTAACTTTATATTATGGAATTCATAATATTTGAGACTATAATGCATGACATAAATAGTATAAAGGAGAGAG	CC@FFFFFHHHHHJJJJJJJJJJJJJJJJIJBGIJJJJJJJJJJJJJIJIFIJJJJJJJJJHHHHGFFFFFFEEEEDEEDDDDDEED@CFFFEDDD?ABB?	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-5	YT:Z:CP",
+
+        
+        # Read pair expected to map 2 times, but 1 pair maps to wrong location
+        "SRR1658224.31153145.16235410-16235625.1.2	163	chr22	16235410	17	101M	=	16235625	316	AGATAATTGTCTTATTTTTTTAAAAAAAGAGTAACTTTATATTATGGAATTCATAATATTTGAGACTATAATGCATGACATAAATAGTATAAAGGAGAGAG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJJIJFHIJJJJJJJJJJJIJIJJFHIJJJJJJJJHHHHHFFFFFFEDEEEEEDDDDDEED@DEEEEDDDDDDB2	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-2	YT:Z:CP",
+        "SRR1658224.31153145.16235410-16235625.1.2	83	chr22	16235625	17	101M	=	16235410	-316	TTCAAAAGATGGTATGTGCATTAATATTTTCATACAACTTCCAGTTTTTGTTTTTCTTCATTTAATTTTATTTATTTATTTATTTTTGAGATGGAGTCTCG	DDDDDDDDEEEEEEFFFFFFHHHHGHHJJIJJJIIJIJIHJHF@(JJJJJJJJJJJJIIIIJJJJJJJIJJJJJJJJJJJJJJJJJJJHHHHHFFFDFCCC	AS:i:-2	XS:i:-36	XN:i:0	XM:i:1	XO:i:0	XG:i:0	NM:i:1	MD:Z:44C56	YS:i:0	YT:Z:CP",
+        "SRR1658224.31153145.16235410-16235625.2.2	163	chr22	18235410	17	101M	=	16235625	316	AGATAATTGTCTTATTTTTTTAAAAAAAGAGTAACTTTATATTATGGAATTCATAATATTTGAGACTATAATGCATGACATAAATAGTATAAAGGAGAGAG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJJIJFHIJJJJJJJJJJJIJIJJFHIJJJJJJJJHHHHHFFFFFFEDEEEEEDDDDDEED@DEEEEDDDDDDB2	AS:i:0	XS:i:0	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-2	YT:Z:CP",
+        "SRR1658224.31153145.16235410-16235625.2.2	83	chr22	18235625	17	101M	=	16235410	-316	TTCAAAAGATGGTATGTGCATTAATATTTTCATACAACTTCCAGTTTTTGTTTTTCTTCATTTAATTTTATTTATTTATTTATTTTTGAGATGGAGTCTCG	DDDDDDDDEEEEEEFFFFFFHHHHGHHJJIJJJIIJIJIHJHF@(JJJJJJJJJJJJIIIIJJJJJJJIJJJJJJJJJJJJJJJJJJJHHHHHFFFDFCCC	AS:i:-2	XS:i:-36	XN:i:0	XM:i:1	XO:i:0	XG:i:0	NM:i:1	MD:Z:44C56	YS:i:0	YT:Z:CP",
+
+        # Read pair expected to map 2 times, but does not map at all
+        # "SRR1658224.25014179"
+
+
+        # Read pairs expected to map 1 times, with read-pairs interleaved
+        "readpair1.100-200.1.2	163	chr22	100	12	101M	=	200	201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+        "readpair2.150-250.1.2	163	chr22	150	12	101M	=	250	201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+        "readpair1.100-200.1.2	83	chr22	200	12	101M	=	100	-201	TCCTGACAGCATGTGCCCAAGGTGGTCAGGATACAGCTTGCTTCTATATATTTTAGGGAGAAAATACATCAGCCTGTAAACAAAAAATTAAATTCTAAGGT	DDDDDDDDDDDDDDEDEEEFFFFHHFHHIIFIIJJJJIJJJJJJJJJJIIJJJIIIJIJIJJJJIFIIIJJIJJJJJJJIIJJJJJJJHHHHHFFFFFCCC	AS:i:0	XS:i:-12	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-11	YT:Z:CP",        
+        "readpair2.150-250.1.2	163	chr22	250	12	101M	=	150	-201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+        "readpair1.100-200.2.2	163	chr22	100	12	101M	=	200	201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+        "readpair2.150-250.2.2	163	chr22	150	12	101M	=	250	201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP",
+        "readpair1.100-200.2.2	83	chr22	200	12	101M	=	100	-201	TCCTGACAGCATGTGCCCAAGGTGGTCAGGATACAGCTTGCTTCTATATATTTTAGGGAGAAAATACATCAGCCTGTAAACAAAAAATTAAATTCTAAGGT	DDDDDDDDDDDDDDEDEEEFFFFHHFHHIIFIIJJJJIJJJJJJJJJJIIJJJIIIJIJIJJJJIFIIIJJIJJJJJJJIIJJJJJJJHHHHHFFFFFCCC	AS:i:0	XS:i:-12	XN:i:0	XM:i:0	XO:i:0	XG:i:0	NM:i:0	MD:Z:101	YS:i:-11	YT:Z:CP",        
+        "readpair2.150-250.2.2	163	chr22	250	12	101M	=	150	-201	TGGAGACATAAAATGAGGCATATCTGACCTCCACTTCCAAAAACATCTGAGATAGGTCTCAGTTAATTAAGAAAGTTTGTTCTGCCTAGTTTAAGGACATG	CCCFFFFFHHHHHJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJIJJIHIJJJJEHIJJJHJJJJJJJJJJJJ=DHHHHHFFFFFFEEEEEEDDCDDDC	AS:i:-11	XS:i:-17	XN:i:0	XM:i:2	XO:i:0	XG:i:0	NM:i:2	MD:Z:7G44C48	YS:i:0	YT:Z:CP"
+    ]
+
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
+        
+    # write temporary file in SAM format, before converting to BAM
+    sam_filename = data_dir + "/tmp.sam"
+    f = open(sam_filename, "w")
+    write_sam_header(f)
+    for line in sam_lines:
+        f.write(line + "\n")
+    f.close()
+
+    # write to temp bam file
+    tmp_bam_filename = data_dir + "/tmp.bam"
+    subprocess.check_call("samtools view -b %s > %s" % (sam_filename, tmp_bam_filename), shell=True)
+    # sort the temp bam file
+    util.sort_bam(tmp_bam_filename, data_dir + "/tmp")
+    # remove temp bam
+    os.remove(tmp_bam_filename)
+    # rename sorted bam to output bam filename
+    os.rename(data_dir + "/tmp.sort.bam", bam_filename)
+
+    
 def read_bam(bam):
     """
     Read a bam file into a list where each element of the list is a line from
     the bam file (with the newline stripped). The header is discarded.
     """
-    res = subprocess.check_output('samtools view {}'.format(bam), shell=True)
+    res = subprocess.check_output('samtools view %s' % bam, shell=True)
     return res.strip().split('\n')
 
-def cleanup():
-    fns = (glob.glob('test_data/test*.keep.bam') +
-           glob.glob('test_data/test*.remap.fq*.gz') + 
-           glob.glob('test_data/test*.to.remap.bam') + 
-           glob.glob('test_data/test*.to.remap.num.gz') + 
-           glob.glob('test_data/test_*_filtered.bam'))
-    [os.remove(x) for x in fns]
 
-class TestRun:
-    def test_simple_single(self):
-        is_paired_end = False
-        max_window = 100000
-        pref = 'test_data/test_single'
-        file_name = pref + ".sort.bam"
-        keep_file_name = pref + ".keep.bam"
-        remap_name = pref + ".to.remap.bam"
-        remap_num_name = pref + ".to.remap.num.gz"
-        fastq_names = [pref + ".remap.fq.gz"]
-        snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
-        bs.run()
+def test_filter_remapped_reads_pe():
+    test_dir = "test_data"
+    to_remap_bam_filename = "test_data/test.to.remap.bam"
+    remap_bam_filename = "test_data/test.remap.bam"
+    keep_bam_filename = "test_data/keep.bam"
 
-        keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_single.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
+    # write test input data
+    write_to_remap_bam_pe(data_dir=test_dir, bam_filename=to_remap_bam_filename)
+    write_remap_bam_pe(data_dir=test_dir, bam_filename=remap_bam_filename)
 
-        lines = read_bam(keep_bam)
-        assert len(lines) == 1
-
-        cleanup()
+    # run filter remapped reads
+    filter_remapped_reads.main(to_remap_bam_filename, remap_bam_filename, keep_bam_filename)
+        
+    # read in filtered reads
+    lines = read_bam(keep_bam_filename)
     
-    def test_simple_paired(self):
-        is_paired_end = True
-        max_window = 100000
-        pref = 'test_data/test_paired'
-        file_name = pref + ".sort.bam"
-        keep_file_name = pref + ".keep.bam"
-        remap_name = pref + ".to.remap.bam"
-        remap_num_name = pref + ".to.remap.num.gz"
-        fastq_names = [pref + ".remap.fq1.gz",
-                       pref + ".remap.fq2.gz"]
-        snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
-        bs.run()
-        
-        keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_paired.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
-        
-        lines = read_bam(keep_bam)
-        assert len(lines) == 2
+    # read lines from keep BAM file
+    read_dict = {}
+    for line in lines:
+        words = line.split()
+        read_name = words[0]
+        if read_name in read_dict:
+            read_dict[read_name].append(words)
+        else:
+            read_dict[read_name] = [words]
+                    
+    # verify that filtered reads look correct
 
-        cleanup()
+    # we expect a read pair with this identifier:
+    read_name = "SRR1658224.34085432"
+    assert read_name in read_dict
+    reads = read_dict[read_name]
+    assert len(reads) == 2
 
-    def test_simple_single_unmapped(self):
-        """Test to make sure that if the read pair is unmapped in the remapping
-        stage, it is not written to the final output file."""
-        is_paired_end = False
-        max_window = 100000
-        pref = 'test_data/test_single'
-        file_name = pref + ".sort.bam"
-        keep_file_name = pref + ".keep.bam"
-        remap_name = pref + ".to.remap.bam"
-        remap_num_name = pref + ".to.remap.num.gz"
-        fastq_names = [pref + ".remap.fq.gz"]
-        snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
-        bs.run()
-        
-        keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_single_unmapped.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
-        
-        lines = read_bam(keep_bam)
-        assert lines == ['']
+    pos1 = int(reads[0][3])
+    pos2 = int(reads[1][3])
+    assert pos1 == 16052611
+    assert pos2 == 16052734
 
-        cleanup()
-
-    def test_simple_paired_unmapped(self):
-        """Test to make sure that if the read pair is unmapped in the remapping
-        stage, it is not written to the final output file."""
-        is_paired_end = True
-        max_window = 100000
-        pref = 'test_data/test_paired'
-        file_name = pref + ".sort.bam"
-        keep_file_name = pref + ".keep.bam"
-        remap_name = pref + ".to.remap.bam"
-        remap_num_name = pref + ".to.remap.num.gz"
-        fastq_names = [pref + ".remap.fq1.gz",
-                       pref + ".remap.fq2.gz"]
-        snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
-        bs.run()
-        
-        keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_paired_unmapped.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
-        
-        lines = read_bam(keep_bam)
-        assert lines == ['']
-
-        cleanup()
-
-    def test_simple_single_reverse(self):
-        """Test to make sure that if the read is mapped correctly on the reverse
-        strand in the remapping stage, it is written to the final output
-        file."""
-        is_paired_end = False
-        max_window = 100000
-        pref = 'test_data/test_single_reverse'
-        file_name = pref + ".sort.bam"
-        keep_file_name = pref + ".keep.bam"
-        remap_name = pref + ".to.remap.bam"
-        remap_num_name = pref + ".to.remap.num.gz"
-        fastq_names = [pref + ".remap.fq.gz"]
-        snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
-        bs.run()
-        
-        keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_single_reverse.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
-        
-        lines = read_bam(keep_bam)
-        assert len(lines) == 1
-
-        cleanup()
-
-    def test_simple_paired_reverse(self):
-        """Test to make sure that if the first read in the read pair is mapped
-        correctly on the reverse strand in the remapping stage, it is written to
-        the final output file."""
-        cleanup()
-        is_paired_end = True
-        max_window = 100000
-        pref = 'test_data/test_paired_reverse'
-        file_name = pref + ".sort.bam"
-        keep_file_name = pref + ".keep.bam"
-        remap_name = pref + ".to.remap.bam"
-        remap_num_name = pref + ".to.remap.num.gz"
-        fastq_names = [pref + ".remap.fq1.gz",
-                       pref + ".remap.fq2.gz"]
-        snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
-        bs.run()
-        
-        keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_paired_reverse.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
-        
-        lines = read_bam(keep_bam)
-        assert len(lines) == 2
-
-        cleanup()
-
-    def test_two_snps_single(self):
-        is_paired_end = False
-        max_window = 100000
-        pref = 'test_data/test_single'
-        file_name = pref + ".sort.bam"
-        keep_file_name = pref + ".keep.bam"
-        remap_name = pref + ".to.remap.bam"
-        remap_num_name = pref + ".to.remap.num.gz"
-        fastq_names = [pref + ".remap.fq.gz"]
-        snp_dir = 'test_data/two_snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
-        bs.run()
-
-        keep_bam = pref + '_filtered.bam'
-        run(remap_name, 'test_data/test_two_snps_single.remapped.bam', keep_bam,
-            remap_num_name, is_paired_end)
-        
-        lines = read_bam(keep_bam)
-        assert len(lines) == 1
-
-        cleanup()
-
-    # def test_two_snps_paired(self):
-    #     # TODO: The remapped bam file should have six entries, only has two.
-    #     is_paired_end = True
-    #     max_window = 100000
-    #     pref = 'test_data/test_paired'
-    #     file_name = pref + ".sort.bam"
-    #     keep_file_name = pref + ".keep.bam"
-    #     remap_name = pref + ".to.remap.bam"
-    #     remap_num_name = pref + ".to.remap.num.gz"
-    #     fastq_names = [pref + ".remap.fq1.gz",
-    #                    pref + ".remap.fq2.gz"]
-    #     snp_dir = 'test_data/two_snps'
-    #     bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-    #                     remap_name, remap_num_name, fastq_names, snp_dir)
-    #     bs.run()
-    #     
-    #     keep_bam = pref + '_filtered.bam'
-    #     run(remap_name, 'test_data/test_two_snps_paired.remapped.bam', keep_bam,
-    #         remap_num_name, is_paired_end)
-
-    #     lines = read_bam(keep_bam)
-    #     assert len(lines) == 2
-
-    #     cleanup()
-
-    # def test_issue_18(self):
-    #     """
-    #     This was reported as a bug because one read pair that overlaps one SNP
-    #     was resulting in multiple pairs of reads in the fastq files. However, it
-    #     is not a bug because the reads overlap and both reads overlap the SNP.
-    #     """
-    #     # TODO: The remapped bam file does not correspond to the input bam file.
-    #     is_paired_end = True
-    #     max_window = 100000
-    #     file_name = 'test_data/issue_18.bam'
-    #     pref = 'test_data/test_paired'
-    #     keep_file_name = pref + ".keep.bam"
-    #     remap_name = pref + ".to.remap.bam"
-    #     remap_num_name = pref + ".to.remap.num.gz"
-    #     fastq_names = [pref + ".remap.fq1.gz",
-    #                    pref + ".remap.fq2.gz"]
-    #     snp_dir = 'test_data/issue_18_snps'
-    #     bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-    #                     remap_name, remap_num_name, fastq_names, snp_dir)
-    #     bs.run()
-    #     
-    #     keep_bam = pref + '_filtered.bam'
-    #     run(remap_name, 'test_data/test_issue_18.remapped.bam', keep_bam,
-    #         remap_num_name, is_paired_end)
-
-    #     lines = read_bam(keep_bam)
-    #     assert len(lines) == 2
-
-    #     cleanup()
-    # 
-    # def test_issue_23(self):
-    #     """
-    #     This was reported as a bug because WASP said the read pair mapped
-    #     correctly yet wasn't written to the output file.
-    #     """
-    #     # TODO: I think the test above was copied down but the test for but the
-    #     # test for issue 23 was not implemented. Maybe I accidentally copied
-    #     # over it at some point.
-    #     is_paired_end = True
-    #     max_window = 100000
-    #     file_name = 'test_data/issue_18.bam'
-    #     pref = 'test_data/test_paired'
-    #     keep_file_name = pref + ".keep.bam"
-    #     remap_name = pref + ".to.remap.bam"
-    #     remap_num_name = pref + ".to.remap.num.gz"
-    #     fastq_names = [pref + ".remap.fq1.gz",
-    #                    pref + ".remap.fq2.gz"]
-    #     snp_dir = 'test_data/issue_18_snps'
-    #     bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-    #                     remap_name, remap_num_name, fastq_names, snp_dir)
-    #     bs.run()
-    #     
-    #     keep_bam = pref + '_filtered.bam'
-    #     run(remap_name, 'test_data/test_issue_18.remapped.bam', keep_bam,
-    #         remap_num_name, is_paired_end)
-
-    #     lines = read_bam(keep_bam)
-    #     assert len(lines) == 2
-
-    #     cleanup()
     
-    def test_bad_first_paired(self):
-        """Test whether the correct read pairs are output if the first read pair
-        is incorrectly remapped."""
-        remap_name = 'test_data/bad_first_paired/bad_first_to_remap.bam'
-        keep_bam = 'test_data/test_bad_first_filtered.bam'
-        remapped_bam = 'test_data/bad_first_paired/bad_first_remapped.bam' 
-        remap_num_name = 'test_data/bad_first_paired/bad_first.to.remap.num.gz'
-        is_paired_end = True
-        run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
+    # expect these read pairs to be filtered out (not present)
+    # only one version of read pair maps (expect 2)
+    assert "SRR1658224.34975561" not in read_dict
+
+    # 1/2 of second read pair missing
+    assert "SRR1658224.7462188" not in read_dict
+
+    # 1 pair maps to wrong location
+    assert "SRR1658224.31153145" not in read_dict
+
+    # neither pair maps
+    assert "SRR1658224.25014179" not in read_dict
+
+    # expect these (interleaved) read pairs to be kept
+    read_name = "readpair1"
+    assert read_name in read_dict
+    reads = read_dict[read_name]
+    assert len(reads) == 2
+    pos1 = int(reads[0][3])
+    pos2 = int(reads[1][3])
+    assert pos1 == 100
+    assert pos2 == 200
+
+    read_name = "readpair2"
+    assert read_name in read_dict
+    reads = read_dict[read_name]
+    assert len(reads) == 2
+    pos1 = int(reads[0][3])
+    pos2 = int(reads[1][3])
+    assert pos1 == 150
+    assert pos2 == 250
+
+    
+
+    
         
-        lines = read_bam(keep_bam)
-        assert len(lines) == 6
 
-        cleanup()
-
-    def test_bad_middle_paired(self):
-        """Test whether the correct read pairs are output if a read pair in the
-        middle is incorrectly remapped."""
-        remap_name = 'test_data/bad_middle_paired/bad_middle_to_remap.bam'
-        keep_bam = 'test_data/test_bad_middle_filtered.bam'
-        remapped_bam = 'test_data/bad_middle_paired/bad_middle_remapped.bam' 
-        remap_num_name = 'test_data/bad_middle_paired/bad_middle.to.remap.num.gz'
-        is_paired_end = True
-        run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
-        
-        lines = read_bam(keep_bam)
-        assert len(lines) == 6
-
-    def test_bad_last_paired(self):
-        """Test whether the correct read pairs are output if the last read pair
-        is incorrectly remapped."""
-        remap_name = 'test_data/bad_last_paired/bad_last_to_remap.bam'
-        keep_bam = 'test_data/test_bad_last_filtered.bam'
-        remapped_bam = 'test_data/bad_last_paired/bad_last_remapped.bam' 
-        remap_num_name = 'test_data/bad_last_paired/bad_last.to.remap.num.gz'
-        is_paired_end = True
-        run(remap_name, remapped_bam, keep_bam, remap_num_name, is_paired_end)
-        
-        lines = read_bam(keep_bam)
-        assert len(lines) == 6
-
-        cleanup()
-
-class TestCLI:
-    def test_simple_single_cli(self):
-        is_paired_end = False
-        max_window = 100000
-        pref = 'test_data/test_single'
-        file_name = pref + ".sort.bam"
-        keep_file_name = pref + ".keep.bam"
-        remap_name = pref + ".to.remap.bam"
-        remap_num_name = pref + ".to.remap.num.gz"
-        fastq_names = [pref + ".remap.fq.gz"]
-        snp_dir = 'test_data/snps'
-        bs = BamScanner(is_paired_end, max_window, file_name, keep_file_name,
-                        remap_name, remap_num_name, fastq_names, snp_dir)
-        bs.run()
-
-        keep_bam = pref + '_filtered.bam'
-        c = ('python filter_remapped_reads.py {} {} {} {}'.format(
-            remap_name, 'test_data/test_single.remapped.bam', keep_bam,
-            remap_num_name))
-        subprocess.check_call(c, shell=True)
-
-        lines = read_bam(keep_bam)
-        assert len(lines) == 1
-
-        cleanup()
+    
+    

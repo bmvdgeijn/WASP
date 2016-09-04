@@ -33,21 +33,21 @@ def parse_options():
                                      "each individual (across sites), under the assumption "
                                      "that all sites come from the null hypothesis (no "
                                      "genetic association)");
-    
-    
-    parser.add_argument("-e", action='store', dest='read_error_rate',
-                        help="sequence read error rate",
+
+
+    parser.add_argument("--read_error_rate", "-e", action='store', dest='read_error_rate',
+                        help="sequence read error rate (default=0.005)",
                         type=float, default=0.005)
-    
-    parser.add_argument("infile_list", 
+
+    parser.add_argument("infile_list",
                         help="Path to file containing list of CHT input "
                         "files (one for each individual)",
                         action='store', default=None)
-    
-    parser.add_argument("out_file", 
+
+    parser.add_argument("out_file",
                         help="File to write overdispersion parameter estimates to",
                         action='store', default=None)
-    
+
     return parser.parse_args()
 
 
@@ -58,7 +58,7 @@ def open_input_files(in_filename):
         sys.stderr.write("input file %s does not exist or is not a regular file\n" %
                          in_filename)
         exit(2)
-    
+
     # read file that contains list of input files
     in_file = open(in_filename)
 
@@ -67,20 +67,20 @@ def open_input_files(in_filename):
         # open each input file and read first line
         filename = line.rstrip()
         if not filename or not os.path.exists(filename) or not os.path.isfile(filename):
-            sys.stderr.write("input file '%s' does not exist or is not a regular file\n" 
+            sys.stderr.write("input file '%s' does not exist or is not a regular file\n"
                              % line)
             exit(2)
         if filename.endswith(".gz"):
-            f = gzip.open(filename)
+            f = gzip.open(filename, "rt")
         else:
             f = open(filename)
-            
+
         # skip header
         f.readline()
 
         infiles.append(f)
     in_file.close()
-    
+
     if len(infiles) == 0:
         sys.stderr.write("no input files specified in file '%s'\n" % options.infile_list)
         exit(2)
@@ -93,37 +93,76 @@ def main():
     options = parse_options()
     infiles = open_input_files(options.infile_list)
     outfile = open(options.out_file,"w")
+    dup_snp_warn = True
+    
+    # read input data and estimate dispersion coefficient
+    # for one individual at a time
+    for i in range(len(infiles)):
+        cur_file = infiles[i]
 
-    for cur_file in infiles:
-        AS_ref=[]
-        AS_alt=[]
-        hetps=[]
-        cur_line=cur_file.readline()
-        while True:
-            try:
-                cur_line=cur_file.readline()
-            except:
-                break
-            if not cur_line:
-                break
-            snpinfo=cur_line.strip().split()
+        AS_ref = []
+        AS_alt = []
+        hetps =[]
 
+        header = cur_file.readline()
+
+        # combine allele-specific read counts into one large
+        # array for this individual
+        for line in cur_file:
+            snpinfo = line.strip().split()
+            
             if snpinfo[12] != "NA":
-                AS_ref = AS_ref + [int(y) for y in snpinfo[12].split(';')]
-                AS_alt = AS_alt + [int(y) for y in snpinfo[13].split(';')]
-                hetps = hetps + [float(y.strip()) for y in snpinfo[10].split(';')]
-        dispersion = fmin(likelihood, 0.001, 
-                          args=(AS_ref, AS_alt, hetps, options.read_error_rate))
-        outfile.write(str(dispersion[0])+"\n")
+                # read information aout target SNPs
+                snp_locs = np.array([int(y.strip()) for y in snpinfo[9].split(';')],
+                                    dtype=np.int32)
+                snp_as_ref = np.array([int(y) for y in snpinfo[12].split(';')],
+                                      dtype=np.int32)
+                snp_as_alt = np.array([int(y) for y in snpinfo[13].split(';')],
+                                      dtype=np.int32)
+                snp_hetps = np.array([float(y.strip()) for y in snpinfo[10].split(';')],
+                                     dtype=np.float64)
+
+                # same SNP should not be provided multiple times, this
+                # can create problems with combined test. Warn and filter
+                # duplicate SNPs
+                uniq_loc, uniq_idx = np.unique(snp_locs, return_index=True)
+
+                if dup_snp_warn and uniq_loc.shape[0] != snp_locs.shape[0]:
+                    sys.stderr.write("WARNING: discarding SNPs that are repeated "
+                                     "multiple times in same line\n")
+                    dup_snp_warn = False
+                
+                AS_ref.extend(snp_as_ref[uniq_idx])
+                AS_alt.extend(snp_as_alt[uniq_idx])
+                hetps.extend(snp_hetps[uniq_idx])
+
+        AS_ref = np.array(AS_ref)
+        AS_alt = np.array(AS_alt)
+        hetps = np.array(hetps)
+
+        # find maximu likelihood estimate for overdispersion parameter
+        res = minimize_scalar(likelihood, bounds=(0.01, 0.99),
+                              args=(AS_ref, AS_alt, hetps, options.read_error_rate),
+                              options = {'xatol' : 0.001},
+                              method="Bounded")
+        LL = res.fun
+        dispersion = res.x
+
+        sys.stderr.write("AS dispersion[%d]: %g\n" % (i, dispersion))
+        sys.stderr.write("LL[%d]: -%g\n" % (i, LL))
+
+        outfile.write(str(dispersion)+"\n")
         outfile.flush()
 
-        
-def likelihood(dispersion,AS_ref,AS_alt,hetps,error):
-    cur_like=0
+
+def likelihood(dispersion, AS_ref, AS_alt, hetps, error):
+    cur_like = 0
     for i in range(len(AS_ref)):
-        cur_like = cur_like + AS_betabinom_loglike([math.log(0.5), math.log(0.5)], 
-                                                   dispersion, AS_ref[i], 
-                                                   AS_alt[i], hetps[i], error)
+        # calculate likelihood for each heterozygous site, under
+        # assumption that true reference proportion is 50%
+        cur_like +=  AS_betabinom_loglike([math.log(0.5), math.log(0.5)],
+                                          dispersion, AS_ref[i],
+                                          AS_alt[i], hetps[i], error)
     return -cur_like
 
 
@@ -139,22 +178,22 @@ def addlogs(loga, logb):
 def AS_betabinom_loglike(logps, sigma, AS1, AS2, hetp, error):
     if sigma >= 1.0 or sigma <= 0.0:
         return -99999999999.0
-    else:
-        a = math.exp(logps[0] + math.log(1/sigma**2 - 1))
-        b = math.exp(logps[1] + math.log(1/sigma**2 - 1))
-    
+
+    a = math.exp(logps[0] + math.log(1/sigma**2 - 1))
+    b = math.exp(logps[1] + math.log(1/sigma**2 - 1))
+
     part1 = 0
     part1 += betaln(AS1 + a, AS2 + b)
     part1 -= betaln(a, b)
-    
+
     if hetp == 1:
-        return part1        
+        return part1
 
     e1 = math.log(error) * AS1 + math.log(1 - error) * AS2
     e2 = math.log(error) * AS2 + math.log(1 - error) * AS1
     if hetp == 0:
         return addlogs(e1, e2)
-    
+
     return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1,e2))
 
 main()

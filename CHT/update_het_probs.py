@@ -52,7 +52,7 @@ def main():
     args = parse_options()
 
     if args.infile.endswith(".gz"):
-        infile = gzip.open(args.infile, "r")
+        infile = gzip.open(args.infile, "rt")
     else:
         infile = open(args.infile, "r")
         

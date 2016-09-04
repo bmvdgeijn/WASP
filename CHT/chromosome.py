@@ -187,7 +187,7 @@ def get_chromosome(filename, name):
         
 def get_all_chromosomes(filename):
     if filename.endswith(".gz"):
-        f = gzip.open(filename)
+        f = gzip.open(filename, "rt")
     else:
         f = open(filename)
 

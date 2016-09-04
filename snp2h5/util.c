@@ -580,6 +580,7 @@ size_t util_strncpy(char *dest, const char *src, size_t n) {
   if(n > 0) {
     while((i < n-1) && (src[i] != '\0')) {
       dest[i] = src[i];
+
       i++;
     }
     /* padd to end with \0 */

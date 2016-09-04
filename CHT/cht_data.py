@@ -1,6 +1,6 @@
 import sys
 import gzip
-
+import os
 import numpy as np
 
 class TestSNP:
@@ -143,7 +143,8 @@ def open_input_files(in_filename):
 
 
     
-def read_count_matrices(input_filename, shuffle=False, skip=0, min_counts=0, min_as_counts=0):
+def read_count_matrices(input_filename, shuffle=False, skip=0,
+                        min_counts=0, min_as_counts=0, sample=0):
     """Given an input file that contains paths to input files for all individuals, and returns 
     matrix of observed read counts, and matrix of expected read counts
     """
@@ -210,12 +211,12 @@ def read_count_matrices(input_filename, shuffle=False, skip=0, min_counts=0, min
     sys.stderr.write("expect_matrix dimension: %s\n" % str(expected_matrix.shape))
 
     nrow = count_matrix.shape[0]
-    if (options.sample > 0) and (options.sample < count_matrix.shape):
+    if (sample > 0) and (sample < count_matrix.shape):
         # randomly sample subset of rows without replacement
-        sys.stderr.write("randomly sampling %d target regions\n" % options.sample)
+        sys.stderr.write("randomly sampling %d target regions\n" % sample)
         samp_index = np.arange(nrow)
         np.random.shuffle(samp_index)
-        samp_index = samp_index[:options.sample]
+        samp_index = samp_index[:sample]
         count_matrix = count_matrix[samp_index,]
         expected_matrix = expected_matrix[samp_index,]
 

@@ -152,7 +152,8 @@ def main():
                                      shuffle=False,
                                      skip=options.skip,
                                      min_counts=options.min_counts,
-                                     min_as_counts=options.min_as_counts)
+                                     min_as_counts=options.min_as_counts,
+                                     sample=options.sample)
     
     gene_fits = [np.float64(0.005)] * count_matrix.shape[0]
     mean_fits = [np.float64(1)] * count_matrix.shape[0]

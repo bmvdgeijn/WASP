@@ -107,7 +107,7 @@ By default Snakemake will write an output and error file for each job
 to your home directory. These files will be named like `snakejob.<rulename>.<job_num>.sh.{e|o}<sge_jobid>`. For example:
 
    	# contains error output for extract_haplotype_read_counts rule:
-   	snakejob.extract_haplotype_read_counts.13.sh.e4507125
+   	snakejob.find_intersecting_snps_paired_end.13.sh.e4507125
 
 If a rule fails, you should check the appropriate output file to see what
 error occurred. A major benefit of Snakemake is that if you re-run snakemake

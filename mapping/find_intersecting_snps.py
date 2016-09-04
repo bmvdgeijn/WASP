@@ -284,16 +284,16 @@ def parse_options():
                         "same directory as the input BAM file.")
 
     parser.add_argument("--snp_dir", action='store', 
-                        help=("Directory containing SNP text files "
-                              "This directory should contain one file per "
-                              "chromosome named like chr<#>.snps.txt.gz. "
-                              "Each file should contain 3 columns: position "
-                              "RefAllele AltAllele. This option should "
-                              "only be used if --snp_tab, --snp_index, "
-                              "and --haplotype arguments are not used."
-                              " If this argument is provided, all possible "
-                              "allelic combinations are used (rather "
-                              "than set of observed haplotypes).",
+                        help="Directory containing SNP text files "
+                        "This directory should contain one file per "
+                        "chromosome named like chr<#>.snps.txt.gz. "
+                        "Each file should contain 3 columns: position "
+                        "RefAllele AltAllele. This option should "
+                        "only be used if --snp_tab, --snp_index, "
+                        "and --haplotype arguments are not used."
+                        " If this argument is provided, all possible "
+                        "allelic combinations are used (rather "
+                        "than set of observed haplotypes).",
                         default=None)
         
 

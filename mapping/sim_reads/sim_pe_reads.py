@@ -177,8 +177,9 @@ def write_reads(file1, file2, read_coord, left_seq, right_seq):
                                       tile, read_coord.left_start, 
                                       read_coord.right_end)
 
-    id1 = base_id + "/1"
-    id2 = base_id + "/2"
+    # id1 = base_id + "/1"
+    # id2 = base_id + "/2"
+    id1 = id2 = base_id
 
     # Make left read "read1" 50 % of time
     if np.random.randint(2) == 0:

@@ -10,6 +10,8 @@ import argparse
 
 import gzip
 
+import util
+
 # TODO: change output dir--make command line arg?
 OUTPUT_DIR = "."
 
@@ -357,7 +359,7 @@ def main():
 
     out_f = None
     if args.output_file:
-        if args.output_file.endswith(".gz"):
+        if util.is_gzipped(args.output_file):
             out_f = gzip.open(args.output_file, "w")
         else:
             out_f = open(args.output_file, "w")

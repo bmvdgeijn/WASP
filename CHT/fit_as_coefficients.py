@@ -24,6 +24,7 @@ import scipy.stats
 
 import numpy as np
 
+import util
 
 def parse_options():
     parser = argparse.ArgumentParser(description="This script estimates the "
@@ -70,7 +71,7 @@ def open_input_files(in_filename):
             sys.stderr.write("input file '%s' does not exist or is not a regular file\n"
                              % line)
             exit(2)
-        if filename.endswith(".gz"):
+        if util.is_gzipped(filename):
             f = gzip.open(filename, "rt")
         else:
             f = open(filename)

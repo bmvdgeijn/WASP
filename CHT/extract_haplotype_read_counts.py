@@ -28,6 +28,7 @@ import tables
 import chromosome
 import chromstat
 import coord
+import util
 
 SNP_UNDEF = -1
 HAP_UNDEF = -1
@@ -533,7 +534,7 @@ def main():
 
     unknown_chrom = set([])
     
-    if args.input_file.endswith(".gz"):
+    if util.is_gzipped(args.input_file):
         f = gzip.open(args.input_file, "rt")
     else:
         f = open(args.input_file, "r")

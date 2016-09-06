@@ -3,6 +3,9 @@ import gzip
 import os
 import numpy as np
 
+import util
+
+
 class TestSNP:
     def __init__(self, name, geno_hap1, geno_hap2, AS_target_ref, AS_target_alt,
                  hetps, totals, counts):
@@ -121,7 +124,7 @@ def open_input_files(in_filename):
             sys.stderr.write("input file '%s' does not exist or is not a "
                              "regular file\n" % in_file)
             exit(2)
-        if filename.endswith(".gz"):
+        if util.is_gzipped(filename):
             f = gzip.open(filename, "rt")
         else:
             f = open(filename)

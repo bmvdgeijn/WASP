@@ -28,6 +28,8 @@ import numpy as np
 
 import random
 
+import util
+
 # OPTIMIZER="BFGS"
 OPTIMIZER="Nelder-Mead"
 
@@ -76,7 +78,7 @@ def open_input_files(in_filename):
             sys.stderr.write("input file '%s' does not exist or is not a regular file\n"
                              % line)
             exit(2)
-        if filename.endswith(".gz"):
+        if util.is_gzipped(filename):
             f = gzip.open(filename, "rt")
         else:
             f = open(filename, "r")
@@ -212,7 +214,7 @@ def main():
         pc_matrix = []
         num_pcs = 0
 
-    if options.out_file.endswith(".gz"):
+    if util.is_gzipped(options.out_file):
         outfile = gzip.open(options.out_file, "wb")
     else:
         outfile = open(options.out_file, 'w')

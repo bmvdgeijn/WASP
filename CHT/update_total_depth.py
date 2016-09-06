@@ -32,6 +32,7 @@ as an input to the CHT.
 import numpy as np
 import sys
 import gzip
+import util
 import argparse
 import math
 import tables
@@ -123,11 +124,11 @@ def main():
 def open_files(file_list, r_w):
     files=[]
     
-    for f in file_list:
-        if f.endswith(".gz"):
-            files.append(gzip.open(f, r_w))
+    for filename in file_list:
+        if util.is_gzipped(filename):
+            files.append(gzip.open(filename, r_w))
         else:
-            files.append(open(f,r_w))
+            files.append(open(filename,r_w))
     
     return(files)
 

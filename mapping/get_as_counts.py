@@ -63,7 +63,7 @@ def parse_samples(samples_str):
     if os.path.exists(samples_str) and not os.path.isdir(samples_str):
         samples = []
 
-        if samples_str.endswith(".gz"):
+        if util.is_gzipped(samples_str):
             f = gzip.open(samples_str)
         else:
             f = open(samples_str)

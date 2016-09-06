@@ -3,6 +3,7 @@ import gzip
 import re
 import argparse
 
+import util
 
 class Chromosome(object):
     """Represents a chromosome. Has a name, length and a few
@@ -186,7 +187,7 @@ def get_chromosome(filename, name):
         
         
 def get_all_chromosomes(filename):
-    if filename.endswith(".gz"):
+    if util.is_gzipped(filename):
         f = gzip.open(filename, "rt")
     else:
         f = open(filename)

@@ -4,6 +4,9 @@ import gzip
 import pysam
 import operator
 
+import util
+
+
 NUCLEOTIDES = set(['A', 'C', 'T', 'G'])
 SNP_UNDEF = -1
 
@@ -196,7 +199,7 @@ class SNPTable(object):
     def read_file(self, filename):
         """read in SNPs and indels from text input file"""
         try:
-            if filename.endswith(".gz"):
+            if util.is_gzipped(filename):
                 f = gzip.open(filename)
             else:
                 f = open(filename, "r")

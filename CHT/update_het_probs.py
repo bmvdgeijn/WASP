@@ -2,10 +2,11 @@ import gzip
 import argparse
 import math
 import sys
-
 from argparse import ArgumentParser
 
 import tables
+
+import util
 
 
 def parse_options():
@@ -51,12 +52,12 @@ def main():
     error = 0.01
     args = parse_options()
 
-    if args.infile.endswith(".gz"):
+    if util.is_gzipped(args.infile):
         infile = gzip.open(args.infile, "rt")
     else:
         infile = open(args.infile, "r")
         
-    if args.outfile.endswith(".gz"):
+    if util.is_gzipped(args.outfile):
         outfile = gzip.open(args.outfile,"w")
     else:
         outfile = open(args.outfile,"w")

@@ -1,3 +1,8 @@
+Version 0.2.1 - September 5, 2016
+-----------
+This minor release corrects an issue where the cht_data module was not included in the v0.2 release. This module is required by the fit_bnb_coefficients.py script.
+
+
 Version 0.2 - September 3, 2016
 -----------
 

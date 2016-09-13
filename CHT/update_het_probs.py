@@ -57,7 +57,7 @@ def main():
     else:
         infile = open(args.infile, "r")
         
-    if util.is_gzipped(args.outfile):
+    if args.outfile.endswith(".gz"):
         outfile = gzip.open(args.outfile,"w")
     else:
         outfile = open(args.outfile,"w")

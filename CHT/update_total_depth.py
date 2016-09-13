@@ -125,10 +125,17 @@ def open_files(file_list, r_w):
     files=[]
     
     for filename in file_list:
-        if util.is_gzipped(filename):
-            files.append(gzip.open(filename, r_w))
+        if r_w.startswith("r"):
+            if util.is_gzipped(filename):
+                files.append(gzip.open(filename, r_w))
+            else:
+                files.append(open(filename, r_w))
         else:
-            files.append(open(filename,r_w))
+            if filename.endswith(".gz"):
+                files.append(gzip.open(filename, r_w))
+            else:
+                files.append(open(filename, r_w))
+                
     
     return(files)
 

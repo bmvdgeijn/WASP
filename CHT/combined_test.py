@@ -214,7 +214,7 @@ def main():
         pc_matrix = []
         num_pcs = 0
 
-    if util.is_gzipped(options.out_file):
+    if options.out_file.endswith(".gz"):
         outfile = gzip.open(options.out_file, "wb")
     else:
         outfile = open(options.out_file, 'w')

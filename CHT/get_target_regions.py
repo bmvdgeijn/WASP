@@ -359,7 +359,7 @@ def main():
 
     out_f = None
     if args.output_file:
-        if util.is_gzipped(args.output_file):
+        if args.output_file.endswith(".gz"):
             out_f = gzip.open(args.output_file, "w")
         else:
             out_f = open(args.output_file, "w")

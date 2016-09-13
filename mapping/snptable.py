@@ -392,11 +392,11 @@ class SNPTable(object):
                 # in these cases, presumably reference version of read
                 # would map to same location (with higher score).
 
-            elif seq_type == BAM_CHARD_CLIP:
+            elif op == BAM_CHARD_CLIP:
                 # these bases not included in read or genome
                 pass
 
-            elif seq_type == BAM_CPAD:
+            elif op == BAM_CPAD:
                 # like an insert, likely only used in multiple-sequence
                 # alignment where inserts may be of different lengths
                 # in different seqs

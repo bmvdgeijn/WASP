@@ -923,6 +923,60 @@ class TestSingleEnd:
         test_data.cleanup()
 
 
+        
+    def test_unaligned_reads(self):
+        """Simple test of whether unmapped reads are handled
+        properly"""
+        test_data = Data(read1_seqs=["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                     "ACTAGACATACATAACACATATACCCACCC"],
+                         read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                      "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"])
+        
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    snp_dir=test_data.snp_dir)
+
+        #
+        # Verify new fastq is correct. The first base of the first read
+        # should be switched from a C to an A.
+        #
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 4
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq = "".join(l)
+
+        assert lines[1] == new_seq
+        assert lines[3] == test_data.read1_quals[0]
+
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert len(old_lines) == 2
+        assert len(new_lines) == 1
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped or are discarded. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+
 
 class TestCLI:
     def test_single_cli(self):

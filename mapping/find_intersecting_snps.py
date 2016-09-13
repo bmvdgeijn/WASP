@@ -162,6 +162,9 @@ class ReadStats(object):
         # number of reads that overlap SNP but match neither allele
         self.other_count = 0
 
+        # number of reads discarded becaused not mapped
+        self.discard_unmapped = 0
+        
         # number of reads discarded because not proper pair
         self.discard_improper_pair = 0
 
@@ -197,6 +200,7 @@ class ReadStats(object):
 
     def write(self, file_handle):
         sys.stderr.write("DISCARD reads:\n"
+                         "  unmapped: %d\n"
                          "  improper pair: %d\n"
                          "  different chromosome: %d\n"
                          "  indel: %d\n"
@@ -210,7 +214,8 @@ class ReadStats(object):
                          "REMAP reads:\n"
                          "  single-end: %d\n"
                          "  pairs: %d\n" %
-                         (self.discard_improper_pair,
+                         (self.discard_unmapped,
+                          self.discard_improper_pair,
                           self.discard_different_chromosome,
                           self.discard_indel,
                           self.discard_secondary,
@@ -576,6 +581,13 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
         # if (read_count % 100000) == 0:
         #     sys.stderr.write("\nread_count: %d\n" % read_count)
         #     sys.stderr.write("cache_size: %d\n" % cache_size)
+
+        # TODO: need to change this to use new pysam API calls
+        # but need to chech pysam version for backward compatibility
+        if read.tid == -1:
+            # unmapped read
+            read_stats.discard_unmapped += 1
+            continue
         
         if (cur_tid is None) or (read.tid != cur_tid):
             # this is a new chromosome

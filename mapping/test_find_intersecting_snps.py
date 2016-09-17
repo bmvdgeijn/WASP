@@ -196,7 +196,26 @@ class Data(object):
         subprocess.check_call(cmd)
 
 
+    def index_genome_bwa(self):
+        cmd = ['bwa', 'index', self.genome_filename]
+        subprocess.check_call(cmd)
 
+    def map_single_bwa(self):
+        cmd = "bwa aln -q 15 %s %s > %s.sai" % (self.genome_filename,
+                                            self.fastq1_filename,
+                                            self.output_prefix)
+        subprocess.check_call(cmd, shell=True)
+
+        cmd = "bwa samse %s %s.sai %s > %s" % (self.genome_filename,
+                                               self.output_prefix,
+                                               self.fastq1_filename,
+                                               self.sam_filename)
+
+        subprocess.check_call(cmd, shell=True)
+
+        
+
+        
     def sam2bam(self):
         cmd = 'samtools view -S -b %s > %s' % \
               (self.sam_filename, self.bam_filename)
@@ -2330,6 +2349,157 @@ class TestHaplotypesSingleEnd:
 
 
 
+    def test_haplotypes_bwa_softclipped(self):
+        """Simple test whether reads that are softclipped
+        by BWA are handled correctly."""
+
+        # make a read that we expect to be softclipped at 5' end
+        # also make a SNP that is at end of read
+
+        snp_pos = [1, 61]
+        test_data = Data(
+            read1_seqs =["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+                         "TTTTTTTTTTATTTTTTTTTTTTTTTTTCTG"],
+            read1_quals=["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+                         "BBBBBBBBBBBBBBBBBBBBBBBB!!!!!!!"],
+            genome_seqs=["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
+                         "TTTTTTTTTTATTTTTTTTTTTTTTTTTCTG"],
+            snp_list=[['test_chrom', snp_pos[0], "A", "G"],
+                      ['test_chrom', snp_pos[1], "T", "G"]],
+            haplotypes=[[0, 1, 0, 1],
+                        [0, 1, 0, 1]])
+        
+        test_data.setup()
+        test_data.index_genome_bwa()
+        test_data.map_single_bwa()
+        test_data.sam2bam()
+        
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    snp_tab_filename=test_data.snp_tab_filename,
+                                    snp_index_filename=test_data.snp_index_filename,
+                                    haplotype_filename=test_data.haplotype_filename)
+
+        #  read1:  AAAAAAAAAAAAAAAAAAAAAAAAAACCTGATTTTTTTTTTATTTTTTTTTTTTTTTTTCTG
+        #  qual1:  BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB!!!!!!!
+        #     POS: 12345678901234567890123456789012345678901234567890123456789012
+        #    SNPs: G                                                           G
+        #          0       10        20        30        40        50        60
+        #  genome: AAAAAAAAAAAAAAAAAAAAAAAAAACCTGATTTTTTTTTTATTTTTTTTTTTTTTTTTCTG
+        #  
+        
+        # Verify new fastq is correct. The first base of the read
+        # should be switched from a A to G, but base 61 should be not
+        # be changed because it is in soft-clipped region of
+        # alignment
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 4
+
+        l = list(test_data.read1_seqs[0])
+        l[snp_pos[0]-1] = 'G'
+        new_seq = "".join(l)
+        test_data.read1_quals[0]
+
+        assert lines[1] == new_seq
+        assert lines[3] == test_data.read1_quals[0]
+
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+
+        ##################################################################
+
+        # need to test what happens when read is rev-complemented so that
+        # soft-clipped region is at start of aligned region
+        snp_pos = [1, 61]
+        test_data = Data(
+            read1_seqs =["CAGAAAAAAAAAAAAAAAAATAAAAAAAAAA"
+                         "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"],
+            read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB" +
+                         "BBBBBBBBBBBBBBBBBBBBBBBB!!!!!!!"],
+            genome_seqs=["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
+                         "TTTTTTTTTTATTTTTTTTTTTTTTTTTCTG"],
+            snp_list=[['test_chrom', snp_pos[0], "A", "G"],
+                      ['test_chrom', snp_pos[1], "T", "G"]],
+            haplotypes=[[0, 1, 0, 1],
+                        [0, 1, 0, 1]])
+        
+        test_data.setup()
+        test_data.index_genome_bwa()
+        test_data.map_single_bwa()
+        test_data.sam2bam()
+        
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    snp_tab_filename=test_data.snp_tab_filename,
+                                    snp_index_filename=test_data.snp_index_filename,
+                                    haplotype_filename=test_data.haplotype_filename)
+
+        read1_revcomp = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATTTTTTTTTTATTTTTTTTTTTTTTTTTCTG"
+        qual1_rev = "!!!!!!!BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+        
+        #   read1:  CAGAAAAAAAAAAAAAAAAATAAAAAAAAAATTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+        #  qual1:   BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB!!!!!!!
+        # rcread1:  AAAAAAAAAAAAAAAAAAAAAAAAAAAAAATTTTTTTTTTATTTTTTTTTTTTTTTTTCTG
+        # rqual1:   !!!!!!!BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+        #    SNPs:  G                                                           G
+        #     POS:  12345678901234567890123456789012345678901234567890123456789012
+        #           0       10        20        30        40        50        60
+        #  genome:  AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATTTTTTTTTTATTTTTTTTTTTTTTTTTCTG
+        #
+
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 4
+
+        # expect only second SNP to remain, since first SNP should be in
+        # softclipped part of read
+        l = list(read1_revcomp)
+        
+        l[snp_pos[1]-1] = 'G'
+        new_seq = "".join(l)
+
+        assert lines[1] == new_seq
+        assert lines[3] == qual1_rev
+
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+        
+        # test_data.cleanup()
+
+
+
+        
+
 
 class TestHaplotypesPairedEnd:
         
@@ -2425,3 +2595,7 @@ class TestHaplotypesPairedEnd:
         test_data.cleanup()
 
         # TODO: test when only one half of read maps
+
+
+
+

@@ -291,9 +291,9 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
             ref_allele = snp_tab.snp_allele1[snp_i]
             alt_allele = snp_tab.snp_allele2[snp_i]
             
-            if ref_allele == read.query[read_pos-1]:
+            if ref_allele == read.query_sequence[read_pos-1]:
                 snp_ref_match[snp_i] += 1
-            elif alt_allele == read.query[read_pos-1]:
+            elif alt_allele == read.query_sequence[read_pos-1]:
                 snp_alt_match[snp_i] += 1
             else:
                 snp_oth_match[snp_i] += 1

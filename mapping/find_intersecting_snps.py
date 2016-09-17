@@ -380,7 +380,7 @@ def write_read(read, snp_tab, snp_idx, read_pos):
         snp_allele1[r_pos-1] = a1
         snp_allele2[r_pos-1] = a2
 
-    sys.stderr.write("READ: %s\n" % read.query)
+    sys.stderr.write("READ: %s\n" % read.query_sequence)
     sys.stderr.write("A1:   %s\n" % "".join(snp_allele1))
     sys.stderr.write("A2:   %s\n" % "".join(snp_allele2))
     
@@ -393,10 +393,10 @@ def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
     alt_alleles = snp_tab.snp_allele2[snp_idx]
     
     for i in range(len(snp_idx)):
-        if ref_alleles[i] == read.query[read_pos[i]-1]:
+        if ref_alleles[i] == read.query_sequence[read_pos[i]-1]:
             # read matches reference allele
             read_stats.ref_count += 1
-        elif alt_alleles[i] == read.query[read_pos[i]-1]:
+        elif alt_alleles[i] == read.query_sequence[read_pos[i]-1]:
             # read matches non-reference allele
             read_stats.alt_count += 1
         else:
@@ -721,13 +721,14 @@ def process_paired_read(read1, read2, read_stats, files,
 
             if files.hap_h5:
                 # generate reads using observed set of haplotypes
-                read_seqs = generate_haplo_reads(read.query, snp_idx,
+                read_seqs = generate_haplo_reads(read.query_sequence,
+                                                 snp_idx,
                                                  snp_read_pos,
                                                  ref_alleles, alt_alleles,
                                                  snp_tab.haplotypes)
             else:
                 # generate all possible allelic combinations of reads
-                read_seqs = generate_reads(read.query, snp_read_pos,
+                read_seqs = generate_reads(read.query_sequence, snp_read_pos,
                                            ref_alleles, alt_alleles, 0)
             
             new_reads.append(read_seqs)
@@ -742,8 +743,8 @@ def process_paired_read(read1, read2, read_stats, files,
         read_stats.keep_pair += 1
     else:
         # add original version of both sides of pair
-        new_reads[0].append(read1.query)
-        new_reads[1].append(read2.query)
+        new_reads[0].append(read1.query_sequence)
+        new_reads[1].append(read2.query_sequence)
 
         if len(new_reads[0]) + len(new_reads[1]) > max_seqs:
             # quit now before generating a lot of read pairs
@@ -766,7 +767,7 @@ def process_paired_read(read1, read2, read_stats, files,
                     unique_pairs.add(pair)
 
         # remove original read pair, if present
-        orig_pair = (read1.query, read2.query)
+        orig_pair = (read1.query_sequence, read2.query_sequence)
                                  
         if orig_pair in unique_pairs:
             unique_pairs.remove(orig_pair)
@@ -819,19 +820,19 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
             return
 
         if files.hap_h5:
-            read_seqs = generate_haplo_reads(read.query, snp_idx,
+            read_seqs = generate_haplo_reads(read.query_sequence, snp_idx,
                                              snp_read_pos,
                                              ref_alleles, alt_alleles,
                                              snp_tab.haplotypes)
         else:
-            read_seqs = generate_reads(read.query,  snp_read_pos,
+            read_seqs = generate_reads(read.query_sequence,  snp_read_pos,
                                        ref_alleles, alt_alleles, 0)
 
         # make set of unique reads, we don't want to remap
         # duplicates, or the read that matches original
         unique_reads = set(read_seqs)
-        if read.query in unique_reads:
-            unique_reads.remove(read.query)
+        if read.query_sequence in unique_reads:
+            unique_reads.remove(read.query_sequence)
         
         if len(unique_reads) == 0:
             # only read generated matches original read,
@@ -925,11 +926,14 @@ def main(bam_filenames, is_paired_end=False,
     
 
 if __name__ == '__main__':
-    options = parse_options()
-
-    samples = parse_samples(options.samples)
-
     sys.stderr.write("command line: %s\n" % " ".join(sys.argv))
+    sys.stderr.write("python version: %s\n" % sys.version)
+    sys.stderr.write("pysam version: %s\n" % pysam.__version__)
+
+    # TODO: add checks for python and pysam versions here
+    
+    options = parse_options()
+    samples = parse_samples(options.samples)
     
     main(options.bam_filename,
          is_paired_end=options.is_paired_end, is_sorted=options.is_sorted,

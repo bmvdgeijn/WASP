@@ -386,11 +386,14 @@ class SNPTable(object):
                 read_start = read_end + 1
                 read_end = read_start + op_len - 1
 
-                # This is like insert, but at the beginning of the read.
-                # TODO: handle indels? Sometimes a read can be softclipped
-                # because it contains insert relative to reference, but
-                # in these cases, presumably reference version of read
-                # would map to same location (with higher score).
+                # This is like insert, but at end of the read.
+                # Sequence was not considered in alignment.
+                # Usually this is because bases at end of read
+                # were low quality. One option would be to 
+                # pretend soft-clipped part of read was aligned
+                # like match/mismatch and to consider SNPs in this
+                # region. We have decided to not consider SNPs 
+                # because this part of read is not actually aligned.
 
             elif op == BAM_CHARD_CLIP:
                 # these bases not included in read or genome

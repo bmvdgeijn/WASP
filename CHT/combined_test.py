@@ -102,6 +102,7 @@ def write_header(outfile):
                              "LOGLIKE.NULL", "LOGLIKE.ALT",
                              "CHISQ", "P.VALUE", "ALPHA", "BETA",
                              "PHI", "TOTAL.AS.READ.COUNT",
+                             "REF.AS.READ.COUNT", "ALT.AS.READ.COUNT",
                              "TOTAL.READ.COUNT"]) + "\n")
 
 
@@ -160,7 +161,8 @@ def read_as_sigmas(options, infiles):
 
 
 def write_results(outfile, snpinfo, loglike1par, loglike2par,
-                  best2par, totcounts, all_counts):
+                  best2par, tot_as_counts, ref_as_counts, alt_as_counts,
+                  all_counts):
     """Write result to output file. Tab-delimited columns are:
       1. chromosome,
       2. SNP position,
@@ -177,7 +179,9 @@ def write_results(outfile, snpinfo, loglike1par, loglike2par,
          parameter for this region)
       8. total number of allele-specific read counts for this
          region summed across individuals
-      9. total number of mapped reads for this region,
+      9. total number of reference haplotype allele-specific read counts
+     10. total number of alt haplotype allele-specific read counts
+     11. total number of mapped reads for this region,
          summed across individuals"""
 
     # compute likelihood ratio test statistic:
@@ -189,10 +193,12 @@ def write_results(outfile, snpinfo, loglike1par, loglike2par,
                              "%.2f" % -loglike2par,
                              "%.3f" % chisq,
                              "%g" % pval,
-                             "%.3f" % best2par[0],
-                             "%.3f" % best2par[1],
+                             "%g" % best2par[0],
+                             "%g" % best2par[1],
                              "%g" % best2par[2],
-                             "%d" % totcounts,
+                             "%d" % tot_as_counts,
+                             "%d" % ref_as_counts,
+                             "%d" % alt_as_counts,
                              "%d" % all_counts]) + '\n')
     outfile.flush()
 
@@ -200,7 +206,8 @@ def write_results(outfile, snpinfo, loglike1par, loglike2par,
 def write_empty_result(outfile, snpinfo):
     """Write all zeros in the even that the test failed"""
     outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], "0", "0",
-                             "0", "NA", "0", "0", "0", "0"]) + '\n')
+                             "0", "NA", "0", "0", "0",
+                             "0", "0", "0"]) + '\n')
 
 
 
@@ -256,17 +263,17 @@ def main():
 
             # how many allele-specific reads are there across all linked SNPs and
             # and individuals?
-            totcounts = sum([np.sum(x.AS_target_ref) + np.sum(x.AS_target_alt)
-                             for x in test_snps])
-
-
+            ref_as_counts = sum([np.sum(x.AS_target_ref) for x in test_snps])
+            alt_as_counts = sum([np.sum(x.AS_target_alt) for x in test_snps])
+            tot_as_counts = ref_as_counts + alt_as_counts
+            
             all_counts = sum([test_snps[i].counts for i in range(len(test_snps))])
 
-            if totcounts < options.min_as_counts:
+            if tot_as_counts < options.min_as_counts:
                 if options.verbose:
                     sys.stderr.write("-----\nskipping SNP %s because "
                                      "total AS counts %d <= %d\n" %
-                                     (test_snps[0].name, totcounts, options.min_as_counts))
+                                     (test_snps[0].name, tot_as_counts, options.min_as_counts))
 
                 # skip, not enough allele-specific counts
                 for i in range(len(infiles)):
@@ -299,7 +306,7 @@ def main():
             if options.benchmark:
                 # start timing test for NULL model
                 bench_file.write("null %s %s %d %d " % (snpinfo[0][0], snpinfo[0][1],
-                                                        totcounts, all_counts))
+                                                        tot_as_counts, all_counts))
                 bench_file.flush()
             t1 = time.time()
 
@@ -370,7 +377,7 @@ def main():
             if options.benchmark:
                 # start timing test for ALT model
                 bench_file.write("alt %s %s %d %d " % (snpinfo[0][0], snpinfo[0][1],
-                                                       totcounts, all_counts))
+                                                       tot_as_counts, all_counts))
                 bench_file.flush()
 
             t1 = time.time()
@@ -397,7 +404,7 @@ def main():
                                  pc_coefs, pc_matrix)
 
             write_results(outfile, snpinfo, loglike1par, loglike2par, best2par,
-                          totcounts, all_counts)
+                          tot_as_counts, ref_as_counts, alt_as_counts, all_counts)
 
         except Exception as e:
             write_empty_result(outfile, snpinfo)

@@ -1095,9 +1095,9 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
        * to point to row in matrices / SNP table 
        */
       if(snp.pos > chrom->len || snp.pos < 1) {
-	my_err("%s:%d: SNP position (%ld) is outside of "
-	       "chromomosome %s range:1-%ld", __FILE__, __LINE__,
-	       snp.pos, chrom->len);
+	my_err("%s:%d: SNP %s position (%ld) is outside of "
+	       "chromomosome %s range: 1-%ld", __FILE__, __LINE__,
+	       snp.name, snp.pos, chrom->name, chrom->len);
       }
 
       if(snp_index) {

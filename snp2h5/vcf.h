@@ -27,6 +27,9 @@ typedef struct {
 
   char **sample_names;
 
+  /* keeps track of line number for error reporting */
+  size_t cur_line;
+  
   /* used for reading lines */
   size_t buf_size;
   char *buf;

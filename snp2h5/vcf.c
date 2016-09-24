@@ -32,6 +32,7 @@ VCFInfo *vcf_info_new() {
   vcf_info->buf = my_malloc(vcf_info->buf_size);
 
   vcf_info->n_sample = 0;
+  vcf_info->cur_line = 0;
   vcf_info->sample_names = NULL;
 
   return vcf_info;
@@ -71,6 +72,7 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
   
   while(util_gzgetline(vcf_fh, &vcf_info->buf, &vcf_info->buf_size) != -1) {
     line = vcf_info->buf;
+    vcf_info->cur_line += 1;
   
     if(util_str_starts_with(line, "##")) {
       /* header line */
@@ -226,8 +228,8 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 	}
 
 	if((n_haps + 2) > expect_haps) {
-	  my_err("%s:%d: more genotypes per line than expected",
-		 __FILE__, __LINE__);
+	  my_err("%s:%d: more genotypes per line than expected (line: %ld)",
+		 __FILE__, __LINE__, vcf_info->cur_line);
 	}
 	haplotypes[n_haps] = hap1;
 	haplotypes[n_haps+1] = hap2;
@@ -241,7 +243,8 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 
   if(n_haps != expect_haps) {
     my_err("%s:%d: expected %ld genotype values per line, but got "
-	   "%ld", __FILE__, __LINE__, expect_haps, n_haps);
+	   "%ld (line: %ld)", __FILE__, __LINE__,
+	   expect_haps, n_haps, vcf_info->cur_line);
   }
 }
 
@@ -285,7 +288,8 @@ void vcf_parse_gl(VCFInfo *vcf_info, float *geno_probs, char *cur, long gl_idx) 
 	    like_homo_ref = like_het = like_homo_alt = -0.477;
 	  } else {
 	    my_err("%s:%d: failed to parse genotype likelihoods from "
-		   "string '%s'", __FILE__, __LINE__, inner_tok);
+		   "string '%s' (line: %ld)", __FILE__, __LINE__,
+		   inner_tok, vcf_info->cur_line);
 	  }
 	}
 
@@ -295,8 +299,9 @@ void vcf_parse_gl(VCFInfo *vcf_info, float *geno_probs, char *cur, long gl_idx) 
 	prob_homo_alt = pow(10.0, like_homo_alt);
 
 	if((n_geno_probs + 3) > expect_geno_probs) {
-	  my_err("%s:%d: more genotype likelihoods per line than expected",
-		 __FILE__, __LINE__);
+	  my_err("%s:%d: more genotype likelihoods per line "
+		 "than expected (line: %ld)",
+		 __FILE__, __LINE__, vcf_info->cur_line);
 	}
 	
 	/* most of time probs sum to 1.0, but sometimes they do not
@@ -322,7 +327,8 @@ void vcf_parse_gl(VCFInfo *vcf_info, float *geno_probs, char *cur, long gl_idx) 
 
   if(n_geno_probs != expect_geno_probs) {
     my_err("%s:%d: expected %ld genotype likelihoods per line, but got "
-	   "%ld", __FILE__, __LINE__, expect_geno_probs, n_geno_probs);
+	   "%ld (line: %ld)", __FILE__, __LINE__, expect_geno_probs,
+	   n_geno_probs, vcf_info->cur_line);
   }
 }  
 
@@ -363,7 +369,8 @@ void vcf_parse_gp(VCFInfo *vcf_info, float *geno_probs, char *cur, long gp_idx) 
 	    prob_homo_ref = prob_het = prob_homo_alt = 0.333;
 	  } else {
 	    my_err("%s:%d: failed to parse genotype probabilities from "
-		   "string '%s'", __FILE__, __LINE__, inner_tok);
+		   "string '%s' (line: %ld)",
+		   __FILE__, __LINE__, inner_tok, vcf_info->cur_line);
 	  }
 	}
 	
@@ -387,7 +394,8 @@ void vcf_parse_gp(VCFInfo *vcf_info, float *geno_probs, char *cur, long gp_idx) 
 
   if(n_geno_probs != expect_geno_probs) {
     my_err("%s:%d: expected %ld genotype probabilities per line, but got "
-	   "%ld", __FILE__, __LINE__, expect_geno_probs, n_geno_probs);
+	   "%ld (line: %ld)", __FILE__, __LINE__, expect_geno_probs,
+	   n_geno_probs, vcf_info->cur_line);
   }
 }  
 
@@ -450,14 +458,16 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   if(util_gzgetline(vcf_fh, &vcf_info->buf, &vcf_info->buf_size) == -1) {
     return -1;
   }
-  
+  vcf_info->cur_line += 1;
+    
   cur = vcf_info->buf;
   tok_num = 0;
 
   /* chrom */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n",
+	   n_fix_header, vcf_info->cur_line);
   }
 
   /* we don't bother to store chromosome since we store 
@@ -469,21 +479,24 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   /* pos */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n",
+	   n_fix_header, vcf_info->cur_line);
   }
   snp->pos = util_parse_long(token);
   
   /* ID */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n",
+	   n_fix_header, vcf_info->cur_line);
   }
   util_strncpy(snp->name, token, sizeof(snp->name));
   
   /* ref */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n", n_fix_header,
+	   vcf_info->cur_line);
   }
   ref_len = util_strncpy(snp->allele1, token, sizeof(snp->allele1));
 
@@ -500,7 +513,8 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   /* alt */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n",
+	   n_fix_header, vcf_info->cur_line);
   }
   alt_len = util_strncpy(snp->allele2, token, sizeof(snp->allele2));
   
@@ -514,14 +528,16 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   /* qual */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n",
+	   n_fix_header, vcf_info->cur_line);
   }
   util_strncpy(vcf_info->qual, token, sizeof(vcf_info->qual));
 
   /* filter */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n", n_fix_header,
+	   vcf_info->cur_line);
   }
   util_strncpy(vcf_info->filter, token, sizeof(vcf_info->filter));
 
@@ -529,7 +545,8 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   /* info */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n",
+	   n_fix_header, vcf_info->cur_line);
   }
   util_strncpy(vcf_info->info, token, sizeof(vcf_info->info));
 
@@ -537,7 +554,8 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   /* format */
   token = strsep(&cur, delim);
   if(token == NULL) {
-    my_err("expected at least %d tokens per line\n", n_fix_header);
+    my_err("expected at least %d tokens per line (line: %ld)\n",
+	   n_fix_header, vcf_info->cur_line);
   }
   util_strncpy(vcf_info->format, token, sizeof(vcf_info->format));
 

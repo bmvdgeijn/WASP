@@ -168,6 +168,9 @@ class ReadStats(object):
         # number of reads discarded because not proper pair
         self.discard_improper_pair = 0
 
+        # number of reads discarded because mate unmapped
+        self.discard_mate_unmapped = 0
+
         # paired reads map to different chromosomes
         self.discard_different_chromosome = 0
 
@@ -201,6 +204,7 @@ class ReadStats(object):
     def write(self, file_handle):
         sys.stderr.write("DISCARD reads:\n"
                          "  unmapped: %d\n"
+                         "  mate unmapped: %d\n"
                          "  improper pair: %d\n"
                          "  different chromosome: %d\n"
                          "  indel: %d\n"
@@ -215,6 +219,7 @@ class ReadStats(object):
                          "  single-end: %d\n"
                          "  pairs: %d\n" %
                          (self.discard_unmapped,
+                          self.discard_mate_unmapped,
                           self.discard_improper_pair,
                           self.discard_different_chromosome,
                           self.discard_indel,
@@ -583,7 +588,7 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
         #     sys.stderr.write("cache_size: %d\n" % cache_size)
 
         # TODO: need to change this to use new pysam API calls
-        # but need to chech pysam version for backward compatibility
+        # but need to check pysam version for backward compatibility
         if read.tid == -1:
             # unmapped read
             read_stats.discard_unmapped += 1
@@ -631,10 +636,13 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
             continue
 
         if read.is_paired:
-            if read.next_reference_name is None:
-                # other side of pair not mapped...
-                process_single_read(read, read_stats, files, snp_tab, max_seqs,
-                                    max_snps)
+            if read.mate_is_unmapped:
+                # other side of pair not mapped
+                # we could process as single... but these not likely
+                # useful so discard
+                # process_single_read(read, read_stats, files,
+                #                     snp_tab, max_seqs, max_snps)
+                read_stats.discard_mate_unmapped += 1
             elif(read.next_reference_name == cur_chrom or
                  read.next_reference_name == "="):
                 # other pair mapped to same chrom

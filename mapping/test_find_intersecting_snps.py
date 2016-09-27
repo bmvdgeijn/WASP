@@ -213,6 +213,28 @@ class Data(object):
 
         subprocess.check_call(cmd, shell=True)
 
+
+    def map_paired_bwa(self):
+        cmd = "bwa aln -q 15 %s %s > %s_1.sai" % (self.genome_filename,
+                                                  self.fastq1_filename,
+                                                  self.output_prefix)
+        subprocess.check_call(cmd, shell=True)
+
+        cmd = "bwa aln -q 15 %s %s > %s_2.sai" % (self.genome_filename,
+                                                  self.fastq2_filename,
+                                                  self.output_prefix)
+        subprocess.check_call(cmd, shell=True)
+
+        
+        cmd = "bwa sampe %s %s_1.sai %s_2.sai %s %s > %s" % \
+              (self.genome_filename,
+               self.output_prefix, self.output_prefix,
+               self.fastq1_filename, self.fastq2_filename,
+               self.sam_filename)
+
+        subprocess.check_call(cmd, shell=True)
+
+        
         
 
         
@@ -943,7 +965,7 @@ class TestSingleEnd:
 
 
         
-    def test_unaligned_reads(self):
+    def test_single_unaligned_reads(self):
         """Simple test of whether unmapped reads are handled
         properly"""
         test_data = Data(read1_seqs=["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -996,6 +1018,8 @@ class TestSingleEnd:
         test_data.cleanup()
 
 
+
+        
 
 class TestCLI:
     def test_single_cli(self):
@@ -2594,8 +2618,78 @@ class TestHaplotypesPairedEnd:
 
         test_data.cleanup()
 
-        # TODO: test when only one half of read maps
 
+    def test_paired_unaligned_reads(self):
+        """Simple test of whether unmapped reads are handled
+        properly"""
+
+
+        # test when only one half of read maps, other half is present as
+        # unaligned read
+
+        # create 4 read pairs
+        # read1: both ends map
+        # read2: only first 1/2 maps
+        # read3: neither 1/2 maps
+        # read4: only second 1/2 maps
+        
+        test_data = Data(genome_seqs=["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                                      "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"],
+                         read1_seqs=["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                     "ACTAGACATACATAACACATATACCCACCC",
+                                     "ACTAGACATACATAACACATATACCCACCC"],
+                         read2_seqs=["AAGAAACAACACAAAAAAATAAAAAATAAA",
+                                     "ACTAGACATACATAACACATATACCCACCC",
+                                     "ACTAGACATACATAACACATATACCCACCC",
+                                     "AAGAAACAACACAAAAAAATAAAAAATAAA"],
+                         read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                      "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                      "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                      "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         read2_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                      "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                      "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                      "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"])
+
+        
+                         
+                         
+        test_data.setup()
+        # test_data.index_genome_bowtie2()
+        # test_data.map_paired_bowtie2()
+        test_data.index_genome_bwa()
+        test_data.map_paired_bwa()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=True,
+                                    is_sorted=False,
+                                    snp_dir=test_data.snp_dir)
+
+
+        #
+        # Verify fastq1 and fastq2 have appropriate read pairs
+        #
+        with gzip.open(test_data.fastq1_remap_filename) as f:
+            lines1 = [x.strip() for x in f.readlines()]
+        assert len(lines1) == 4
+
+        with gzip.open(test_data.fastq2_remap_filename) as f:
+            lines2 = [x.strip() for x in f.readlines()]
+        assert len(lines2) == 4
+        
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq = "".join(l)
+
+        assert lines1[1] == new_seq
+        assert lines1[3] == test_data.read1_quals[0]
+
+        assert lines2[1] == test_data.read2_seqs[0]
+        assert lines2[3] == test_data.read2_quals[0]
+
+        # test_data.cleanup()
 
 
 

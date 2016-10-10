@@ -9,7 +9,13 @@ import util
 
 class ReadStats(object):
 
-    def __init__(self):
+    def __init__(self):        
+        # number of reads discarded becaused not mapped
+        self.discard_unmapped = 0
+
+        # number of reads discarded because mate unmapped
+        self.discard_mate_unmapped = 0
+
         # number of reads discarded because not proper pair
         self.discard_improper_pair = 0
 
@@ -35,6 +41,8 @@ class ReadStats(object):
 
     def write(self, file_handle):
         sys.stderr.write("DISCARD reads:\n"
+                         "  unmapped: %d\n"
+                         "  mate unmapped: %d\n"
                          "  improper pair: %d\n"
                          "  different chromosome: %d\n"
                          "  secondary alignment: %d\n"
@@ -43,7 +51,9 @@ class ReadStats(object):
                          "  duplicate pairs: %d\n"
                          "KEEP reads:\n"
                          "  pairs: %d\n"  %
-                         (self.discard_improper_pair,
+                         (self.discard_unmapped,
+                          self.discard_improper_pair,
+                          self.discard_improper_pair,
                           self.discard_different_chromosome,
                           self.discard_secondary,
                           self.discard_missing_pair,
@@ -131,7 +141,11 @@ def filter_reads(infile, outfile):
     
     for read in infile:
         read_count += 1
-                            
+
+        if read.is_unmapped:
+           read_stats.discard_unmapped += 1
+           continue
+        
         if (cur_tid is None) or (read.tid != cur_tid):
             # this is a new chromosome
             cur_chrom = infile.getrname(read.tid)
@@ -169,6 +183,10 @@ def filter_reads(infile, outfile):
             sys.stderr.write("starting chromosome %s\n" % cur_chrom)
             sys.stderr.write("processing reads\n")
 
+        if read.mate_is_unmapped:
+            read_stats.discard_mate_unmapped += 1
+            continue
+            
         if read.is_secondary:
             # this is a secondary alignment (i.e. read was aligned more than
             # once and this has align score that <= best score)

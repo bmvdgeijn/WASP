@@ -76,3 +76,32 @@ def is_gzipped(filename):
 
     # check against gzip magic number 1f8b
     return (byte1 == chr(0x1f)) and (byte2 == chr(0x8b))
+
+
+
+def check_pysam_version(min_pysam_ver="0.8.4"):
+    """Checks that the imported version of pysam is greater than
+    or equal to provided version. Returns 0 if version is high enough,
+    raises ImportWarning otherwise."""
+    import pysam
+
+    min_ver = [int(x) for x in min_pysam_ver.split(".")]
+    pysam_ver = [int(x) for x in pysam.__version__.split(".")]
+
+    n_ver = min(len(pysam_ver), len(min_pysam_ver))
+    
+    for i in range(n_ver):
+        if pysam_ver[i] < min_ver[i]:
+            raise ImportWarning("pysam version is %s, but pysam version %s "
+                                "or greater is required" % (pysam.__version__,
+                                min_pysam_ver))
+        if pysam_ver[i] > min_ver[i]:
+            # version like 1.0 beats version like 0.8
+            break
+        
+    return 0
+        
+    
+                                
+
+    

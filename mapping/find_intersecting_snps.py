@@ -938,8 +938,8 @@ if __name__ == '__main__':
     sys.stderr.write("python version: %s\n" % sys.version)
     sys.stderr.write("pysam version: %s\n" % pysam.__version__)
 
-    # TODO: add checks for python and pysam versions here
-    
+    util.check_pysam_version()
+        
     options = parse_options()
     samples = parse_samples(options.samples)
     

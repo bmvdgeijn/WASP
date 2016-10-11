@@ -267,7 +267,17 @@ def filter_reads(infile, outfile):
     
         
 
+
+
+
+    
 if __name__ == "__main__":
+    sys.stderr.write("command line: %s\n" % " ".join(sys.argv))
+    sys.stderr.write("python version: %s\n" % sys.version)
+    sys.stderr.write("pysam version: %s\n" % pysam.__version__)
+
+    util.check_pysam_version()
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('input_bam', help="input BAM or SAM file (must "
                         "be sorted!)")

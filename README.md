@@ -49,7 +49,7 @@ known as [HDF5](https://www.hdfgroup.org/HDF5/).
 
 WASP depends on the following:
 
-* [python] version 2.6.x or 2.7.x (code is not tested with python 3)
+* python version 2.6.x or 2.7.x (code is not tested with python 3)
 
 * [numpy](http://www.numpy.org)
 

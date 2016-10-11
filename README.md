@@ -44,19 +44,25 @@ Each directory contains its own README file:
 
 ## Dependencies
 
-WASP is written in C and python and depends on both
-[numpy](http://www.numpy.org) and [scipy](http://www.scipy.org).  The
-code also depends on [argparse](https://code.google.com/p/argparse/),
-which is included by default in newer versions of python (>= 2.7).
+WASP is written in C and python and uses an efficient binary file format
+known as [HDF5](https://www.hdfgroup.org/HDF5/).
 
-Some scripts depend on the
-[pysam python library](https://github.com/pysam-developers/pysam)
+WASP depends on the following:
 
-The combined haplotype test uses
-[HDF5](https://www.hdfgroup.org/HDF5/), an efficient
-compressed binary file format.  For this reason, the Combined
-Haplotype Test requires the HDF5 library
-(version 1.6 or higher) and [PyTables](http://www.pytables.org/).
+* [python] version 2.6.x or 2.7.x (code is not tested with python 3)
+
+* [numpy](http://www.numpy.org)
+
+* [scipy](http://www.scipy.org).
+
+* [argparse](https://code.google.com/p/argparse/) (included by default in python >= 2.7).
+
+* [pysam](https://github.com/pysam-developers/pysam) version 0.8.4 or higher.
+
+* the HDF5 C library version 1.6 or higher
+
+* [PyTables](http://www.pytables.org/)
+
 
 The easiest way to install [HDF5](https://www.hdfgroup.org/HDF5/),
 [numpy](http://www.numpy.org), [scipy](http://scipy.org) and

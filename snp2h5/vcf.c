@@ -33,6 +33,7 @@ VCFInfo *vcf_info_new() {
 
   vcf_info->n_sample = 0;
   vcf_info->cur_line = 0;
+  vcf_info->has_format = 0;
   vcf_info->sample_names = NULL;
 
   return vcf_info;
@@ -94,24 +95,41 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
 	}
 	tok_num += 1;
       }
-      vcf_info->n_sample = tok_num - n_fix_header;
 
-      /*
-       * read sample names from remaining part of header
-       */
-      vcf_info->sample_names = my_malloc(sizeof(char *) * vcf_info->n_sample);
-      cur = line;
-      tok_num = 0;
-      i = 0;
-      while((token = strsep(&cur, delim)) != NULL) {
-	if(tok_num >= n_fix_header) {
-	  vcf_info->sample_names[i] = util_str_dup(token);
-	  i += 1;
+      if(tok_num < n_fix_header) {
+	my_warn("VCF contains fewer header columns in #CHROM line "
+		"than expected\n");
+	
+	fprintf(stderr, "missing headers: ");
+	for(i = tok_num; i < n_fix_header; i++) {
+	  fprintf(stderr, "%s", vcf_fix_headers[i]);
+	  (i < n_fix_header-1) ? fprintf(stderr, ",") : fprintf(stderr, "\n");
 	}
-	tok_num += 1;
+	vcf_info->n_sample = 0;
+      } else {
+	vcf_info->has_format = TRUE;
+	vcf_info->n_sample = tok_num - n_fix_header;
+      }
+
+      if(vcf_info->n_sample == 0) {
+	my_warn("VCF header contains no sample identifiers in #CHROM line\n");
+      } else {      
+	/*
+	 * read sample names from remaining part of header
+	 */
+	vcf_info->sample_names = my_malloc(sizeof(char *) * vcf_info->n_sample);
+	cur = line;
+	tok_num = 0;
+	i = 0;
+	while((token = strsep(&cur, delim)) != NULL) {
+	  if(tok_num >= n_fix_header) {
+	    vcf_info->sample_names[i] = util_str_dup(token);
+	    i += 1;
+	  }
+	  tok_num += 1;
+	}
       }
       my_free(line);
-
       break;
     } else {
       my_err("expected last line in header to start with #CHROM");
@@ -550,36 +568,42 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
   }
   util_strncpy(vcf_info->info, token, sizeof(vcf_info->info));
 
-  
-  /* format */
-  token = strsep(&cur, delim);
-  if(token == NULL) {
-    my_err("expected at least %d tokens per line (line: %ld)\n",
-	   n_fix_header, vcf_info->cur_line);
-  }
-  util_strncpy(vcf_info->format, token, sizeof(vcf_info->format));
+  if(vcf_info->has_format) {
+    /* format */
+    token = strsep(&cur, delim);
+    if(token == NULL) {
+      my_err("expected at least %d tokens per line (line: %ld)\n",
+	     n_fix_header, vcf_info->cur_line);
+    }
+    util_strncpy(vcf_info->format, token, sizeof(vcf_info->format));
 
-  /* now parse haplotypes and/or genotype likelihoods */
-  if(geno_probs && haplotypes) {
-    char *cur_copy;    
-    /* Both genotype probs and haplotypes requested.
-     * Need to copy string because it is modified
-     * by the tokenizing in the parsing functions.
-     *
-     * This could be made more efficient by doing the parsing
-     * of both types of data at same time
-     */
-    cur_copy = my_malloc(strlen(cur)+1);
-    strcpy(cur_copy, cur);
+    /* now parse haplotypes and/or genotype likelihoods */
+    if(geno_probs && haplotypes) {
+      char *cur_copy;    
+      /* Both genotype probs and haplotypes requested.
+       * Need to copy string because it is modified
+       * by the tokenizing in the parsing functions.
+       *
+       * This could be made more efficient by doing the parsing
+       * of both types of data at same time
+       */
+      cur_copy = my_malloc(strlen(cur)+1);
+      strcpy(cur_copy, cur);
     
-    vcf_parse_geno_probs(vcf_info, geno_probs, cur_copy);
-    my_free(cur_copy);
+      vcf_parse_geno_probs(vcf_info, geno_probs, cur_copy);
+      my_free(cur_copy);
 
-    vcf_parse_haplotypes(vcf_info, haplotypes, cur);
-  } else if(geno_probs) {
-    vcf_parse_geno_probs(vcf_info, geno_probs, cur);
-  } else if(haplotypes) {
-    vcf_parse_haplotypes(vcf_info, haplotypes, cur);
+      vcf_parse_haplotypes(vcf_info, haplotypes, cur);
+    } else if(geno_probs) {
+      vcf_parse_geno_probs(vcf_info, geno_probs, cur);
+    } else if(haplotypes) {
+      vcf_parse_haplotypes(vcf_info, haplotypes, cur);
+    }
+  } else {
+    /* header specifies no FORMAT string */
+    if(geno_probs || haplotypes) {
+      my_err("cannot parse genotypes or haplotypes without FORMAT field");
+    }
   }
 
   /* my_free(line); */

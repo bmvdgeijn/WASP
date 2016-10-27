@@ -1017,43 +1017,53 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
      * haplotypes, etc
      */
     if(args->geno_prob_file) {
-      geno_probs = my_malloc(file_info.n_geno_prob_col *
-			     sizeof(float));
-      init_h5matrix(gprob_info, file_info.n_row,
-		    file_info.n_geno_prob_col,
-		    GENO_PROB_DATATYPE, chrom->name);
+      if(vcf->n_sample == 0) {
+	my_warn("VCF file has 0 samples, cannot write genotype probabilities");
+	geno_probs = NULL;
+      } else {
+	geno_probs = my_malloc(file_info.n_geno_prob_col *
+			       sizeof(float));
+	init_h5matrix(gprob_info, file_info.n_row,
+		      file_info.n_geno_prob_col,
+		      GENO_PROB_DATATYPE, chrom->name);
 
-      if((vcf->n_sample*3) != file_info.n_geno_prob_col) {
-	my_warn("%s:%d number of samples*3 (%d*3=%d) does not match "
-		"number of genotype columns for chromosome %s "
-		"(%d)\n", __FILE__, __LINE__, vcf->n_sample,
-		vcf->n_sample*3, chrom->name, file_info.n_geno_prob_col);
-      }
+	if((vcf->n_sample*3) != file_info.n_geno_prob_col) {
+	  my_warn("%s:%d number of samples*3 (%d*3=%d) does not match "
+		  "number of genotype columns for chromosome %s "
+		  "(%d)\n", __FILE__, __LINE__, vcf->n_sample,
+		  vcf->n_sample*3, chrom->name, file_info.n_geno_prob_col);
+	}
       
-      /* create table of sample names for genotype probs */
-      samp_tab = sample_tab_from_names(gprob_info->h5file, chrom->name,
-				       vcf->sample_names, vcf->n_sample);
-      sample_tab_free(samp_tab);
+	/* create table of sample names for genotype probs */
+	samp_tab = sample_tab_from_names(gprob_info->h5file, chrom->name,
+					 vcf->sample_names, vcf->n_sample);
+	sample_tab_free(samp_tab);
+      }
     } else {
       geno_probs = NULL;
     }
     if(args->haplotype_file) {
-      haplotypes = my_malloc(file_info.n_haplotype_col * sizeof(char));
-      init_h5matrix(haplotype_info, file_info.n_row,
-		    file_info.n_haplotype_col,
-		    HAPLOTYPE_DATATYPE, chrom->name);
+      if(vcf->n_sample == 0) {
+	my_warn("VCF file has 0 samples, cannot write haplotypes");
+	haplotypes = NULL;
+      } else {
+	haplotypes = my_malloc(file_info.n_haplotype_col * sizeof(char));
+	init_h5matrix(haplotype_info, file_info.n_row,
+		      file_info.n_haplotype_col,
+		      HAPLOTYPE_DATATYPE, chrom->name);
 
-      if((vcf->n_sample*2) != file_info.n_haplotype_col) {
-	my_warn("%s:%d number of samples (%d*2=%d) does not match "
-		"number of haplotype columns for chromosome %s "
-		"(%d)\n", __FILE__, __LINE__, vcf->n_sample,
-		vcf->n_sample*2, chrom->name, file_info.n_haplotype_col);
-      }
+	if((vcf->n_sample*2) != file_info.n_haplotype_col) {
+	  my_warn("%s:%d number of samples (%d*2=%d) does not match "
+		  "number of haplotype columns for chromosome %s "
+		  "(%d)\n", __FILE__, __LINE__, vcf->n_sample,
+		  vcf->n_sample*2, chrom->name, file_info.n_haplotype_col);
+	}
       
-      /* create table of sample names for haplotypes */
-      samp_tab = sample_tab_from_names(haplotype_info->h5file, chrom->name,
-				       vcf->sample_names, vcf->n_sample);
-      sample_tab_free(samp_tab);
+	/* create table of sample names for haplotypes */
+	samp_tab = sample_tab_from_names(haplotype_info->h5file, chrom->name,
+					 vcf->sample_names, vcf->n_sample);
+	sample_tab_free(samp_tab);
+      }
     } else {
       haplotypes = NULL;
     }

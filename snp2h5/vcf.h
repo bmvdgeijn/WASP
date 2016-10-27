@@ -33,6 +33,9 @@ typedef struct {
   /* used for reading lines */
   size_t buf_size;
   char *buf;
+
+  /* flag that is true if VCF has a FORMAT field, false otherwise */
+  int has_format;
   
   /* could store lots of header info here */
 } VCFInfo;

@@ -210,6 +210,15 @@ def write_empty_result(outfile, snpinfo):
                              "0", "0", "0"]) + '\n')
 
 
+def rescale_totals(test_snps):
+    min_tot = min([s.totals for s in test_snps])
+
+    if min_tot > 0:
+        for s in test_snps:
+            s.totals = s.totals / min_tot        
+        
+    
+
 
 def main():
     options = parse_options()
@@ -261,8 +270,13 @@ def main():
             for i in range(len(infiles)):
                 test_snps.append(parse_test_snp(snpinfo[i], options))
 
-            # how many allele-specific reads are there across all linked SNPs and
-            # and individuals?
+            # rescale totals to put values into reasonable range for
+            # alpha and beta parameter estimation
+            rescale_totals(test_snps)
+            
+
+            # how many allele-specific reads are there across all
+            # linked SNPs and and individuals?
             ref_as_counts = sum([np.sum(x.AS_target_ref) for x in test_snps])
             alt_as_counts = sum([np.sum(x.AS_target_alt) for x in test_snps])
             tot_as_counts = ref_as_counts + alt_as_counts
@@ -650,11 +664,11 @@ def parse_test_snp(snpinfo, options):
         # SNP is missing data
         tot = 0
     else:
-        # rescale these to put totals in reasonable range
-        # better approach might be to divide by minimum total
-        # across individuals
-        #if tot>10000:
-        tot = float(snpinfo[16]) #/1000000
+        # these totals are later rescaled by dividing
+        # by the minimum total across individuals to
+        # put them into a reasonable range for
+        # estimating alpha and beta
+        tot = float(snpinfo[16])
 
     if snpinfo[6] == "NA":
         geno_hap1 = 0

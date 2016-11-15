@@ -132,9 +132,8 @@ program can take VCF or IMPUTE2 files as input.
 
 ### Step 3
 
-Convert FASTA files to HDF5 format. Note the HDF5 sequence files are
-only used for GC content correction part of CHT. This step can be
-ommitted if GC-content correction is not used.
+Convert FASTA files to HDF5 format. The HDF5 sequence files are
+currently used for the GC content correction part of CHT.
 
 	./snp2h5/fasta2h5 --chrom example_data/chromInfo.hg19.txt \
 		--seq example_data/seq.h5 \
@@ -250,7 +249,8 @@ SNPs and target regions from the input file created in Step 5.
 ### Step 7
 
 Adjust read counts in CHT input files by modeling relationship between read
-depth and GC content & peakiness in each sample.
+depth and GC content & peakiness in each sample. This uses the seq.h5 file created
+by fasta2h5 in Step 3.
 
 	IN_FILE=example_data/H3K27ac/input_files.txt
 	OUT_FILE=example_data/H3K27ac/output_files.txt

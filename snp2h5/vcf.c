@@ -74,8 +74,12 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
   while(util_gzgetline(vcf_fh, &vcf_info->buf, &vcf_info->buf_size) != -1) {
     line = vcf_info->buf;
     vcf_info->cur_line += 1;
-  
-    if(util_str_starts_with(line, "##")) {
+
+    if(line[0] == '\n' || line[0] == '\0') {
+      /* empty line, assume part of header */
+      vcf_info->n_header_line += 1;
+    }
+    else if(util_str_starts_with(line, "##")) {
       /* header line */
       vcf_info->n_header_line += 1;
     }
@@ -131,9 +135,7 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
       }
       my_free(line);
       break;
-    } else {
-      my_err("expected last line in header to start with #CHROM");
-    }
+    } 
   }
 }
 

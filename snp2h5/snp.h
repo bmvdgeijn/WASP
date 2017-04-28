@@ -8,7 +8,7 @@
 /* maximum length of chromosome name */
 /* #define SNP_MAX_CHROM 32 */
 /* maximum length of SNP identifier */
-#define SNP_MAX_NAME 16
+#define SNP_MAX_NAME 255
 
 
 typedef struct {

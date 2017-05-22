@@ -92,10 +92,13 @@ def open_input_files(in_filename):
 
 def main():
     options = parse_options()
+
+    sys.stderr.write("reading input filenames from %s\n")
     infiles = open_input_files(options.infile_list)
-    outfile = open(options.out_file,"w")
+    outfile = open(options.out_file, "w")
     dup_snp_warn = True
-    
+
+    sys.stderr.write("estimating allele-specific dispersion coefficients\n")
     # read input data and estimate dispersion coefficient
     # for one individual at a time
     for i in range(len(infiles)):
@@ -149,11 +152,16 @@ def main():
         LL = res.fun
         dispersion = res.x
 
-        sys.stderr.write("AS dispersion[%d]: %g\n" % (i, dispersion))
-        sys.stderr.write("LL[%d]: -%g\n" % (i, LL))
+        sys.stderr.write("Sample %d:\n" % i)
+        sys.stderr.write("  dispersion estimate: %g\n" % dispersion)
+        sys.stderr.write("  LL: -%g\n" % LL)
 
         outfile.write(str(dispersion)+"\n")
         outfile.flush()
+
+    sys.stderr.write("output written to file: %s\n" % options.out_file)
+    sys.stderr.write("done!\n")
+        
 
 
 def likelihood(dispersion, AS_ref, AS_alt, hetps, error):

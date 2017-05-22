@@ -1,0 +1,10 @@
+This directory contains scripts for Combined Haplotype Test power calculations.
+
+generate_power_sim_params.py - script to make table of simulation parameters
+
+sim_haplotype_read_counts.R - simulates combined haplotype test input data. Should potentially
+be swapped for simulate_counts.py script, which is more sophisticated...
+
+run_power_analysis.sh - SGE cluster submission script to run combined haplotype test on simulated
+data
+

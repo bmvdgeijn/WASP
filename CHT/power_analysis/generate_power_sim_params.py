@@ -28,7 +28,7 @@ for samp_size in range(10, 60 + samp_size_step, samp_size_step):
 
     # range of effect sizes
     step = 0.2
-    for log2_effect_size in np.arange(-2, 2 + step, step):
+    for log2_effect_size in np.arange(-1, 1 + step, step):
         effect_size = 2**log2_effect_size
         sim_id += 1
         sys.stdout.write("%d %.2f %.2f %d\n" %

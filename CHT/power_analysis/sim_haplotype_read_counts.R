@@ -10,7 +10,7 @@ option.list <- list(
               default=5.0, type="double"),
   
   make_option(c("-e", "--effect.size"), 
-              help="ratio of reads from REF/NON-REF chromosome (alpha/beta)", 
+              help="ratio of reads from REF/NON-REF chromosome (alpha/beta) for 'true' sites", 
               default=1.2, type="double"),
   
   make_option(c("-r", "--region.size"), 
@@ -23,7 +23,11 @@ option.list <- list(
   
   make_option(c("-m", "--n.site"),
               help="number of sites/regions to simulate data for",
-              default=1000, type="integer"),
+              default=10000, type="integer"),
+  
+  make_option(c("-t", "--true.fraction"),
+              help="fraction of 'true' sites to simulate that have non-zero effect size",
+              default=0.1, type="double"),
   
   make_option(c("-f", "--allele.freq"),
               help="REF allele frequency in population", 
@@ -34,7 +38,7 @@ option.list <- list(
               default=".", type="character"),
   
   make_option(c("p", "--output.prefix"),
-              help="prefix of output file", 
+              help="prefix of output file",
               default="sim_hap_read_counts", type="character")
   
 )
@@ -43,7 +47,17 @@ opt.parser <- OptionParser(option_list=option.list)
 
 opt <- parse_args(opt.parser)
 
-beta <- opt$alpha / opt$effect.size
+# flag whether site is from ALTERNATIVE (alpha != beta) or NULL (alpha == beta)
+n.alt <- opt$n.site * opt$true.fraction
+n.null <- opt$n.site * (1.0 - opt$true.fraction)
+is.alt <-  c(rep(1, n.alt), rep(0, n.null))
+
+site.names <- c(paste("ALT.", 1:n.alt, sep=""),
+                paste("NULL.", 1:n.null, sep=""))
+
+# beta depends on whether site is from ALT or NULL model 
+# NULL sites have no difference between alleles (alpha==beta)
+beta <- opt$alpha / ((opt$effect.size * is.alt) + (1.0-is.alt))
 
 output.prefix <- paste(opt$output.dir, "/", opt$output.prefix, sep="")
 
@@ -112,7 +126,7 @@ for(col in 1:ncol(geno.matrix)) {
    # create an output table for each sample
    out.tab <- data.frame(CHROM=rep("chr1", opt$n.site),
                         TEST.SNP.POS=rep(1000, opt$n.site),
-                        TEST.SNP.ID=seq(1, opt$n.site),
+                        TEST.SNP.ID=site.names,
                         TEST.SNP.REF.ALLELE=rep("A", opt$n.site),
                         TEST.SNP.ALT.ALLELE=rep("G", opt$n.site),
                         TEST.SNP.GENOTYPE=gtypes,

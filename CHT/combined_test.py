@@ -98,7 +98,9 @@ def open_input_files(in_filename):
 
 
 def write_header(outfile):
-    outfile.write("\t".join(["TEST.SNP.CHROM", "TEST.SNP.POS",
+    outfile.write("\t".join(["TEST.SNP.CHROM", "TEST.SNP.POS", "TEST.SNP.ID",
+                             "TEST.SNP.REF.ALLELE", "TEST.SNP.ALT.ALLELE",
+                             "REGION.START", "REGION.END",
                              "LOGLIKE.NULL", "LOGLIKE.ALT",
                              "CHISQ", "P.VALUE", "ALPHA", "BETA",
                              "PHI", "TOTAL.AS.READ.COUNT",
@@ -163,32 +165,41 @@ def read_as_sigmas(options, infiles):
 def write_results(outfile, snpinfo, loglike1par, loglike2par,
                   best2par, tot_as_counts, ref_as_counts, alt_as_counts,
                   all_counts):
-    """Write result to output file. Tab-delimited columns are:
-      1. chromosome,
-      2. SNP position,
-      3. Log likelihood 1 parameter model (Null)
-      4. Log likelihood 2 parameter model (Alternative)
-      3. Chi-squared statistic,
-      4. P-value
-      5. alpha parameter estimate (expression level
-         of reference allele)
-      6. beta parameter estimate (expression level of
-         alternative allele)
-      7. phi parameter estimate (beta-negative-binomial
-         overdispersion
-         parameter for this region)
-      8. total number of allele-specific read counts for this
-         region summed across individuals
-      9. total number of reference haplotype allele-specific read counts
-     10. total number of alt haplotype allele-specific read counts
-     11. total number of mapped reads for this region,
-         summed across individuals"""
+    """Write result to output file. First columns mirror those in the input 
+    files, but no genotypes or haplotypes are given.
+    Tab-delimited columns are:
+      1. Chromosome,
+      2. Test SNP position,
+      3. Test SNP identifier,
+      4. Test SNP Ref Allele,
+      5. Test SNP Alt Allele,
+      6. Target Region Start,
+      7. Target Region End,
+      8. Log likelihood 1 parameter model (Null),
+      9. Log likelihood 2 parameter model (Alternative),
+      10. Chi-squared statistic,
+      11. P-value,
+      12. Alpha parameter estimate (expression level
+          of reference allele)
+      13. Beta parameter estimate (expression level of
+          alternative allele)
+      14. Phi parameter estimate (beta-negative-binomial
+          overdispersion parameter for target region)
+      15. Total number of allele-specific read counts for this
+          region summed across individuals
+      16. Total number of reference haplotype allele-specific read counts
+      17. Total number of alt haplotype allele-specific read counts
+      18. Total number of mapped reads for the target region,
+          summed across individuals"""
 
     # compute likelihood ratio test statistic:
     chisq = 2 * (loglike1par - loglike2par)
     pval = (1-scipy.stats.chi2.cdf(chisq,1)),
 
     outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1],
+                             snpinfo[0][2], snpinfo[0][3],
+                             snpinfo[0][4], snpinfo[0][7],
+                             snpinfo[0][8],
                              "%.2f" % -loglike1par,
                              "%.2f" % -loglike2par,
                              "%.3f" % chisq,
@@ -205,7 +216,11 @@ def write_results(outfile, snpinfo, loglike1par, loglike2par,
 
 def write_empty_result(outfile, snpinfo):
     """Write all zeros in the even that the test failed"""
-    outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1], "0", "0",
+    outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1],
+                             snpinfo[0][2], snpinfo[0][3],
+                             snpinfo[0][4],
+                             snpinfo[0][7], snpinfo[0][8],
+                             "0", "0",
                              "0", "NA", "0", "0", "0",
                              "0", "0", "0"]) + '\n')
 
@@ -439,7 +454,37 @@ def main():
 
 
 def parse_options():
-    parser=argparse.ArgumentParser()
+    parser=argparse.ArgumentParser(description="Runs the combined haplotype test on a set of "
+                                   "input files.\nOutput is written to the specified file "
+                                   "with the following tab-delimited fields:\n"
+                                   "  1. Chromosome,\n"
+                                   "  2. Test SNP position,\n"
+                                   "  3. Test SNP identifier,\n"
+                                   "  4. Test SNP Ref Allele,\n"
+                                   "  5. Test SNP Alt Allele,\n"
+                                   "  6. Target Region Start,\n"
+                                   "  7. Target Region End,\n"
+                                   "  8. Log likelihood 1 parameter model (Null),\n"
+                                   "  9. Log likelihood 2 parameter model (Alternative),\n"
+                                   "  10. Chi-squared statistic,\n"
+                                   "  11. P-value,\n"
+                                   "  12. Alpha parameter estimate (expression level "
+                                   "      of reference allele),\n"
+                                   "  13. Beta parameter estimate (expression level of "
+                                   "alternative allele),\n"
+                                   "  14. Phi parameter estimate (beta-negative-binomial "
+                                   "overdispersion parameter for target region),\n"
+                                   "  15. Total number of allele-specific read counts for this "
+                                   "region summed across individuals,\n"
+                                   "  16. Total number of reference haplotype allele-specific "
+                                   "read counts,\n"
+                                   "  17. Total number of alt haplotype allele-specific read "
+                                   "counts,\n"
+                                   "  18. Total number of mapped reads for the target region,"
+                                   "summed across individuals\n",
+                                   formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    
     parser.add_argument("-a", "--as_only",
                         action='store_true',
                         dest='is_as_only', default=False,

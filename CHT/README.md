@@ -310,18 +310,25 @@ Run the combined haplotype test:
 
 The combined haplotype test outputs a tab delimited text file with the
 following columns:
-
-1. chromosome - location of tested SNP 
-2. position - position of tested SNP
-3. log likelihood under null model
-4. log likelihood under alternative model
-5. chi-squared value - likelihood ratio test statistic
-6. p-value - p-value from likelihood ratio test
-7. best alpha parameter - maximum likelihood estimate of alpha parameter (expression level of reference allele)
-8. best beta parameter - maximum likelihood estimate of beta parameter (expression level of non-reference allele)
-9. overdispersion parameter - maximum  likelihood estimate of phi parameter (per-region beta-negative-binomial dispersion parameter)
-10. number of AS reads - number of allele specific reads in tested regio,n summed across individuals
-11. total reads - number of mapped reads in tested region, summed across individuals
+1. Chromosome - location of test SNP and target region,
+2. Test SNP position - position of test SNP
+3. Test SNP identifier - identifier of test SNP
+4. Test SNP Ref Allele - reference allele of test SNP
+5. Test SNP Alt Allele - alternative allele of test SNP
+6. Target Region Start - start position of target region
+7. Target Region End - end position of target region
+8. Log likelihood 1 - log likelihood under Null model
+9. Log likelihood 2 - log likelihood under Alternative model
+10. Chi-squared statistic - likelihood ratio test statistic
+11. P-value - p-value from likelihood ratio test
+12. Alpha - maximum likelihood estimate of alpha parameter (expression level of reference allele)
+13. Beta - maximum likelihood estimate of beta parameter (expression level of alternative allele)
+14. Phi - maximum likelihood estimate of phi parameter (beta-negative-binomial
+          overdispersion parameter for target region)
+15. Total number of allele-specific read counts for target region summed across individuals
+16. Total number of reference haplotype allele-specific read counts
+17. Total number of alt haplotype allele-specific read counts
+18. Total number of mapped reads for the target region, summed across individuals
 
 
 ## Updating total read depths and heterozygous probabilities

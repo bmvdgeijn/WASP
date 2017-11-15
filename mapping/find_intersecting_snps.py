@@ -92,6 +92,11 @@ class DataFiles(object):
            self.prefix = output_dir + "/" + ".".join(name_split[:-1])
         else:
             self.prefix = output_dir + "/" + name_split[0]
+        
+        # create output dir if does not exist
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
             
         # TODO: could allow names of output files to be specified
         # on command line rather than appending name to prefix
@@ -110,6 +115,7 @@ class DataFiles(object):
                          self.bam_sort_filename)
         
         sys.stderr.write("writing output files to:\n")
+
         
         if self.is_paired:
             self.fastq1_filename = self.prefix + ".remap.fq1.gz"
@@ -937,8 +943,10 @@ if __name__ == '__main__':
     sys.stderr.write("command line: %s\n" % " ".join(sys.argv))
     sys.stderr.write("python version: %s\n" % sys.version)
     sys.stderr.write("pysam version: %s\n" % pysam.__version__)
+    sys.stderr.write("pytables version: %s\n" % tables.__version__)
 
     util.check_pysam_version()
+    util.check_pytables_version()
         
     options = parse_options()
     samples = parse_samples(options.samples)

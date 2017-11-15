@@ -100,7 +100,24 @@ def check_pysam_version(min_pysam_ver="0.8.4"):
             break
         
     return 0
-        
+
+
+def check_pytables_version():
+    """Checks that PyTables version 2 is being used. PyTables version 3 
+    changes the names of many functions and is not backwards compatible.
+    Future versions of WASP should switch to use version 3 functions."""
+    import tables
+
+    pytables_ver = [int(x) for x in tables.__version__.split(".")]
+
+    if pytables_ver[0] != 2:
+        raise ImportWarning("pytables version is %s, but pytables version "
+                            "2 is required" % (tables.__version__))
+
+    return 0
+
+                    
+    
     
                                 
 

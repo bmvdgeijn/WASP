@@ -75,7 +75,18 @@ class SNPTable(object):
                 # reduce set of SNPs and indels to ones that are
                 # polymorphic in provided list of samples
                 samp_idx_dict, samp_idx = self.get_h5_sample_indices(hap_h5, chrom_name, samples)
-                
+
+                if len(samp_idx) == 0:
+                    # gracefully handle situation where there are no matching
+                    # samples on this chromosome
+                    sys.stderr.write("WARNING: chromosome %s haplotype file "
+                                     "has no samples that match provided "
+                                     "sample names, assuming no SNPs for "
+                                     "this chromosome\n" % chrom_name)
+
+                    self.clear()
+                    return
+                    
                 hap_idx = np.empty(samp_idx.shape[0]*2, dtype=np.int)
                 hap_idx[0::2] = samp_idx*2
                 hap_idx[1::2] = samp_idx*2 + 1
@@ -165,7 +176,7 @@ class SNPTable(object):
         if len(not_seen_samples) > 0:
             sys.stderr.write("WARNING: the following samples are not "
                              "present in haplotype table for chromosome "
-                             "%s: %s" %
+                             "%s: %s\n" %
                              (chrom_name, ",".join(not_seen_samples)))
         
         return samp_idx_dict, np.array(samp_idx, dtype=np.int)

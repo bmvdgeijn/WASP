@@ -275,6 +275,8 @@ class Data(object):
                 row = table.row
                 row['name'] = samp
                 row.append()
+
+            table.flush()
         
         
             
@@ -303,6 +305,7 @@ class Data(object):
             row['allele1'] = snp[2]
             row['allele2'] = snp[3]
             row.append()
+            table.flush()
 
         self.write_hap_samples(snp_tab_h5)
         
@@ -1953,6 +1956,26 @@ class TestHaplotypesSingleEnd:
 
 
     
+    def test_haplotypes_wrong_sample_name(self):
+        """Simple test that error o
+        1 SNP works correctly"""
+        test_data = Data()
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    samples=["sampX", "sampY"],
+                                    snp_tab_filename=test_data.snp_tab_filename,
+                                    snp_index_filename=test_data.snp_index_filename,
+                                    haplotype_filename=test_data.haplotype_filename)
+
+        test_data.cleanup()
+                                    
+
         
     def test_haplotypes_single_one_read_two_snps_samples(self):
         """Test whether 1 read overlapping 2 SNPs works correctly"""

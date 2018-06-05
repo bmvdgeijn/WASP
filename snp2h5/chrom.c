@@ -12,14 +12,31 @@
  * Returns appropriate chromosome for filename by looking for match
  * with chromosome name in filename. Returns NULL if no match found.
  */
-Chromosome *chrom_guess_from_file(const char *filename,
+Chromosome *chrom_guess_from_file(char *path,
 				  Chromosome *chroms,
 				  int n_chrom) {
   int i, j, longest_match, n1, n2;
+  char *filename;
   Chromosome *match_chrom;
 
   longest_match = 0;
   match_chrom = NULL;
+
+  
+  /* find last occurance of '/' or '\' in file
+   * assume that everything before this is in directories
+   * leading up to filename
+   */
+  filename = rindex(path, '/');
+  if(filename == NULL) {
+    filename = rindex(path, '\\');
+    if(filename == NULL) {
+      filename = path;
+    }
+  }
+
+  fprintf(stderr, "guessing chromosome name from filename %s\n",
+	  filename);
   
   for(i = 0; i < n_chrom; i++) {
     n1 = strlen(chroms[i].name);
@@ -33,6 +50,8 @@ Chromosome *chrom_guess_from_file(const char *filename,
       for(j = 0; j < n2 - n1 + 1; j++) {
 	if(strncmp(chroms[i].name, &filename[j], n1) == 0) {
 	  /* chromosome name is present in this filename */
+	  fprintf(stderr, "match_len: %d, '%s' matches at '%s'\n",
+		  n1, chroms[i].name, &filename[j]);
 	  match_chrom = &chroms[i];
 	  longest_match = n1;
 	  break;
@@ -41,6 +60,9 @@ Chromosome *chrom_guess_from_file(const char *filename,
     }
   }
 
+  fprintf(stderr, "best matching chromosome: %s\n", match_chrom->name);
+
+  
   return match_chrom;
 }
 

@@ -154,6 +154,36 @@ long util_count_lines(const char *filename) {
 
 
 /**
+ * Counts number of newline characters in file, but stops counting
+ * if max_lines is reached.
+ */
+long util_count_lines_max(const char *filename, long max_lines) {
+  char c;
+  long line_count;
+  gzFile gzf;
+
+  gzf = util_must_gzopen(filename, "rb");
+
+  line_count = 0;
+  while((c = gzgetc(gzf)) != EOF) {
+    if(c == '\n') {
+      line_count += 1;
+
+      if(line_count >= max_lines) {
+	return max_lines;
+      }
+    }
+  }
+  
+  gzclose(gzf);
+
+  return line_count;
+}
+
+
+
+
+/**
  * Counts the number of '\n' characters in the provided gzipped file.
  * The gzFile is rewound to the beginning of the file before and after the count of
  * newlines.

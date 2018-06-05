@@ -45,6 +45,8 @@ typedef struct {
 VCFInfo *vcf_info_new();
 void vcf_info_free();
 
+char *vcf_get_chrom_name(const char *filename);
+
 void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info);
 
 int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,

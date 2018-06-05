@@ -50,9 +50,11 @@ typedef struct {
   char *snp_index_file; /* base position => SNP table row lookup */
   char *snp_tab_file; /* SNP table with id, alleles, etc */
 
+  long max_lines; /* maximum number of lines to read from input files */
+  
   char *sample_file;
   char **input_files;
-  
+
   int n_input_files;
 } Arguments;
 
@@ -129,6 +131,10 @@ void usage(char **argv) {
 	  "     be downloaded from the UCSC genome browser. For example,\n"
 	  "     a chromInfo.txt.gz file for hg19 can be downloaded from\n"
 	  "     http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/\n"
+	  "\n"
+	  "  --max_lines MAX_LINES [optional]\n"
+	  "     Only read the first MAX_LINES SNPs from each input file.\n"
+	  "     This option is primarily for testing/debugging."
 	  "\n"
 	  "  --format vcf|impute [required]\n"
 	  "     Specifies the format of the input files. Currently supported\n"
@@ -209,6 +215,7 @@ void parse_args(Arguments *args, int argc, char **argv) {
      {"snp_index", required_argument, 0, 'i'},
      {"snp_tab", required_argument, 0, 't'},
      {"samples", required_argument, 0, 's'},
+     {"max_lines", required_argument, 0, 'm'},
      {0,0,0,0}
    };
    args->chrom_file = NULL;
@@ -218,9 +225,10 @@ void parse_args(Arguments *args, int argc, char **argv) {
    args->snp_index_file = NULL;
    args->snp_tab_file = NULL;
    args->sample_file = NULL;
+   args->max_lines = 0;
 
    while(1) {
-     c = getopt_long(argc, argv, "c:f:p:h:i:t:s:", loptions, NULL);
+     c = getopt_long(argc, argv, "c:f:p:h:i:t:s:m:", loptions, NULL);
      
      if(c == -1) {
        break;
@@ -234,6 +242,7 @@ void parse_args(Arguments *args, int argc, char **argv) {
        case 'i': args->snp_index_file = util_str_dup(optarg); break;
        case 't': args->snp_tab_file = util_str_dup(optarg); break;
        case 's': args->sample_file = util_str_dup(optarg); break;
+       case 'm': args->max_lines = util_parse_long(optarg); break;
        default: usage(argv); break;
      }
    }
@@ -539,13 +548,15 @@ void close_h5vector(H5VectorInfo *info) {
  * sets attributes such as number of samples in FileInfo structure,
  * and advances file handle to end of header
  */
-void set_file_info(gzFile gzf, char *filename, Arguments *args, FileInfo *file_info,
-		   VCFInfo *vcf, ImputeInfo *impute_info) {
+void set_file_info(gzFile gzf, char *filename, Arguments *args,
+		   FileInfo *file_info, VCFInfo *vcf, ImputeInfo *impute_info) {
   long n_col;
   
   /* count total number lines in file, this tells us number of records */
   fprintf(stderr, "counting lines in file\n");
+
   file_info->n_line = util_count_lines(filename);
+  
   fprintf(stderr, "  total lines: %ld\n", file_info->n_line);
 
   if(args->format == FORMAT_VCF) {
@@ -975,7 +986,65 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 
 
 
+char **group_vcf_by_chromosome(Arguments *args, Chromosome *all_chroms,
+			       int n_chrom) {
+  char **file_by_chrom;
+  char *chrom_name;
+  int found_match;
+  long i, j;
 
+  /* make array of filenames, same length as chromosomes */
+  file_by_chrom = my_malloc(sizeof(char *) * n_chrom);
+  for(i = 0; i < n_chrom; i++) {
+    file_by_chrom[i] = NULL;
+  }
+  
+  for(i = 0; i < args->n_input_files; i++) {
+    chrom_name = vcf_get_chrom_name(args->input_files[i]);
+
+    if(chrom_name == NULL) {
+      my_warn("  input file %s is empty", args->input_files[i]);
+    }
+
+    
+    if(chrom_name) {
+      found_match = FALSE;
+      
+      for(j = 0; j < n_chrom; j++) {
+	if(strcmp(all_chroms[j].name, chrom_name) == 0) {
+
+	  if(found_match) {
+	    my_warn("  chromosome %s from input file %s\n"
+		    "matches multiple chromosomes",
+		    chrom_name, args->input_files[i]);
+	  } else {
+	    found_match = TRUE;
+	  }
+	  
+	  if(file_by_chrom[j]) {
+	    /* file already set */
+	    my_err("  multiple input files for chromosome %s: %s and %s",
+		   chrom_name, args->input_files[i], file_by_chrom[j]);
+	  } else {
+	    file_by_chrom[j] = util_str_dup(args->input_files[i]);
+	  }	  
+	}
+      }
+
+      if(!found_match) {
+	/* could not find chromosome matching the one in this file */
+	my_err("%s:%d  could not find chromosome matching name '%s' in "
+	       "for input file %s", __FILE__, __LINE__,
+	       chrom_name, args->input_files[i]);
+	       
+      }
+
+      my_free(chrom_name);
+    } 
+  }
+  
+  return file_by_chrom;
+}
 
 void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	       H5MatrixInfo *gprob_info, H5MatrixInfo *haplotype_info,
@@ -992,26 +1061,31 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
   gzFile gzf;
   Chromosome *chrom;
   SampleTab *samp_tab;
+  char **vcf_by_chrom;
   
   vcf = vcf_info_new();
 
-  /* loop over input files, there should be one for each chromosome */
-  for(i = 0; i < args->n_input_files; i++) {
-    /* guess chromosome file filename */
-    chrom = chrom_guess_from_file(args->input_files[i],
-				  all_chroms, n_chrom);
-    if(chrom == NULL) {
-      my_err("%s:%d: could not guess chromosome from filename '%s'\n",
-	     __FILE__, __LINE__, args->input_files[i]);
-    }
+  /* group VCFs by their chromosomes */
+  vcf_by_chrom = group_vcf_by_chromosome(args, all_chroms, n_chrom);
+
+  /* loop over chromosomes, getting input VCF file for each one */
+  for(i = 0; i < n_chrom; i++) {
+    chrom = &all_chroms[i];
 
     fprintf(stderr, "chromosome: %s, length: %ldbp\n",
 	    chrom->name, chrom->len);
 
-    fprintf(stderr, "reading from file %s\n", args->input_files[i]);
-    gzf = util_must_gzopen(args->input_files[i], "rb");
+    if(vcf_by_chrom[i] == NULL) {
+      /* no input file for this chromosome */
+      fprintf(stderr, "  no data for this chromosome\n");
+      continue;
+    }
 
-    set_file_info(gzf, args->input_files[i], args, &file_info, vcf, NULL);
+    fprintf(stderr, "reading from file %s\n", vcf_by_chrom[i]);
+
+    gzf = util_must_gzopen(vcf_by_chrom[i], "rb");
+
+    set_file_info(gzf, vcf_by_chrom[i], args, &file_info, vcf, NULL);
     
     /* initialize output files and memory to hold genotypes,
      * haplotypes, etc
@@ -1091,8 +1165,10 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
 
     fprintf(stderr, "parsing file and writing to HDF5 files\n");
 
-    while(vcf_read_line(gzf, vcf, &snp,
-			geno_probs, haplotypes) != -1) {
+    int done = FALSE;
+    
+    while(!done && vcf_read_line(gzf, vcf, &snp,
+				 geno_probs, haplotypes) != -1) {
       
       if(geno_probs) {
 	write_h5matrix_row(gprob_info, row, geno_probs);
@@ -1123,6 +1199,11 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
       row++;
       if((row % 1000) == 0) {
 	fprintf(stderr, ".");
+      }
+      if((args->max_lines > 0) && (row >= args->max_lines)) {
+	fprintf(stderr, "reached max_lines (%ld), stopping now\n",
+		args->max_lines);
+	done = TRUE;
       }
     }
     fprintf(stderr, "\n");

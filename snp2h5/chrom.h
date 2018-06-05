@@ -9,7 +9,7 @@ typedef struct {
 } Chromosome;
 
 
-Chromosome *chrom_guess_from_file(const char *filename,
+Chromosome *chrom_guess_from_file(char *filename,
 				  Chromosome *chroms,
 				  int n_chrom);
 

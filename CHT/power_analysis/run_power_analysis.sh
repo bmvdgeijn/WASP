@@ -5,7 +5,7 @@
 #$ -o $HOME/sge/out
 #$ -e $HOME/sge/err
 #
-#$ -t 1-440
+#$ -t 1-126
 #$ -V
 #
 
@@ -41,7 +41,7 @@ ls $OUT_DIR/sim_hap_read_counts*.txt > $OUT_DIR/input_files.txt
 # estimate dispersion parameters from simulation data
 python $WASP_DIR/CHT/fit_as_coefficients.py $OUT_DIR/input_files.txt $OUT_DIR/as_coef.txt
 
-python $WASP_DIR/CHT/fit_bnb_coefficients.py --sample 200 $OUT_DIR/input_files.txt $OUT_DIR/bnb_coef.txt
+python $WASP_DIR/CHT/fit_bnb_coefficients.py --sample 1000 $OUT_DIR/input_files.txt $OUT_DIR/bnb_coef.txt
 
 # run combined haplotype test
 # python $WASP_DIR/CHT/combined_test.py \

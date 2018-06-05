@@ -59,6 +59,46 @@ void vcf_info_free(VCFInfo *vcf_info) {
 }
 
 
+
+/**
+ * returns the name of the chromosome that is present on the
+ * first non-header line of the VCF. If the file has no 
+ * non-header lines, NULL is returned.
+ * The returned string should be freed once it is no longer needed.
+ */
+char *vcf_get_chrom_name(const char *filename) {
+  gzFile gzf;
+  VCFInfo *vcf_info;
+  SNP snp;
+  int ret;
+  char *chrom_name;
+
+
+  gzf = util_must_gzopen(filename, "rb");
+
+  vcf_info = vcf_info_new();
+
+  /* read header */
+  vcf_read_header(gzf, vcf_info);
+
+  /* read first line */
+  ret = vcf_read_line(gzf, vcf_info, &snp, NULL, NULL);
+
+  if(ret == -1) {
+    /* at end of file */
+    my_warn("VCF file %s contained no data lines\n", filename);
+    return NULL;
+  }
+
+  chrom_name = util_str_dup(snp.chrom);
+  
+  vcf_info_free(vcf_info);
+  
+  gzclose(gzf);
+  
+  return chrom_name;
+}
+
 void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
   char *line, *cur, *token;
   int tok_num;
@@ -490,10 +530,7 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
 	   n_fix_header, vcf_info->cur_line);
   }
 
-  /* we don't bother to store chromosome since we store 
-   * SNPs from each chromosome in their own table
-   */
-  /* util_strncpy(snp->chrom, token, sizeof(snp->chrom)); */
+  util_strncpy(snp->chrom, token, sizeof(snp->chrom));
   
   
   /* pos */

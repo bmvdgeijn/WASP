@@ -32,6 +32,7 @@ int util_has_gz_ext(const char *filename);
 
 char *util_read_entire_file(char *filename);
 long util_count_lines(const char *filename);
+long util_count_lines_max(const char *filename, long max_lines);
 long util_fcount_lines(FILE *fh);
 long util_gzcount_lines(gzFile gzf);
 long util_fcount_lines_match(FILE *fh, const char *starts_with);

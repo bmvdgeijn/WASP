@@ -57,7 +57,8 @@ site.names <- c(paste("ALT.", 1:n.alt, sep=""),
 
 # beta depends on whether site is from ALT or NULL model 
 # NULL sites have no difference between alleles (alpha==beta)
-beta <- opt$alpha / ((opt$effect.size * is.alt) + (1.0-is.alt))
+alpha <- rep(opt$alpha, n.alt + n.null)
+beta <- alpha / ((opt$effect.size * is.alt) + (1.0-is.alt))
 
 output.prefix <- paste(opt$output.dir, "/", opt$output.prefix, sep="")
 
@@ -72,13 +73,14 @@ genos <- rmultinom(opt$n.site, size=opt$n.sample, prob=expect.geno.freq)
 # create a genotype matrix with samples as columns, rows as sites, using sample to shuffle order of genotypes
 geno.matrix <- t(apply(genos, 2, function(x) { sample(c(rep(0, x[1]), rep(1, x[2]), rep(2, x[3])))}))
 
-expect.ref.reads <- opt$alpha * opt$region.size
+expect.ref.reads <- alpha * opt$region.size
+expect.alt.reads <- beta * opt$region.size
 expect.homo.ref.reads <- 2 * expect.ref.reads
-expect.het.reads <- expect.ref.reads + expect.ref.reads * opt$effect.size
-expect.homo.alt.reads <- 2 * expect.ref.reads * opt$effect.size
+expect.het.reads <- expect.ref.reads + expect.alt.reads
+expect.homo.alt.reads <- 2 * expect.alt.reads
 
-expect.het.site.reads <- opt$alpha + beta
-expect.het.site.ref.prp <- opt$alpha / (opt$alpha + beta)
+expect.het.site.reads <- alpha + beta
+expect.het.site.ref.prp <- alpha / (alpha + beta)
 
 # loop over each sample... generating read counts and allele-specific read counts
 for(col in 1:ncol(geno.matrix)) {

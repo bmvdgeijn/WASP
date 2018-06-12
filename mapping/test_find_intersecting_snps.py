@@ -448,7 +448,6 @@ class TestSingleEnd:
         test_data.cleanup()
 
 
-
     def test_single_two_read_two_snp_two_chrom(self):
         """Test whether having two chromosomes works, with reads
         and SNPs on both works correctly"""
@@ -514,6 +513,68 @@ class TestSingleEnd:
 
         test_data.cleanup()
 
+
+    def test_chrom_with_no_snps(self):
+        """Test whether having two chromosomes works, with no
+        SNPs on second chromsome"""
+                        
+        test_data = Data(read1_seqs = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                       "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"],
+                         read1_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
+                                         "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT",
+                                         "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG\n" +
+                                         "CCCCCCCCCCGCCCCCCCCCCCCCCCCCCC"],
+                         chrom_names = ['test_chrom1', 'test_chrom2'],
+                         snp_list = [['test_chrom1', 1, "A", "C"]])
+        
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        # write an empty file with no SNPs for chr=2
+        filename = test_data.snp_dir + "/test_chrom2.snps.txt.gz"
+        f = gzip.open(filename, "wb")
+        f.write("");
+        f.close()
+
+        
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=False,
+                                    is_sorted=False)
+
+        #
+        # Verify new fastq is correct. The first base of the first read
+        # should be switched from C to an A, and the second read
+        # should be unchanged
+        #
+        with gzip.open(test_data.fastq_remap_filename) as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 4
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq = "".join(l)
+        assert lines[1] == new_seq
+        assert lines[3] == test_data.read1_quals[0]
+        
+        #
+        # Verify to.remap bam has 1 read
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert len(new_lines) == 1 and new_lines[0].startswith("read1")
+
+        #
+        # Verify that the keep file has 1 read
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1 and lines[0].startswith("read2")
+
+        test_data.cleanup()
         
 
     def test_single_gapD_read_two_snps(self):

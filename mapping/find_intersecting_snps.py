@@ -902,13 +902,12 @@ def parse_samples(samples_str):
         f.close()
     else:    
         # otherwise assume comma-delimited string
-        if ("," not in samples_str and len(samples_str) > 15) \
-           or ("/" in samples_str):
+        if ("/" in samples_str or "\\" in samples_str):
             sys.stderr.write("WARNING: --samples argument (%s) "
-                             "does not look like sample name "
-                             "but is not path to valid file. "
-                             "Assuming it is a sample name anyway."
-                             % samples_str)
+                             "does not look like list of sample names "
+                             "(contains '/' or '\\') but is not path to "
+                             "valid file. Assuming it is list of sample "
+                             "names anyway." % samples_str)
 
         samples = samples_str.split(",")
         sys.stderr.write("SAMPLES: %s\n"% repr(samples))

@@ -58,9 +58,9 @@ def main():
         infile = open(args.infile, "r")
         
     if args.outfile.endswith(".gz"):
-        outfile = gzip.open(args.outfile,"w")
+        outfile = gzip.open(args.outfile, "w")
     else:
-        outfile = open(args.outfile,"w")
+        outfile = open(args.outfile, "w")
 
     ref_count_h5 = tables.openFile(args.ref_as_counts)
     alt_count_h5 = tables.openFile(args.alt_as_counts)

@@ -143,7 +143,7 @@ class TestGetOverlappingSNPs:
         sam_file.close()
 
         sam_file = pysam.Samfile(data.sam_filename)
-        read = sam_file.next()
+        read = next(sam_file)
 
         # simple case where read has only one big match segment
         snp_tab = snptable.SNPTable()
@@ -176,7 +176,7 @@ class TestGetOverlappingSNPs:
         sam_file.close()
         
         sam_file = pysam.Samfile(data.sam_filename)
-        read = sam_file.next()
+        read = next(sam_file)
 
         snp_tab = snptable.SNPTable()
         snp_tab.read_file(data.snp_filename)
@@ -205,7 +205,7 @@ class TestGetOverlappingSNPs:
         sam_file.close()
         
         sam_file = pysam.Samfile(data.sam_filename)
-        read = sam_file.next()
+        read = next(sam_file)
 
         snp_tab = snptable.SNPTable()
         snp_tab.read_file(data.snp_filename)
@@ -233,7 +233,7 @@ class TestGetOverlappingSNPs:
         sam_file.close()
         
         sam_file = pysam.Samfile(data.sam_filename)
-        read = sam_file.next()
+        read = next(sam_file)
 
         snp_tab = snptable.SNPTable()
         snp_tab.read_file(data.snp_filename)

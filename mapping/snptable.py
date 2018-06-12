@@ -7,7 +7,7 @@ import operator
 import util
 
 
-NUCLEOTIDES = set(['A', 'C', 'T', 'G'])
+NUCLEOTIDES = {b'A', b'C', b'T', b'G'}
 SNP_UNDEF = -1
 
 
@@ -90,7 +90,7 @@ class SNPTable(object):
                 hap_idx = np.empty(samp_idx.shape[0]*2, dtype=np.int)
                 hap_idx[0::2] = samp_idx*2
                 hap_idx[1::2] = samp_idx*2 + 1
-                haps = self.haplotypes[:,hap_idx]
+                haps = self.haplotypes[:, hap_idx]
 
                 # count number of ref and non-ref alleles,
                 # ignoring undefined (-1s)
@@ -108,7 +108,7 @@ class SNPTable(object):
 
                 # make filtered and ordered samples for this chromosome
                 # that corresponds to order of haplotypes
-                sorted_samps = sorted(samp_idx_dict.items(),
+                sorted_samps = sorted(list(samp_idx_dict.items()),
                                       key=operator.itemgetter(1))
                 self.samples = [x[0] for x in sorted_samps]
                 
@@ -134,13 +134,16 @@ class SNPTable(object):
         
         if node_name in h5f:
             node = h5f.getNode(node_name)
-            samples = [row["name"] for row in node]
+            samples = [row["name"].decode("utf-8") for row in node]
         else:
             raise ValueError("Cannot retrieve haplotypes for "
                              "specified samples, because haplotype "
                              "file %s does not contain '%s' table. "
                              "May need to regenerate haplotype HDF5 file "
                              "using snp2h5" % (h5f.filename, node_name))
+
+        sys.stderr.write("SAMPLES: %s\n" % samples)
+        
         return samples
 
     
@@ -193,7 +196,7 @@ class SNPTable(object):
                 # this is a SNP
                 return True
             else:
-                if ("-" in allele1) or ("-" in allele2):
+                if (b"-" in allele1) or (b"-" in allele2):
                     # 1bp indel
                     return False
                 else:
@@ -211,9 +214,9 @@ class SNPTable(object):
         """read in SNPs and indels from text input file"""
         try:
             if util.is_gzipped(filename):
-                f = gzip.open(filename)
+                f = gzip.open(filename, "rt")
             else:
-                f = open(filename, "r")
+                f = open(filename, "rt")
         except IOError:
             sys.stderr.write("WARNING: unable to read from file '%s', "
                              "assuming no SNPs for this chromosome\n" %
@@ -233,7 +236,7 @@ class SNPTable(object):
                 raise ValueError("expected at least 3 values per SNP "
               			 "file line but got %d:\n"
                                  "%s\n" % (len(words), line))
-
+            
             pos = int(words[0])
             a1 = words[1].upper().replace("-", "")
             a2 = words[2].upper().replace("-", "")

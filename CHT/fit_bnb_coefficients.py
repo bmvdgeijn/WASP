@@ -376,8 +376,8 @@ def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
     fit_ll = 0
 
     for indx in range(count_matrix.shape[1]):
-        cur_like = gw_like(gw_fits[indx], count_matrix[:,indx],
-                           expected_matrix[:,indx], gene_fits, mean_fits)
+        cur_like = gw_like(gw_fits[indx], count_matrix[:, indx],
+                           expected_matrix[:, indx], gene_fits, mean_fits)
 
         init_gw_fit = gw_fits[indx]
 
@@ -385,8 +385,8 @@ def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
 
         res = minimize_scalar(gw_like,
                               bounds=(MIN_GW_FIT, MAX_GW_FIT),
-                              args=(count_matrix[:,indx],
-                                    expected_matrix[:,indx],
+                              args=(count_matrix[:, indx],
+                                    expected_matrix[:, indx],
                                     gene_fits, mean_fits),
                               options={'xatol' : xtol},
                               # tol=GW_LIKE_TOL,
@@ -403,8 +403,8 @@ def get_gw_overdisp(count_matrix, expected_matrix, gw_fits,
             # likelihood did not improve because failed to converge
             like = cur_like
 
-        like = gw_like(gw_fits[indx], count_matrix[:,indx],
-                       expected_matrix[:,indx], gene_fits, mean_fits)
+        like = gw_like(gw_fits[indx], count_matrix[:, indx],
+                       expected_matrix[:, indx], gene_fits, mean_fits)
 
         fit_ll += like
     return gw_fits, fit_ll
@@ -464,12 +464,12 @@ def addlogs(loga, logb):
 
 
 
-def lbeta_asymp(a,b):
+def lbeta_asymp(a, b):
     if b > a:
-        a,b = b,a
+        a, b = b, a
 
     if a<1e6:
-        return betaln(a,b)
+        return betaln(a, b)
 
     l = gammaln(b)
 
@@ -482,7 +482,7 @@ def lbeta_asymp(a,b):
 
 
 
-def BNB_loglike(k,mean,n,sigma):
+def BNB_loglike(k, mean, n, sigma):
     #n=min(n,10000)
     #Put variables in beta-NB form (n,a,b)
     mean = max(mean, 0.00001)
@@ -491,7 +491,7 @@ def BNB_loglike(k,mean,n,sigma):
              math.log(mean) - math.log(n + mean)]
 
     if sigma < 0.00001:
-        loglike = -betaln(n,k+1)-math.log(n+k)+n*logps[0]+k*logps[1]
+        loglike = -betaln(n, k+1)-math.log(n+k)+n*logps[0]+k*logps[1]
         return loglike
 
     sigma = (1/sigma)**2
@@ -505,16 +505,16 @@ def BNB_loglike(k,mean,n,sigma):
     #for j in range(k):
     #    loglike += math.log(j+n)
     if k>0:
-        loglike = -lbeta_asymp(n,k) - math.log(k)
+        loglike = -lbeta_asymp(n, k) - math.log(k)
         #loglike=scipy.special.gammaln(k+n)-scipy.special.gammaln(n)
     else:
         loglike=0
 
     #Add log(beta(a+n,b+k))
-    loglike += lbeta_asymp(a+n,b+k)
+    loglike += lbeta_asymp(a+n, b+k)
 
     #Subtract log(beta(a,b))
-    loglike -= lbeta_asymp(a,b)
+    loglike -= lbeta_asymp(a, b)
 
     return loglike
 

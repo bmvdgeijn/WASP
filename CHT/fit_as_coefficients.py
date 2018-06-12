@@ -203,6 +203,6 @@ def AS_betabinom_loglike(logps, sigma, AS1, AS2, hetp, error):
     if hetp == 0:
         return addlogs(e1, e2)
 
-    return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1,e2))
+    return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1, e2))
 
 main()

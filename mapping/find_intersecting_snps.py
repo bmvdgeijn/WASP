@@ -120,10 +120,10 @@ class DataFiles(object):
         if self.is_paired:
             self.fastq1_filename = self.prefix + ".remap.fq1.gz"
             self.fastq2_filename = self.prefix + ".remap.fq2.gz"
-            self.fastq1 = gzip.open(self.fastq1_filename, "wb")
-            self.fastq2 = gzip.open(self.fastq2_filename, "wb")
+            self.fastq1 = gzip.open(self.fastq1_filename, "wt")
+            self.fastq2 = gzip.open(self.fastq2_filename, "wt")
             self.fastq_single_filename = self.prefix + ".remap.single.fq.gz"
-            self.fastq_single = gzip.open(self.fastq_single_filename, "wb")
+            self.fastq_single = gzip.open(self.fastq_single_filename, "wt")
             sys.stderr.write("  %s\n  %s\n  %s\n" %
                              (self.fastq1_filename,
                               self.fastq2_filename,
@@ -131,13 +131,13 @@ class DataFiles(object):
             
         else:
             self.fastq_single_filename = self.prefix + ".remap.fq.gz"
-            self.fastq_single = gzip.open(self.fastq_single_filename, "wb")
+            self.fastq_single = gzip.open(self.fastq_single_filename, "wt")
             sys.stderr.write("  %s\n" % (self.fastq_single_filename))
 
-        self.input_bam = pysam.Samfile(self.bam_sort_filename, "rb")
-        self.keep_bam = pysam.Samfile(self.keep_filename, "wb",
+        self.input_bam = pysam.Samfile(self.bam_sort_filename, "r")
+        self.keep_bam = pysam.Samfile(self.keep_filename, "w",
                                       template=self.input_bam)
-        self.remap_bam = pysam.Samfile(self.remap_filename, "wb",
+        self.remap_bam = pysam.Samfile(self.remap_filename, "w",
                                        template=self.input_bam)
         sys.stderr.write("  %s\n  %s\n" % (self.keep_filename,
                                            self.remap_filename))
@@ -460,10 +460,10 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
             # add segment for appropriate allele
             if hap[i] == 0:
                 # reference allele
-                new_read.append(ref_alleles[i])
+                new_read.append(ref_alleles[i].decode("utf-8"))
             elif hap[i] == 1:
                 # alternate allele
-                new_read.append(alt_alleles[i])
+                new_read.append(alt_alleles[i].decode("utf-8"))
             else:
                 # haplotype has unknown genotype or phasing so skip it...
                 # not sure if this is the best thing to do, could instead
@@ -513,8 +513,8 @@ def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles, i):
     # create new version of this read with both reference and
     # alternative versions of allele at this index
     idx = read_pos[i]-1
-    ref_read = read_seq[:idx] + ref_alleles[i] + read_seq[idx+1:]
-    alt_read = read_seq[:idx] + alt_alleles[i] + read_seq[idx+1:]
+    ref_read = read_seq[:idx] + ref_alleles[i].decode("utf-8") + read_seq[idx+1:]
+    alt_read = read_seq[:idx] + alt_alleles[i].decode("utf-8") + read_seq[idx+1:]
 
     if i == len(read_pos)-1:
         # this was the last SNP
@@ -888,9 +888,9 @@ def parse_samples(samples_str):
         samples = []
 
         if util.is_gzipped(samples_str):
-            f = gzip.open(samples_str)
+            f = gzip.open(samples_str, "rt")
         else:
-            f = open(samples_str)
+            f = open(samples_str, "rt")
 
         for line in f:
             # assume first token in line is sample name

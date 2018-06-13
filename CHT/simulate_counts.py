@@ -172,22 +172,22 @@ def main():
     
     out_files = []
     sys.stderr.write("creating output files:\n")
-    file_list = open("%s_file_list.txt" % options.prefix, "w")
+    file_list = open("%s_file_list.txt" % options.prefix, "wt")
     for i in range(options.num_inds):
         out_filename = "%s_%d.txt" % (options.prefix, i+1)
         sys.stderr.write("  %s\n" % out_filename)
 
-        out_files.append(open(out_filename, "w"))
+        out_files.append(open(out_filename, "wt"))
         # write_options(out_files[i], options)
         write_header(out_files[i])
         file_list.write(out_filename + "\n")
     file_list.close()
     
     
-    ASseq_Y_file = open("%s_Y.txt" % options.prefix, "w")
-    ASseq_Y1_file = open("%s_Y1.txt" % options.prefix, "w")
-    ASseq_Y2_file = open("%s_Y2.txt" % options.prefix, "w")
-    ASseq_Z_file = open("%s_Z.txt" % options.prefix, "w")
+    ASseq_Y_file = open("%s_Y.txt" % options.prefix, "wt")
+    ASseq_Y1_file = open("%s_Y1.txt" % options.prefix, "wt")
+    ASseq_Y2_file = open("%s_Y2.txt" % options.prefix, "wt")
+    ASseq_Z_file = open("%s_Z.txt" % options.prefix, "wt")
 
     test = 1
     while test <= options.num_tests:

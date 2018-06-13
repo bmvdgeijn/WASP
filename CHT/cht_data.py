@@ -112,7 +112,7 @@ def open_input_files(in_filename):
                       "regular file\n" % in_filename)
 
     # read file that contains list of input files
-    in_file = open(in_filename)
+    in_file = open(in_filename, "rt")
 
     infiles = []
     for line in in_file:
@@ -127,7 +127,7 @@ def open_input_files(in_filename):
         if util.is_gzipped(filename):
             f = gzip.open(filename, "rt")
         else:
-            f = open(filename)
+            f = open(filename, "rt")
 
         # skip header
         f.readline()

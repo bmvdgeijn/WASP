@@ -301,7 +301,7 @@ def get_samples_index(options):
     sys.stderr.write("reading list of individuals from %s\n" % 
                      options.samples)
     
-    f = open(options.samples)
+    f = open(options.samples, "rt")
 
     ind_dict = {}
     
@@ -328,7 +328,7 @@ def read_individuals(options, samp_idx):
     if os.path.exists(options.individuals):
         # read individuals from specified file
         ind_list = []
-        f = open(options.individuals)
+        f = open(options.individuals, "rt")
 
         for line in f:
             words = line.rstrip().split()
@@ -360,9 +360,9 @@ def main():
     out_f = None
     if args.output_file:
         if args.output_file.endswith(".gz"):
-            out_f = gzip.open(args.output_file, "w")
+            out_f = gzip.open(args.output_file, "wt")
         else:
-            out_f = open(args.output_file, "w")
+            out_f = open(args.output_file, "wt")
     else:
         out_f = sys.stdout
 

@@ -68,7 +68,7 @@ def open_input_files(in_filename):
         exit(2)
 
     # read file that contains list of input files
-    in_file = open(in_filename)
+    in_file = open(in_filename, "rt")
 
     infiles = []
     for line in in_file:
@@ -81,7 +81,7 @@ def open_input_files(in_filename):
         if util.is_gzipped(filename):
             f = gzip.open(filename, "rt")
         else:
-            f = open(filename, "r")
+            f = open(filename, "rt")
 
         # skip header
         f.readline()
@@ -112,7 +112,7 @@ def read_bnb_sigmas(options, infiles):
     """Read overdispersion parameters for beta-negative binomial.
     Expect one for each individual."""
     if (options.bnb_disp):
-        disp_file = open(options.bnb_disp)
+        disp_file = open(options.bnb_disp, "rt")
         line = disp_file.readline()
         bnb_sigmas = []
         while line:
@@ -136,7 +136,7 @@ def read_as_sigmas(options, infiles):
     (Beta-Binomial). Expect one for each individual."""
 
     if (options.as_disp):
-        disp_file = open(options.as_disp)
+        disp_file = open(options.as_disp, "rt")
         line = disp_file.readline()
         as_sigmas = []
         while line:
@@ -246,15 +246,15 @@ def main():
         num_pcs = 0
 
     if options.out_file.endswith(".gz"):
-        outfile = gzip.open(options.out_file, "wb")
+        outfile = gzip.open(options.out_file, "wt")
     else:
-        outfile = open(options.out_file, 'w')
+        outfile = open(options.out_file, "wt")
 
     if options.benchmark:
         if options.benchmark == "-":
             bench_file = sys.stderr
         else:
-            bench_file = open(options.benchmark, "w")
+            bench_file = open(options.benchmark, "wt")
 
         bench_file.write("TEST.TYPE TIME\n")
 
@@ -777,7 +777,7 @@ def parse_test_snp(snpinfo, options):
                        snp_as_alt, snp_hetps, tot, count)
 
 def load_covariates(cov_file):
-    infile=open(cov_file)
+    infile = open(cov_file, "rt")
     cov_table=[]
     while True:
         line=infile.readline()

@@ -535,7 +535,7 @@ def parse_args():
 def lookup_individual_index(samples_file, ind_name, population=None):
     """Gets the index of individual that is used
     to lookup information in the genotype and haplotype tables"""
-    f = open(samples_file)
+    f = open(samples_file, "rt")
 
     if population:
         p = population.lower()

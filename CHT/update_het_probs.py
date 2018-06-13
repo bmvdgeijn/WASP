@@ -55,12 +55,12 @@ def main():
     if util.is_gzipped(args.infile):
         infile = gzip.open(args.infile, "rt")
     else:
-        infile = open(args.infile, "r")
+        infile = open(args.infile, "rt")
         
     if args.outfile.endswith(".gz"):
-        outfile = gzip.open(args.outfile, "w")
+        outfile = gzip.open(args.outfile, "wt")
     else:
-        outfile = open(args.outfile, "w")
+        outfile = open(args.outfile, "wt")
 
     ref_count_h5 = tables.openFile(args.ref_as_counts)
     alt_count_h5 = tables.openFile(args.alt_as_counts)

@@ -12,4 +12,4 @@ def is_gzipped(filename):
     f.close()
 
     # check against gzip magic number 1f8b
-    return (byte1 == chr(0x1f)) and (byte2 == chr(0x8b))
+    return (byte1 == b'\x1f') and (byte2== b'\x8b')

@@ -278,7 +278,7 @@ def lookup_individual_index(options, ind_name):
     to lookup information in the genotype and haplotype tables"""
     sys.stderr.write("reading list of individuals from %s\n" % 
                      options.samples)
-    f = open(options.samples, "r")
+    f = open(options.samples, "rt")
 
     idx = 0
     for line in f:
@@ -537,7 +537,7 @@ def main():
     if util.is_gzipped(args.input_file):
         f = gzip.open(args.input_file, "rt")
     else:
-        f = open(args.input_file, "r")
+        f = open(args.input_file, "rt")
 
     line_count = 0
 

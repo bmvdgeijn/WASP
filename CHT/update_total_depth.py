@@ -93,7 +93,7 @@ def parse_options():
 
 def main():
     args = parse_options()
-    inlist = [line.strip() for line in open(args.infile_list, "r")]
+    inlist = [line.strip() for line in open(args.infile_list, "rt")]
 
     for i in inlist:
         sys.stderr.write(i + "\n")
@@ -113,7 +113,7 @@ def main():
         write_splines(coefs_list, args.fit_out_file)
     else:
         outlist = [line.strip() for 
-                   line in open(args.outfile_list, "r")]
+                   line in open(args.outfile_list, "rt")]
         
         update_totals(inlist, outlist, count_table, coefs_list,
                       keep_list)
@@ -241,7 +241,7 @@ def load_data(inlist, seq_h5_filename, min_counts, skips):
 
 
 def read_splines(fit_in_file):
-    spline_file = open(fit_in_file, "r")
+    spline_file = open(fit_in_file, "rt")
     coefs = []
     for line in spline_file:
         coefs.append([float(x) for x in line.strip().split()])
@@ -250,7 +250,7 @@ def read_splines(fit_in_file):
 
 
 def write_splines(coefs, fit_out_file):
-    spline_file = open(fit_out_file, "w")
+    spline_file = open(fit_out_file, "wt")
     for ind in coefs:
         spline_file.write("\t".join([str(x) for x in ind]) + "\n")
     spline_file.close()
@@ -337,7 +337,7 @@ def splinefit(arg, x1, x2,  y):
 def update_totals(inlist, outlist, count_table, coefs_table,
                   keep_list):
     infiles = open_files(inlist, "rt")
-    outfiles = open_files(outlist, "w")
+    outfiles = open_files(outlist, "wt")
     row = 0
     count_row = 0
 

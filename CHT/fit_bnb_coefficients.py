@@ -216,7 +216,7 @@ def main():
 
         # write estimates to outfile each iteration
         # (this way outfile is written even if optimization terminated by user)
-        outfile = open(options.outfile, "w")
+        outfile = open(options.outfile, "wt")
         for i in gw_fits:
             outfile.write("%f\n" % i)
         outfile.close()

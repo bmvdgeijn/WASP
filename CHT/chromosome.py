@@ -190,7 +190,7 @@ def get_all_chromosomes(filename):
     if util.is_gzipped(filename):
         f = gzip.open(filename, "rt")
     else:
-        f = open(filename)
+        f = open(filename, "rt")
 
     chrom_list = []
     

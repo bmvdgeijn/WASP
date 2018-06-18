@@ -63,7 +63,6 @@ rule all:
 #     output:
 #         expand(config["snp_dir"] + "/{chromosome}.snps.txt.gz", chromosome=get_chromosomes())
 #     shell:
-#         "mkdir -p {config[snp_dir]} ; "
 #         "{config[wasp_dir]}/mapping/extract_vcf_snps.sh {input} {config[snp_dir]}"
 #
 # rule find_intersecting_snps_paired_end:
@@ -77,8 +76,7 @@ rule all:
 #         keep_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.keep.bam",
 #         remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
 #     shell:
-#         "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
-#         "{config[py2]} {config[wasp_dir]}/mapping/find_intersecting_snps.py "
+#         "python {config[wasp_dir]}/mapping/find_intersecting_snps.py "
 #         "    --is_paired_end --is_sorted --output_dir {config[output_dir]}/find_intersecting_snps {input.bam} {config[snp_dir]}"
 
 
@@ -92,7 +90,6 @@ rule vcf2h5:
         snp_tab=config['snp_h5_dir'] + "/snp_tab.h5",
         haplotype=config['snp_h5_dir'] + "/haplotype.h5"
     shell:
-        "mkdir -p {config[snp_h5_dir]}; "
         "{config[wasp_dir]}/snp2h5/snp2h5 "
         "  --chrom {input.chrom} "
         "  --format vcf "
@@ -115,8 +112,7 @@ rule find_intersecting_snps_paired_end:
          keep_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.keep.bam",
          remap_bam=config["output_dir"] + "/find_intersecting_snps/{sample}.to.remap.bam"
      shell:
-         "mkdir -p {config[output_dir]}/find_intersecting_snps ; "
-         "{config[py2]} {config[wasp_dir]}/mapping/find_intersecting_snps.py "
+         "python {config[wasp_dir]}/mapping/find_intersecting_snps.py "
          "    --is_paired_end "
          "    --is_sorted "
          "    --output_dir {config[output_dir]}/find_intersecting_snps "
@@ -136,7 +132,6 @@ rule map_bowtie2_paired_end1:
     output:
         config["output_dir"] + "/map1/{sample}.bam"
     shell:
-        "mkdir -p " + config["output_dir"] + "/map1 ; "
         "{config[bowtie2]} -x {config[bowtie2_index]} -1 {input.fastq1} -2 {input.fastq2} "
         "| {config[samtools]} view -b -q 10 - > {output} "
 
@@ -149,7 +144,6 @@ rule sort_and_index_bam1:
         config["output_dir"] + "/map1_sort/{sample}.bam",
         config["output_dir"] + "/map1_sort/{sample}.bam.bai"
     shell:
-        "mkdir -p {config[output_dir]}/map1_sort ; "
         "{config[samtools]} sort -o {output[0]} {input}; "
         "{config[samtools]} index {output[0]}"
 
@@ -163,7 +157,6 @@ rule map_bowtie2_paired_end2:
     output:
         config["output_dir"] + "/map2/{sample}.bam"
     shell:
-        "mkdir -p " + config["output_dir"] + "/map2 ; "
         "{config[bowtie2]} -x {config[bowtie2_index]} -1 {input.fastq1} -2 {input.fastq2} "
         "| {config[samtools]} view -b -q 10 - > {output}"
         
@@ -176,7 +169,6 @@ rule sort_and_index_bam2:
         config["output_dir"] + "/map2_sort/{sample}.bam",
         config["output_dir"] + "/map2_sort/{sample}.bam.bai"
     shell:
-        "mkdir -p {config[output_dir]}/map2_sort ; "
         "{config[samtools]} sort -o {output[0]} {input} ; "
         "{config[samtools]} index {output[0]}"
 
@@ -189,8 +181,7 @@ rule filter_remapped_reads:
     output:
         keep_bam=config['output_dir'] + "/filter_remapped_reads/{sample}.keep.bam"
     shell:
-        "mkdir -p {config[output_dir]}/filter_remapped_reads ; "
-        "{config[py2]} {config[wasp_dir]}/mapping/filter_remapped_reads.py "
+        "python {config[wasp_dir]}/mapping/filter_remapped_reads.py "
         "  {input.to_remap_bam} {input.remap_bam} {output.keep_bam}"
 
     
@@ -203,7 +194,6 @@ rule merge_bams:
         merge=config['output_dir'] + "/merge/{sample}.keep.merge.bam",
         sort=config['output_dir'] + "/merge/{sample}.keep.merge.sort.bam"
     shell:
-        "mkdir -p {config[output_dir]}/merge ; "
         "{config[samtools]} merge {output.merge} {input.keep1} {input.keep2}; "
         "{config[samtools]} sort -o {output.sort} {output.merge}; "
         "{config[samtools]} index {output.sort}"
@@ -217,8 +207,7 @@ rule rmdup_pe:
         rmdup=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.bam",
         sort=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam"
     shell:
-        "mkdir -p {config[output_dir]}/rmdup ; "
-        "{config[py2]} {config[wasp_dir]}/mapping/rmdup_pe.py {input} {output.rmdup} ;"
+        "python {config[wasp_dir]}/mapping/rmdup_pe.py {input} {output.rmdup} ;"
         "{config[samtools]} sort -o {output.sort} {output.rmdup}; "
         "{config[samtools]} index {output.sort}"
         
@@ -236,8 +225,7 @@ rule get_as_counts:
     output:
         config['output_dir'] + "/as_counts/{sample}.as_counts.txt.gz"
     shell:
-        "mkdir -p {config[output_dir]}/as_counts ; "
-        "{config[py2]} {config[wasp_dir]}/mapping/get_as_counts.py "
+        "python {config[wasp_dir]}/mapping/get_as_counts.py "
         "  --snp_tab {input.snp_tab} "
         "  --snp_index {input.snp_index} "
         "  --haplotype {input.haplotype} "

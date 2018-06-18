@@ -103,7 +103,7 @@ def filter_reads(remap_bam):
                 
             # only use left end of reads, but check that right end is in
             # correct location
-            if read.pos < read.next_reference_start:
+            if read.pos < read.next_reference_start or (read.pos == read.next_reference_start and read.is_read1 and not read.is_read2):
                 if pos1 == read.pos+1 and pos2 == read.next_reference_start+1:
                     # both reads mapped to correct location
                     correct_map = True

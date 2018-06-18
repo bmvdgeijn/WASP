@@ -111,9 +111,9 @@ def check_pytables_version():
 
     pytables_ver = [int(x) for x in tables.__version__.split(".")]
 
-    if pytables_ver[0] != 3:
+    if pytables_ver[0] < 3:
         raise ImportWarning("pytables version is %s, but pytables version "
-                            "2 is required" % (tables.__version__))
+                            ">=3 is required" % (tables.__version__))
 
     return 0
 

@@ -114,7 +114,7 @@ import pysam
 
 import chromosome
 import chromstat
-
+import util
 
 # codes used by pysam for aligned read CIGAR strings
 BAM_CMATCH     = 0 # M
@@ -582,6 +582,14 @@ def lookup_individual_index(samples_file, ind_name, population=None):
 def main():
     args = parse_args()
 
+    sys.stderr.write("command line: %s\n" % " ".join(sys.argv))
+    sys.stderr.write("python version: %s\n" % sys.version)
+    sys.stderr.write("pysam version: %s\n" % pysam.__version__)
+    sys.stderr.write("pytables version: %s\n" % tables.__version__)
+
+    util.check_pysam_version()
+    util.check_pytables_version()
+    
     snp_tab_h5 = tables.open_file(args.snp_tab, "r")
     snp_index_h5 = tables.open_file(args.snp_index, "r")
 

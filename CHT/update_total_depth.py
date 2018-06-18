@@ -143,7 +143,7 @@ def open_files(file_list, r_w):
 def get_at_gc_count(seq_h5, chrm, start, end):
     # seq HDF5 file contains ascii values for nucleotides
     # e.g. A = 65
-    node = seq_h5.getNode("/%s" % chrm)
+    node = seq_h5.get_node("/%s" % chrm)
     vals = node[start-1:end]
 
     counts = np.bincount(vals)
@@ -169,7 +169,7 @@ def get_at_gc_count(seq_h5, chrm, start, end):
 def load_data(inlist, seq_h5_filename, min_counts, skips):
     infiles = open_files(inlist, "rt")
 
-    seq_h5 = tables.openFile(seq_h5_filename, "r")
+    seq_h5 = tables.open_file(seq_h5_filename, "r")
     
     end_of_file = False
     count_table = []

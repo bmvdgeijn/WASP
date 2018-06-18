@@ -123,7 +123,7 @@ def write_remap_bam_pe(data_dir="test_data", bam_filename="test_data/test.remap.
         
     # write temporary file in SAM format, before converting to BAM
     sam_filename = data_dir + "/tmp.sam"
-    f = open(sam_filename, "w")
+    f = open(sam_filename, "wt")
     write_sam_header(f)
     for line in sam_lines:
         f.write(line + "\n")
@@ -146,7 +146,7 @@ def read_bam(bam):
     the bam file (with the newline stripped). The header is discarded.
     """
     res = subprocess.check_output('samtools view %s' % bam, shell=True)
-    return res.strip().split('\n')
+    return res.decode("utf-8").strip().split('\n')
 
 
 def test_filter_remapped_reads_pe():

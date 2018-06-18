@@ -64,9 +64,9 @@ class DataFiles(object):
         self.haplotype_filename = haplotype_filename
 
         if self.snp_tab_filename:
-            self.snp_tab_h5 = tables.openFile(snp_tab_filename, "r")
-            self.snp_index_h5 = tables.openFile(snp_index_filename, "r")
-            self.hap_h5 = tables.openFile(haplotype_filename, "r")
+            self.snp_tab_h5 = tables.open_file(snp_tab_filename, "r")
+            self.snp_index_h5 = tables.open_file(snp_index_filename, "r")
+            self.hap_h5 = tables.open_file(haplotype_filename, "r")
         else:
             self.snp_tab_h5 = None
             self.snp_index_h5 = None

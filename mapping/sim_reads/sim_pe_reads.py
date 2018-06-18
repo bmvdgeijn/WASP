@@ -279,13 +279,13 @@ def gen_seqs(read_coord, hap1_seq, hap2_seq):
 
 def make_hap_seqs(haps, options):
     """Makes a chromosome sequence for each haplotype"""
-    seq_h5 = tables.openFile(options.seq)
+    seq_h5 = tables.open_file(options.seq)
     
     node_name = "/%s" % options.chrom
     if node_name not in seq_h5:
         raise ValueError("chromosome %s is not in sequence h5 file" % options.chrom)
         
-    seq_node = seq_h5.getNode("/%s" % options.chrom)
+    seq_node = seq_h5.get_node("/%s" % options.chrom)
 
     seq_array1 = seq_node[:]
     seq_array2 = np.array(seq_node[:])

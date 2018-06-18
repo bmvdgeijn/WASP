@@ -268,7 +268,7 @@ class Data(object):
             name = tables.StringCol(64)
 
         for chrom_name in self.chrom_names:
-            table = h5f.createTable(h5f.root, "samples_%s" % chrom_name,
+            table = h5f.create_table(h5f.root, "samples_%s" % chrom_name,
                                     SamplesTab)
 
             for samp in self.hap_samples:
@@ -280,8 +280,8 @@ class Data(object):
         
         
             
-    def write_snp_tab_h5(self):        
-        snp_tab_h5 = tables.openFile(self.snp_tab_filename, "w")
+    def write_snp_tab_h5(self):
+        snp_tab_h5 = tables.open_file(self.snp_tab_filename, "w")
 
         class SNPTab(tables.IsDescription):
             name = tables.StringCol(16)
@@ -295,7 +295,7 @@ class Data(object):
             if snp[0] in chrom_tables:
                 table = chrom_tables[snp[0]]
             else:
-                table = snp_tab_h5.createTable(snp_tab_h5.root, snp[0], SNPTab)
+                table = snp_tab_h5.create_table(snp_tab_h5.root, snp[0], SNPTab)
                 chrom_tables[snp[0]] = table
 
             row = table.row
@@ -329,7 +329,7 @@ class Data(object):
         atom = tables.Int8Atom(dflt=0)
         zlib_filter = tables.Filters(complevel=1, complib="zlib")
         
-        hap_h5 = tables.openFile(self.haplotype_filename, "w")    
+        hap_h5 = tables.open_file(self.haplotype_filename, "w")    
 
         chrom_haps = {}
         snp_index = 0
@@ -343,7 +343,7 @@ class Data(object):
         
         for chrom, haps in list(chrom_haps.items()):
             hap_array = np.array(haps, dtype=np.int8)
-            carray = hap_h5.createCArray(hap_h5.root,
+            carray = hap_h5.create_carray(hap_h5.root,
                                          chrom, atom, hap_array.shape,
                                          filters=zlib_filter)
             carray[:] = haps
@@ -358,7 +358,7 @@ class Data(object):
         atom = tables.Int16Atom(dflt=0)
         zlib_filter = tables.Filters(complevel=1, complib="zlib")
         
-        snp_index_h5 = tables.openFile(self.snp_index_filename, "w")    
+        snp_index_h5 = tables.open_file(self.snp_index_filename, "w")    
 
         snp_index = 0
 
@@ -371,7 +371,7 @@ class Data(object):
             else:
                 # create CArray for this chromosome
                 shape = [chrom_lengths[snp[0]]]
-                carray = snp_index_h5.createCArray(snp_index_h5.root,
+                carray = snp_index_h5.create_carray(snp_index_h5.root,
                                                    snp[0], atom, shape,
                                                    filters=zlib_filter)
                 carray[:] = -1

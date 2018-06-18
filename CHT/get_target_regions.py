@@ -31,9 +31,9 @@ class SNP(object):
 class SNPFiles(object):
     def __init__(self, args):
         # open tracks where SNP information can be extracted
-        self.snp_tab_h5 = tables.openFile(args.snp_tab, "r")
-        self.snp_index_h5 = tables.openFile(args.snp_index, "r")
-        self.hap_h5 = tables.openFile(args.haplotype, "r")
+        self.snp_tab_h5 = tables.open_file(args.snp_tab, "r")
+        self.snp_index_h5 = tables.open_file(args.snp_index, "r")
+        self.hap_h5 = tables.open_file(args.haplotype, "r")
 
 
     def close(self):
@@ -47,21 +47,21 @@ class CombinedFiles(object):
     def __init__(self, output_dir, chrom_list):
         # combined allele-specific read counts
         as_count_filename = "%s/combined_as_count.h5" % output_dir
-        self.as_count_h5 = tables.openFile(as_count_filename, "w")
+        self.as_count_h5 = tables.open_file(as_count_filename, "w")
         
         # combined mapped read counts
         read_count_filename = "%s/combined_read_count.h5" % output_dir
-        self.read_count_h5 = tables.openFile(read_count_filename, "w")
+        self.read_count_h5 = tables.open_file(read_count_filename, "w")
 
         # counts of genotypes
         ref_count_filename = "%s/combined_ref_count.h5" % output_dir
-        self.ref_count_h5 = tables.openFile(ref_count_filename, "w")
+        self.ref_count_h5 = tables.open_file(ref_count_filename, "w")
         
         alt_count_filename = "%s/combined_alt_count.h5" % output_dir
-        self.alt_count_h5 = tables.openFile(alt_count_filename, "w")
+        self.alt_count_h5 = tables.open_file(alt_count_filename, "w")
         
         het_count_filename = "%s/combined_het_count.h5" % output_dir
-        self.het_count_h5 = tables.openFile(het_count_filename, "w")
+        self.het_count_h5 = tables.open_file(het_count_filename, "w")
         
         self.filenames = [as_count_filename, read_count_filename,
                           ref_count_filename, alt_count_filename,
@@ -83,7 +83,7 @@ class CombinedFiles(object):
 
         # create CArray for this chromosome
         shape = [chrom.length]
-        carray = h5f.createCArray(h5f.root, chrom.name,
+        carray = h5f.create_carray(h5f.root, chrom.name,
                                   atom, shape, filters=zlib_filter)
 
         return carray
@@ -110,23 +110,23 @@ class CombinedFiles(object):
 
             sys.stderr.write("  %s\n" % chrom.name)
             
-            node = self.as_count_h5.getNode(node_name)
+            node = self.as_count_h5.get_node(node_name)
                 
-            ind_node = ind_files.ref_as_count_h5.getNode(node_name)
+            ind_node = ind_files.ref_as_count_h5.get_node(node_name)
             node[:] += ind_node[:]
 
-            ind_node = ind_files.alt_as_count_h5.getNode(node_name)
+            ind_node = ind_files.alt_as_count_h5.get_node(node_name)
             node[:] += ind_node[:]
 
-            node = self.read_count_h5.getNode(node_name)
-            ind_node = ind_files.read_count_h5.getNode("/%s" % chrom.name)
+            node = self.read_count_h5.get_node(node_name)
+            ind_node = ind_files.read_count_h5.get_node("/%s" % chrom.name)
             node[:] += ind_node[:]
 
 
             # get haplotypes for this individual
             hap_a_idx = ind_idx*2
             hap_b_idx = ind_idx*2+1            
-            hap_tab = snp_files.hap_h5.getNode("/%s" % chrom.name)
+            hap_tab = snp_files.hap_h5.get_node("/%s" % chrom.name)
             a_hap = hap_tab[:, hap_a_idx]
             b_hap = hap_tab[:, hap_b_idx]
 
@@ -136,18 +136,18 @@ class CombinedFiles(object):
             is_homo_alt = (a_hap == 1) & (b_hap == 1)
             
             # get genomic location of SNPs
-            i = snp_files.snp_index_h5.getNode("/%s" % chrom.name)[:]
+            i = snp_files.snp_index_h5.get_node("/%s" % chrom.name)[:]
             chrom_idx = np.where(i != SNP_UNDEF)[0]
             snp_idx = i[chrom_idx]
 
             # add to total genotype counts
-            node = self.ref_count_h5.getNode("/%s" % chrom.name)
+            node = self.ref_count_h5.get_node("/%s" % chrom.name)
             node[chrom_idx] += is_homo_ref[snp_idx]
             
-            node = self.het_count_h5.getNode("/%s" % chrom.name)
+            node = self.het_count_h5.get_node("/%s" % chrom.name)
             node[chrom_idx] += is_het[snp_idx]
             
-            node = self.alt_count_h5.getNode("/%s" % chrom.name)
+            node = self.alt_count_h5.get_node("/%s" % chrom.name)
             node[chrom_idx] += is_homo_alt[snp_idx]
             
 
@@ -165,11 +165,11 @@ class CombinedFiles(object):
 class CountFiles(object):    
     def __init__(self, read_count_dir, individual):
         # open read count tracks for a single individual
-        self.ref_as_count_h5 = tables.openFile("%s/ref_as_counts.%s.h5" % 
+        self.ref_as_count_h5 = tables.open_file("%s/ref_as_counts.%s.h5" % 
                                             (read_count_dir, individual), "r")
-        self.alt_as_count_h5 = tables.openFile("%s/alt_as_counts.%s.h5" % 
+        self.alt_as_count_h5 = tables.open_file("%s/alt_as_counts.%s.h5" % 
                                             (read_count_dir, individual), "r")
-        self.read_count_h5 = tables.openFile("%s/read_counts.%s.h5" %
+        self.read_count_h5 = tables.open_file("%s/read_counts.%s.h5" %
                                              (read_count_dir, individual), "r")
 
         
@@ -428,14 +428,14 @@ def write_target_regions(out_f, args, chrom_list, combined_files, snp_files):
         sys.stderr.write("  %s\n" % chrom.name)
 
         sys.stderr.write("  getting genotype counts\n")
-        ref_geno_count = combined_files.ref_count_h5.getNode(node_name)[:]
-        het_geno_count = combined_files.het_count_h5.getNode(node_name)[:]
+        ref_geno_count = combined_files.ref_count_h5.get_node(node_name)[:]
+        het_geno_count = combined_files.het_count_h5.get_node(node_name)[:]
 
         ref_allele_count = ref_geno_count * 2 + het_geno_count
         # free memory as it is no longer needed
         del ref_geno_count
 
-        alt_geno_count = combined_files.alt_count_h5.getNode(node_name)[:]
+        alt_geno_count = combined_files.alt_count_h5.get_node(node_name)[:]
         alt_allele_count = alt_geno_count * 2 + het_geno_count
 
         del alt_geno_count
@@ -453,11 +453,11 @@ def write_target_regions(out_f, args, chrom_list, combined_files, snp_files):
         
         sys.stderr.write("  %d possible test SNPs\n" % idx.shape[0])
 
-        read_counts = combined_files.read_count_h5.getNode(node_name)[:]
-        as_read_counts = combined_files.as_count_h5.getNode(node_name)[:]
+        read_counts = combined_files.read_count_h5.get_node(node_name)[:]
+        as_read_counts = combined_files.as_count_h5.get_node(node_name)[:]
 
-        snp_idx = snp_files.snp_index_h5.getNode(node_name)
-        snp_tab = snp_files.snp_tab_h5.getNode(node_name)
+        snp_idx = snp_files.snp_index_h5.get_node(node_name)
+        snp_tab = snp_files.snp_tab_h5.get_node(node_name)
         
         n_region = 0
                             

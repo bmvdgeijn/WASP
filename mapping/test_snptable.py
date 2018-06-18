@@ -29,7 +29,7 @@ class Data():
 
 
     def setup(self):
-        snp_file = gzip.open(self.snp_filename, "wb")
+        snp_file = gzip.open(self.snp_filename, "wt")
 
         for snp in self.snp_list:
             snp_file.write("%d %s %s\n" % (snp[0], snp[1], snp[2]))
@@ -79,12 +79,12 @@ class TestReadFile(object):
         assert np.where(snp_tab.snp_index != -1)[0].shape[0] == 3
 
         # check snp_allele set correctly
-        assert snp_tab.snp_allele1[0] == "A"
-        assert snp_tab.snp_allele2[0] == "C"
-        assert snp_tab.snp_allele1[1] == "T"
-        assert snp_tab.snp_allele2[1] == "G"
-        assert snp_tab.snp_allele1[2] == "A"
-        assert snp_tab.snp_allele2[2] == "T"
+        assert snp_tab.snp_allele1[0] == b"A"
+        assert snp_tab.snp_allele2[0] == b"C"
+        assert snp_tab.snp_allele1[1] == b"T"
+        assert snp_tab.snp_allele2[1] == b"G"
+        assert snp_tab.snp_allele1[2] == b"A"
+        assert snp_tab.snp_allele2[2] == b"T"
 
         # check that snp_pos set correctly
         assert snp_tab.snp_pos[0] == 10
@@ -114,12 +114,12 @@ class TestReadFile(object):
         assert np.where(snp_tab.snp_index != -1)[0].shape[0] == 4
 
         # check snp_allele set correctly
-        assert snp_tab.snp_allele1[0] == "A"
-        assert snp_tab.snp_allele2[0] == ""
-        assert snp_tab.snp_allele1[1] == "A"
-        assert snp_tab.snp_allele2[1] == "ATTG"
-        assert snp_tab.snp_allele1[3] == "AAA"
-        assert snp_tab.snp_allele2[3] == "A"
+        assert snp_tab.snp_allele1[0] == b"A"
+        assert snp_tab.snp_allele2[0] == b""
+        assert snp_tab.snp_allele1[1] == b"A"
+        assert snp_tab.snp_allele2[1] == b"ATTG"
+        assert snp_tab.snp_allele1[3] == b"AAA"
+        assert snp_tab.snp_allele2[3] == b"A"
 
         # check that snp_pos set correctly
         assert snp_tab.snp_pos[0] == 10

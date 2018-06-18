@@ -228,9 +228,9 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
         if (not snp_index_filename) or (not haplotype_filename):
             raise ValueError("--snp_index and --haplotype must be provided "
                              "if --snp_tab is provided")
-        snp_tab_h5 = tables.openFile(snp_tab_filename, "r")
-        snp_index_h5 = tables.openFile(snp_index_filename, "r")
-        hap_h5 = tables.openFile(haplotype_filename, "r")
+        snp_tab_h5 = tables.open_file(snp_tab_filename, "r")
+        snp_index_h5 = tables.open_file(snp_index_filename, "r")
+        hap_h5 = tables.open_file(haplotype_filename, "r")
     else:
         snp_tab_h5 = None
         snp_index_h5 = None

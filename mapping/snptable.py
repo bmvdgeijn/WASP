@@ -59,17 +59,17 @@ class SNPTable(object):
             
         else:
             # get numpy array of SNP idices
-            node = snp_index_h5.getNode(node_name)
+            node = snp_index_h5.get_node(node_name)
             self.snp_index = node[:]
 
             # get numpy array of SNP positions
-            node = snp_tab_h5.getNode(node_name)
+            node = snp_tab_h5.get_node(node_name)
             self.snp_pos = node[:]['pos']
             self.snp_allele1 = node[:]['allele1']
             self.snp_allele2 = node[:]['allele2']
             self.n_snp = self.snp_pos.shape[0]
             self.samples = self.get_h5_samples(hap_h5, chrom_name)
-            self.haplotypes = hap_h5.getNode(node_name)
+            self.haplotypes = hap_h5.get_node(node_name)
             
             if samples:
                 # reduce set of SNPs and indels to ones that are
@@ -133,7 +133,7 @@ class SNPTable(object):
         node_name = "/samples_%s" % chrom_name
         
         if node_name in h5f:
-            node = h5f.getNode(node_name)
+            node = h5f.get_node(node_name)
             samples = [row["name"].decode("utf-8") for row in node]
         else:
             raise ValueError("Cannot retrieve haplotypes for "

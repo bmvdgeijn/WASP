@@ -355,6 +355,9 @@ def read_individuals(options, samp_idx):
 
 
 def main():
+
+    sys.stderr.write("cmd: %s\n" % " ".join(sys.argv))
+    
     args = parse_args()
 
     out_f = None
@@ -469,7 +472,7 @@ def write_target_regions(out_f, args, chrom_list, combined_files, snp_files):
             n_as_reads = np.sum(as_read_counts[start-1:end])
 
             snp_row = snp_tab[snp_idx[i]]
-
+            
             if (n_reads >= args.min_read_count) and (n_as_reads >= args.min_as_count):
                 # keep this target region
 

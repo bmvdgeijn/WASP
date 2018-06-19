@@ -232,6 +232,7 @@ def load_data(inlist, seq_h5_filename, min_counts, skips):
 
     for infile in infiles:
         infile.close()
+    
     count_table = np.array(count_table, dtype=np.float64)
 
     seq_h5.close()
@@ -262,6 +263,11 @@ def fit_splines(count_table):
     #iterate through each individual
     col_sums = np.sum(count_table, 0)
 
+    if len(count_table.shape) == 1:
+        # empty table
+        sys.stderr.write("WARNING: count table contains no data\n")
+        return [0] * 15
+    
     for col in range(2, count_table.shape[1]):
         slope_start = col_sums[col]/col_sums[1]
         sys.stderr.write(str(slope_start)+"\n")

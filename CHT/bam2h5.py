@@ -383,11 +383,13 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
         return
 
     snp = snp_tab[snp_idx]
+    allele1 = snp['allele1'].decode("utf-8")
+    allele2 = snp['allele2'].decode("utf-8")
 
     base = read.seq[read_offset]
     snp_pos = snp['pos']
 
-    if base == snp['allele1']:
+    if base == allele1:
         # matches reference allele
         if ref_array[snp_pos-1] < max_count:
             ref_array[snp_pos-1] += 1
@@ -395,7 +397,7 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
             sys.stderr.write("WARNING ref allele count at position %d "
                              "exceeds max %d\n" % (snp_pos, max_count))
             warned_pos[snp_pos] = True
-    elif base == snp['allele2']:
+    elif base == allele2:
         # matches alternate allele
         if alt_array[snp_pos-1] < max_count:
             alt_array[snp_pos-1] += 1

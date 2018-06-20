@@ -214,7 +214,7 @@ def read_count_matrices(input_filename, shuffle=False, skip=0,
     sys.stderr.write("expect_matrix dimension: %s\n" % str(expected_matrix.shape))
 
     nrow = count_matrix.shape[0]
-    if (sample > 0) and (sample < count_matrix.shape):
+    if (sample > 0) and (sample < count_matrix.shape[0]):
         # randomly sample subset of rows without replacement
         sys.stderr.write("randomly sampling %d target regions\n" % sample)
         samp_index = np.arange(nrow)

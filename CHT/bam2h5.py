@@ -517,12 +517,12 @@ def parse_args():
 
     parser.add_argument("--text_counts",
                        help="Path to text file to write ref, alt, and other "
-                       "counts of reads regardless of whether they overlap a "
-                       "SNP. The text file will have 8 columns: chrom, pos, "
-                       "ref_allele, alt_allele, genotype, ref_count, "
-                       "alt_count, other_count."
+                       "counts of reads. The text file will have columns: "
+                       "<chromosome> <snp_position> <ref_allele> <alt_allele> "
+                       "<genotype> <ref_allele_count> <alt_allele_count> "
+                       "<other_count>",
                        metavar="COUNTS_TXT_FILE",
-                       required=False, defalt=None)
+                       default=None)
 
     parser.add_argument("bam_filenames", action="store", nargs="+",
                         help="BAM file(s) to read mapped reads from. "
@@ -629,10 +629,10 @@ def main():
     else:
         raise NotImplementedError("unsupported datatype %s" % args.data_type)
 
-    # also create a numpy array to hold all of the counts that will be written
+    # also create a list to hold all of the counts that will be written
     # to a text file
-    if args.text_counts:
-        all_counts = np.empty((0, 8))
+    if args.text_counts is not None:
+        all_counts = list()
 
     for chrom in chrom_list:
         sys.stderr.write("%s\n" % chrom.name)
@@ -693,26 +693,25 @@ def main():
             # file later.
             # columns are:
             # chrom, pos, ref, alt, genotype, ref_count, alt_count, other_count
-            if args.text_counts:
+            if args.text_counts is not None:
                 chrom = np.tile(chrom.name, len(snp_tab))
                 pos = np.array([snp['pos'] for snp in snp_tab])
                 ref = np.array([snp['allele1'] for snp in snp_tab])
                 alt = np.array([snp['allele2'] for snp in snp_tab])
                 genotype = np.array([str(hap[0])+"|"+str(hap[1]) for hap in hap_tab])
-                all_counts = np.vstack((all_counts,
-                                        np.column_stack((chrom, pos, ref, alt,
-                                                         genotype,
-                                                         ref_array[pos-1],
-                                                         alt_array[pos-1],
-                                                         other_array[pos-1]))
-                                        ))
+                all_counts.append(
+                    np.column_stack((chrom, pos, ref, alt, genotype,
+                                     ref_array[pos-1],
+                                     alt_array[pos-1],
+                                     other_array[pos-1]))
+                )
 
 
             samfile.close()
 
     # write the all_counts np array to a text file
-    if args.text_counts:
-        np.savetxt(args.text_counts, all_counts, fmt="%10s", delimiter=" ")
+    if args.text_counts is not None:
+        np.savetxt(args.text_counts, np.vstack(tuple(all_counts)), fmt="%10s", delimiter=" ")
 
     # set track statistics and close HDF5 files
 

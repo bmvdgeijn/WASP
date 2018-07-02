@@ -711,7 +711,7 @@ def main():
 
     # write the all_counts np array to a text file
     if args.text_counts is not None:
-        np.savetxt(args.text_counts, np.vstack(tuple(all_counts)), fmt="%10s", delimiter=" ")
+        np.savetxt(args.text_counts, np.vstack(tuple(all_counts)), fmt="%1s", delimiter=" ")
 
     # set track statistics and close HDF5 files
 

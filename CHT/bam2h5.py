@@ -689,7 +689,7 @@ def main():
             read_count_carray[:] = read_count_array
             sys.stderr.write("\n")
 
-            # write data to numpy array, so that it can be written to a text
+            # write data to numpy arrays, so that they can be written to a txt
             # file later.
             # columns are:
             # chrom, pos, ref, alt, genotype, ref_count, alt_count, other_count
@@ -698,7 +698,10 @@ def main():
                 pos = np.array([snp['pos'] for snp in snp_tab])
                 ref = np.array([snp['allele1'] for snp in snp_tab])
                 alt = np.array([snp['allele2'] for snp in snp_tab])
-                genotype = np.array([str(hap[0])+"|"+str(hap[1]) for hap in hap_tab])
+                if hap_tab is not None:
+                    genotype = np.array([str(hap[0])+"|"+str(hap[1]) for hap in hap_tab])
+                else:
+                    genotype = np.empty((len(snp_tab), 0))
                 all_counts.append(
                     np.column_stack((chrom, pos, ref, alt, genotype,
                                      ref_array[pos-1],
@@ -709,8 +712,9 @@ def main():
 
             samfile.close()
 
-    # write the all_counts np array to a text file
+    # write the all_counts np arrays to a txt file
     if args.text_counts is not None:
+        # we use vstack to combine np arrays row-wise into a 2D array
         np.savetxt(args.text_counts, np.vstack(tuple(all_counts)), fmt="%1s", delimiter=" ")
 
     # set track statistics and close HDF5 files

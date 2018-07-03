@@ -102,7 +102,7 @@ BAM files must be sorted and indexed.
     they overlap a SNP. Read counts are stored at the left-most position
     of the mapped read.
     
-* --text_counts COUNTS_TXT_FILE [optional]
+* --txt_counts COUNTS_TXT_FILE [optional]
 
     Path to text file to write ref, alt, and other counts of reads.
     The text file will have columns: <chromosome> <snp_position>

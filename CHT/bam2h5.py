@@ -100,6 +100,12 @@ Output Options:
        Path to HDF5 file to write counts of all reads, regardless of whether
        they overlap a SNP. Read counts are stored at the left-most position
        of the mapped read.
+
+     --txt_counts COUNTS_TXT_FILE [optional]
+       Path to text file to write ref, alt, and other counts of reads. The
+       text file will have columns:
+       <chromosome> <snp_position> <ref_allele> <alt_allele> <genotype>
+       <ref_allele_count> <alt_allele_count> <other_count>
 """
 
 import sys
@@ -515,7 +521,7 @@ def parse_args():
                         metavar="READ_COUNT_H5_FILE",
                         required=True)
 
-    parser.add_argument("--text_counts",
+    parser.add_argument("--txt_counts",
                         help="Path to text file to write ref, alt, and other "
                         "counts of reads. The text file will have columns: "
                         "<chromosome> <snp_position> <ref_allele> <alt_allele>"

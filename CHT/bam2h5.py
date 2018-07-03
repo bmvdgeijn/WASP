@@ -508,21 +508,21 @@ def parse_args():
                         required=True)
 
     parser.add_argument("--read_counts",
-                       help="Path to HDF5 file to write counts of all "
-                       "reads, regardless of whether they overlap a SNP. "
-                       "Read counts are stored at the left-most position "
-                       "of the mapped read.",
-                       metavar="READ_COUNT_H5_FILE",
-                       required=True)
+                        help="Path to HDF5 file to write counts of all "
+                        "reads, regardless of whether they overlap a SNP. "
+                        "Read counts are stored at the left-most position "
+                        "of the mapped read.",
+                        metavar="READ_COUNT_H5_FILE",
+                        required=True)
 
     parser.add_argument("--text_counts",
-                       help="Path to text file to write ref, alt, and other "
-                       "counts of reads. The text file will have columns: "
-                       "<chromosome> <snp_position> <ref_allele> <alt_allele> "
-                       "<genotype> <ref_allele_count> <alt_allele_count> "
-                       "<other_count>",
-                       metavar="COUNTS_TXT_FILE",
-                       default=None)
+                        help="Path to text file to write ref, alt, and other "
+                        "counts of reads. The text file will have columns: "
+                        "<chromosome> <snp_position> <ref_allele> <alt_allele>"
+                        " <genotype> <ref_allele_count> <alt_allele_count> "
+                        "<other_count>",
+                        metavar="COUNTS_TXT_FILE",
+                        default=None)
 
     parser.add_argument("bam_filenames", action="store", nargs="+",
                         help="BAM file(s) to read mapped reads from. "
@@ -629,10 +629,10 @@ def main():
     else:
         raise NotImplementedError("unsupported datatype %s" % args.data_type)
 
-    # also create a list to hold all of the counts that will be written
-    # to a text file
+    # create a list to hold the counts that will be later written
+    # to a txt file
     if args.text_counts is not None:
-        all_counts = list()
+        txt_counts = list()
 
     for chrom in chrom_list:
         sys.stderr.write("%s\n" % chrom.name)
@@ -690,7 +690,7 @@ def main():
             sys.stderr.write("\n")
 
             # write data to numpy arrays, so that they can be written to a txt
-            # file later.
+            # file later
             # columns are:
             # chrom, pos, ref, alt, genotype, ref_count, alt_count, other_count
             if args.text_counts is not None:
@@ -699,10 +699,11 @@ def main():
                 ref = np.array([snp['allele1'] for snp in snp_tab])
                 alt = np.array([snp['allele2'] for snp in snp_tab])
                 if hap_tab is not None:
-                    genotype = np.array([str(hap[0])+"|"+str(hap[1]) for hap in hap_tab])
+                    genotype = np.array([str(hap[0])+"|"+str(hap[1])
+                                         for hap in hap_tab])
                 else:
                     genotype = np.empty((len(snp_tab), 0))
-                all_counts.append(
+                txt_counts.append(
                     np.column_stack((chrom, pos, ref, alt, genotype,
                                      ref_array[pos-1],
                                      alt_array[pos-1],
@@ -712,10 +713,12 @@ def main():
 
             samfile.close()
 
-    # write the all_counts np arrays to a txt file
+    # write the txt_counts np arrays to a txt file
     if args.text_counts is not None:
-        # we use vstack to combine np arrays row-wise into a 2D array
-        np.savetxt(args.text_counts, np.vstack(tuple(all_counts)), fmt="%1s", delimiter=" ")
+        # we use vstack to combine np arrays row-wise into a multi-dimensional
+        # array
+        np.savetxt(args.text_counts, np.vstack(tuple(txt_counts)),
+                   fmt="%1s", delimiter=" ")
 
     # set track statistics and close HDF5 files
 

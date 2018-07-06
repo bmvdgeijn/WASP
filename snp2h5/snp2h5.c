@@ -834,7 +834,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
       }
       
       row++;
-      if((row % 1000) == 0) {
+      if((row % 10000) == 0) {
 	fprintf(stderr, ".");
       }
     }
@@ -1197,7 +1197,7 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
       }
 
       row++;
-      if((row % 1000) == 0) {
+      if((row % 10000) == 0) {
 	fprintf(stderr, ".");
       }
       if((args->max_lines > 0) && (row >= args->max_lines)) {

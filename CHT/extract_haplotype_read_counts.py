@@ -48,16 +48,16 @@ class SNP(object):
 class DataFiles(object):
     def __init__(self, args):
         # open tracks that read counts will be pulled from
-        self.ref_count_h5 = tables.openFile(args.ref_as_counts, "r")
-        self.alt_count_h5 = tables.openFile(args.alt_as_counts, "r")
-        self.other_count_h5 = tables.openFile(args.other_as_counts, "r")
-        self.read_count_h5 = tables.openFile(args.read_counts, "r")
+        self.ref_count_h5 = tables.open_file(args.ref_as_counts, "r")
+        self.alt_count_h5 = tables.open_file(args.alt_as_counts, "r")
+        self.other_count_h5 = tables.open_file(args.other_as_counts, "r")
+        self.read_count_h5 = tables.open_file(args.read_counts, "r")
 
         # open tracks where SNP information can be extracted
-        self.snp_tab_h5 = tables.openFile(args.snp_tab, "r")
-        self.snp_index_h5 = tables.openFile(args.snp_index, "r")
-        self.geno_prob_h5 = tables.openFile(args.geno_prob, "r")
-        self.hap_h5 = tables.openFile(args.haplotype, "r")
+        self.snp_tab_h5 = tables.open_file(args.snp_tab, "r")
+        self.snp_index_h5 = tables.open_file(args.snp_index, "r")
+        self.geno_prob_h5 = tables.open_file(args.geno_prob, "r")
+        self.hap_h5 = tables.open_file(args.haplotype, "r")
 
     
     def close(self):
@@ -216,10 +216,10 @@ def get_region_snps(data_files, region_list, ind_idx):
     chrom = region_list[0].chrom
 
     node_name = "/%s" % chrom.name
-    snp_tab = data_files.snp_tab_h5.getNode(node_name)
-    hap_tab = data_files.hap_h5.getNode(node_name)
-    geno_tab = data_files.geno_prob_h5.getNode(node_name)
-    snp_idx_tab = data_files.snp_index_h5.getNode(node_name)
+    snp_tab = data_files.snp_tab_h5.get_node(node_name)
+    hap_tab = data_files.hap_h5.get_node(node_name)
+    geno_tab = data_files.geno_prob_h5.get_node(node_name)
+    snp_idx_tab = data_files.snp_index_h5.get_node(node_name)
     
     region_snps = []
     
@@ -278,7 +278,7 @@ def lookup_individual_index(options, ind_name):
     to lookup information in the genotype and haplotype tables"""
     sys.stderr.write("reading list of individuals from %s\n" % 
                      options.samples)
-    f = open(options.samples, "r")
+    f = open(options.samples, "rt")
 
     idx = 0
     for line in f:
@@ -334,9 +334,9 @@ def set_snp_counts(data_files, region_list, snps, test_snp, options):
     for region in region_list:
         node_name = "/%s" % region.chrom.name
         
-        ref_node = data_files.ref_count_h5.getNode(node_name)
-        alt_node = data_files.alt_count_h5.getNode(node_name)
-        other_node = data_files.other_count_h5.getNode(node_name)
+        ref_node = data_files.ref_count_h5.get_node(node_name)
+        alt_node = data_files.alt_count_h5.get_node(node_name)
+        other_node = data_files.other_count_h5.get_node(node_name)
 
         ref_counts = ref_node[region.start-1:region.end]
         alt_counts = alt_node[region.start-1:region.end]
@@ -469,7 +469,7 @@ def get_region_read_counts(data_files, region_list):
 
     for region in region_list:
         node_name = "/%s" % region.chrom.name
-        node = data_files.read_count_h5.getNode(node_name)
+        node = data_files.read_count_h5.get_node(node_name)
         counts = node[region.start-1:region.end]
         total_count += np.sum(counts)
 
@@ -537,7 +537,7 @@ def main():
     if util.is_gzipped(args.input_file):
         f = gzip.open(args.input_file, "rt")
     else:
-        f = open(args.input_file, "r")
+        f = open(args.input_file, "rt")
 
     line_count = 0
 

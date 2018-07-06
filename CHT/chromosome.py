@@ -145,7 +145,7 @@ def get_chromosomes_from_args(filename, args):
     chrom_name_dict = get_chromosome_dict(filename)
 
     chrom_id_dict = dict([(str(c.idnum), c) for c \
-                          in chrom_name_dict.values()])
+                          in list(chrom_name_dict.values())])
 
     chrom_list = []
     for arg in args:
@@ -190,7 +190,7 @@ def get_all_chromosomes(filename):
     if util.is_gzipped(filename):
         f = gzip.open(filename, "rt")
     else:
-        f = open(filename)
+        f = open(filename, "rt")
 
     chrom_list = []
     

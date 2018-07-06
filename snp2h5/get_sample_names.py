@@ -13,7 +13,7 @@ def main():
 
     options = parser.parse_args()
     
-    h5f = tables.openFile(options.h5file)
+    h5f = tables.open_file(options.h5file)
 
     for node in h5f.root:
         if node.name.startswith("samples"):

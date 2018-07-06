@@ -15,7 +15,7 @@ def read_bam(bam):
     the bam file (with the newline stripped). The header is discarded.
     """
     res = subprocess.check_output('samtools view %s' % bam, shell=True)
-    return res.strip().split('\n')
+    return res.decode("utf-8").strip().split('\n')
 
 
 
@@ -254,10 +254,10 @@ class Data(object):
             chrom, pos, allele1, allele2 = snp
             if chrom not in files:
                 filename = self.snp_dir + "/" + chrom + ".snps.txt.gz"
-                files[chrom] = gzip.open(filename, "wb")
+                files[chrom] = gzip.open(filename, "wt")
             files[chrom].write("%d\t%s\t%s\n" % (pos, allele1, allele2))
 
-        for f in files.values():
+        for f in list(files.values()):
             f.close()
 
 
@@ -268,7 +268,7 @@ class Data(object):
             name = tables.StringCol(64)
 
         for chrom_name in self.chrom_names:
-            table = h5f.createTable(h5f.root, "samples_%s" % chrom_name,
+            table = h5f.create_table(h5f.root, "samples_%s" % chrom_name,
                                     SamplesTab)
 
             for samp in self.hap_samples:
@@ -280,8 +280,8 @@ class Data(object):
         
         
             
-    def write_snp_tab_h5(self):        
-        snp_tab_h5 = tables.openFile(self.snp_tab_filename, "w")
+    def write_snp_tab_h5(self):
+        snp_tab_h5 = tables.open_file(self.snp_tab_filename, "w")
 
         class SNPTab(tables.IsDescription):
             name = tables.StringCol(16)
@@ -295,7 +295,7 @@ class Data(object):
             if snp[0] in chrom_tables:
                 table = chrom_tables[snp[0]]
             else:
-                table = snp_tab_h5.createTable(snp_tab_h5.root, snp[0], SNPTab)
+                table = snp_tab_h5.create_table(snp_tab_h5.root, snp[0], SNPTab)
                 chrom_tables[snp[0]] = table
 
             row = table.row
@@ -329,7 +329,7 @@ class Data(object):
         atom = tables.Int8Atom(dflt=0)
         zlib_filter = tables.Filters(complevel=1, complib="zlib")
         
-        hap_h5 = tables.openFile(self.haplotype_filename, "w")    
+        hap_h5 = tables.open_file(self.haplotype_filename, "w")    
 
         chrom_haps = {}
         snp_index = 0
@@ -341,9 +341,9 @@ class Data(object):
             else:
                 chrom_haps[snp[0]] = [hap]
         
-        for chrom, haps in chrom_haps.items():
+        for chrom, haps in list(chrom_haps.items()):
             hap_array = np.array(haps, dtype=np.int8)
-            carray = hap_h5.createCArray(hap_h5.root,
+            carray = hap_h5.create_carray(hap_h5.root,
                                          chrom, atom, hap_array.shape,
                                          filters=zlib_filter)
             carray[:] = haps
@@ -358,7 +358,7 @@ class Data(object):
         atom = tables.Int16Atom(dflt=0)
         zlib_filter = tables.Filters(complevel=1, complib="zlib")
         
-        snp_index_h5 = tables.openFile(self.snp_index_filename, "w")    
+        snp_index_h5 = tables.open_file(self.snp_index_filename, "w")    
 
         snp_index = 0
 
@@ -371,7 +371,7 @@ class Data(object):
             else:
                 # create CArray for this chromosome
                 shape = [chrom_lengths[snp[0]]]
-                carray = snp_index_h5.createCArray(snp_index_h5.root,
+                carray = snp_index_h5.create_carray(snp_index_h5.root,
                                                    snp[0], atom, shape,
                                                    filters=zlib_filter)
                 carray[:] = -1
@@ -418,7 +418,7 @@ class TestSingleEnd:
         # Verify new fastq is correct. The first base of the first read
         # should be switched from a C to an A.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -446,7 +446,6 @@ class TestSingleEnd:
         assert lines[0] == ''
 
         test_data.cleanup()
-
 
 
     def test_single_two_read_two_snp_two_chrom(self):
@@ -479,7 +478,7 @@ class TestSingleEnd:
         # should be switched from C to an A, and the third base of second read
         # should be switched from C to G
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 8
 
@@ -514,6 +513,68 @@ class TestSingleEnd:
 
         test_data.cleanup()
 
+
+    def test_chrom_with_no_snps(self):
+        """Test whether having two chromosomes works, with no
+        SNPs on second chromsome"""
+                        
+        test_data = Data(read1_seqs = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                       "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"],
+                         read1_quals = ["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                                        "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+                         genome_seqs = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n" +
+                                         "TTTTTTTTTTATTTTTTTTTTTTTTTTTTT",
+                                         "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG\n" +
+                                         "CCCCCCCCCCGCCCCCCCCCCCCCCCCCCC"],
+                         chrom_names = ['test_chrom1', 'test_chrom2'],
+                         snp_list = [['test_chrom1', 1, "A", "C"]])
+        
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+
+        # write an empty file with no SNPs for chr=2
+        filename = test_data.snp_dir + "/test_chrom2.snps.txt.gz"
+        f = gzip.open(filename, "wt")
+        f.write("");
+        f.close()
+
+        
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=False,
+                                    is_sorted=False)
+
+        #
+        # Verify new fastq is correct. The first base of the first read
+        # should be switched from C to an A, and the second read
+        # should be unchanged
+        #
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 4
+
+        l = list(test_data.read1_seqs[0])
+        l[0] = 'C'
+        new_seq = "".join(l)
+        assert lines[1] == new_seq
+        assert lines[3] == test_data.read1_quals[0]
+        
+        #
+        # Verify to.remap bam has 1 read
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert len(new_lines) == 1 and new_lines[0].startswith("read1")
+
+        #
+        # Verify that the keep file has 1 read
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1 and lines[0].startswith("read2")
+
+        test_data.cleanup()
         
 
     def test_single_gapD_read_two_snps(self):
@@ -555,7 +616,7 @@ class TestSingleEnd:
         # with all possible configurations of the two alleles, except
         # for the original configuration.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 12
 
@@ -641,7 +702,7 @@ class TestSingleEnd:
         # with all possible configurations of the two alleles, except
         # for the original configuration.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 12
 
@@ -704,7 +765,7 @@ class TestSingleEnd:
         # Verify new fastq is correct. Should be empty because only
         # read overlaps an indel
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 0
 
@@ -756,7 +817,7 @@ class TestSingleEnd:
         # a single read and, the first base of the first read
         # should be switched from a C to an A.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
 
         assert len(lines) == 4
@@ -801,7 +862,7 @@ class TestSingleEnd:
         # with all possible configurations of the two alleles, except
         # for the original configuration.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 12
 
@@ -877,7 +938,7 @@ class TestSingleEnd:
         # because reads with greater than 10 allelic combinations
         # are thrown out
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 0
 
@@ -913,7 +974,7 @@ class TestSingleEnd:
         # with all possible configurations of the two alleles, except
         # for the original configuration.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4*1023
 
@@ -990,7 +1051,7 @@ class TestSingleEnd:
         # Verify new fastq is correct. The first base of the first read
         # should be switched from a C to an A.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -1041,7 +1102,7 @@ class TestCLI:
 
         # Verify new fastq is correct. The first base of the first read
         # should be switched from a C to an A.
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -1109,8 +1170,8 @@ class TestCLI:
                          read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
                          read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
                          genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
-                         haplotypes=[[1,0,1,0],
-                                     [1,0,0,1]],
+                         haplotypes=[[1, 0, 1, 0],
+                                     [1, 0, 0, 1]],
                          hap_samples=["samp1", "samp2"])
         
         test_data.setup()
@@ -1130,7 +1191,7 @@ class TestCLI:
         # Verify new fastq is correct. There should be 3 reads
         # with all possible configurations of the two alleles, except
         # for the original configuration.
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 12
 
@@ -1186,8 +1247,8 @@ class TestCLI:
                          read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
                          read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
                          genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
-                         haplotypes=[[1,0,1,0],
-                                     [1,0,0,1]],
+                         haplotypes=[[1, 0, 1, 0],
+                                     [1, 0, 0, 1]],
                          hap_samples=hap_samples)
         
         test_data.setup()
@@ -1213,7 +1274,7 @@ class TestCLI:
         # Verify new fastq is correct. There should be 3 reads
         # with all possible configurations of the two alleles, except
         # for the original configuration.
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 12
 
@@ -1296,7 +1357,7 @@ class TestPairedEnd:
         #
         # Verify new fastq1 is correct.
         #
-        with gzip.open(test_data.fastq1_remap_filename) as f:
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 8
 
@@ -1317,7 +1378,7 @@ class TestPairedEnd:
         #
         # verify fastq2 is correct
         #
-        with gzip.open(test_data.fastq2_remap_filename) as f:
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 8
 
@@ -1391,17 +1452,17 @@ class TestPairedEnd:
                                     snp_dir=test_data.snp_dir, 
                                     is_paired_end=True, is_sorted=False)
 
-        expect_reads = set([("AACGAAAAGGAGAC", "AAGAAACAACACAA"),
-                            ("ACAAAAATTTAAAA", "AAAAATAAAAAATA")])
+        expect_reads = {("AACGAAAAGGAGAC", "AAGAAACAACACAA"),
+                            ("ACAAAAATTTAAAA", "AAAAATAAAAAATA")}
 
         #
         # Verify fastq1 and fastq2 have appropriate read pairs
         #
-        with gzip.open(test_data.fastq1_remap_filename) as f:
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
             lines1 = [x.strip() for x in f.readlines()]
         assert len(lines1) == len(expect_reads) * 4
 
-        with gzip.open(test_data.fastq2_remap_filename) as f:
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
             lines2 = [x.strip() for x in f.readlines()]
 
         # should be same number of lines in each file
@@ -1480,16 +1541,16 @@ class TestPairedEnd:
                                     is_paired_end=True, is_sorted=False)
 
         # Currently reads overlapping indels are thrown out
-        expect_reads = set([("ACAAAAATTTAAAA", "AAAAATAAAAAATA")])
+        expect_reads = {("ACAAAAATTTAAAA", "AAAAATAAAAAATA")}
 
         #
         # Verify fastq1 and fastq2 have appropriate read pairs
         #
-        with gzip.open(test_data.fastq1_remap_filename) as f:
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
             lines1 = [x.strip() for x in f.readlines()]
         assert len(lines1) == len(expect_reads) * 4
 
-        with gzip.open(test_data.fastq2_remap_filename) as f:
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
             lines2 = [x.strip() for x in f.readlines()]
         assert len(lines2) == len(expect_reads) * 4
                            
@@ -1562,21 +1623,21 @@ class TestPairedEnd:
                                     snp_dir=test_data.snp_dir, 
                                     is_paired_end=True, is_sorted=False)
 
-        expect_reads = set([("AACGAAAAGGAGAC", "AAGAAACAACACAA"),
+        expect_reads = {("AACGAAAAGGAGAC", "AAGAAACAACACAA"),
                             ("AACGAAAAGGAGAC", "AAGAAACAAAACAA"),
                             ("AACGAAAAGGAGAA", "AAGAAACAAAACAA"),
                             ("ACAAAAATTTAAAA", "AAAAATAAAAAATA"),
                             ("ACAAAAATTTAAAA", "AAAAATACAAAATA"),
-                            ("AAAAAAATTTAAAA", "AAAAATACAAAATA")])
+                            ("AAAAAAATTTAAAA", "AAAAATACAAAATA")}
 
         #
         # Verify fastq1 and fastq2 have appropriate read pairs
         #
-        with gzip.open(test_data.fastq1_remap_filename) as f:
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
             lines1 = [x.strip() for x in f.readlines()]
         assert len(lines1) == len(expect_reads) * 4
 
-        with gzip.open(test_data.fastq2_remap_filename) as f:
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
             lines2 = [x.strip() for x in f.readlines()]
         assert len(lines2) == len(expect_reads) * 4
         for i in range(1, len(lines2), 4):
@@ -1631,7 +1692,7 @@ class TestHaplotypesSingleEnd:
         # Verify new fastq is correct. The first base of the first read
         # should be switched from a C to an A.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -1662,7 +1723,7 @@ class TestHaplotypesSingleEnd:
         #
         # repeat test, but with haoplotypes only containing non-reference allele
         #
-        test_data = Data(haplotypes=[[1,1,1,1]])
+        test_data = Data(haplotypes=[[1, 1, 1, 1]])
         test_data.setup()
         test_data.index_genome_bowtie2()
         test_data.map_single_bowtie2()
@@ -1679,7 +1740,7 @@ class TestHaplotypesSingleEnd:
         # Verify new fastq is correct. The first base of the first read
         # should be switched from a C to an A.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -1710,7 +1771,7 @@ class TestHaplotypesSingleEnd:
         #
         # repeat test, but with haplotypes only containing reference allele
         #
-        test_data = Data(haplotypes=[[0,0,0,0]])
+        test_data = Data(haplotypes=[[0, 0, 0, 0]])
         test_data.setup()
         test_data.index_genome_bowtie2()
         test_data.map_single_bowtie2()
@@ -1727,7 +1788,7 @@ class TestHaplotypesSingleEnd:
         # Verify new fastq is correct. There should not be any reads
         # to remap since all haplotypes match reference
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 0
 
@@ -1770,7 +1831,7 @@ class TestHaplotypesSingleEnd:
         # Verify new fastq is correct. The last base of the first read
         # should be switched from a C to an A.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -1814,8 +1875,8 @@ class TestHaplotypesSingleEnd:
                          read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
                          read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
                          genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
-                         haplotypes=[[1,0,1,0],
-                                     [1,0,0,1]])
+                         haplotypes=[[1, 0, 1, 0],
+                                     [1, 0, 0, 1]])
         
         test_data.setup()
         test_data.index_genome_bowtie2()
@@ -1834,7 +1895,7 @@ class TestHaplotypesSingleEnd:
         # with all possible configurations of the two alleles, except
         # for the original configuration.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 12
 
@@ -1891,8 +1952,8 @@ class TestHaplotypesSingleEnd:
         ##
         test_data = Data(snp_list = [['test_chrom', 1, "A", "C"],
                                      ['test_chrom', 4, "A", "G"]],
-                         haplotypes=[[1,1,1,1,1,1],
-                                     [1,0,0,0,1,0]])
+                         haplotypes=[[1, 1, 1, 1, 1, 1],
+                                     [1, 0, 0, 0, 1, 0]])
         
         test_data.setup()
         test_data.index_genome_bowtie2()
@@ -1910,7 +1971,7 @@ class TestHaplotypesSingleEnd:
         # Verify new fastq is correct. There should be 2 reads
         # with two haplotype configurations
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 8
 
@@ -1989,8 +2050,8 @@ class TestHaplotypesSingleEnd:
                          read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
                          read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
                          genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
-                         haplotypes=[[1,0,1,0],
-                                     [1,0,0,1]],
+                         haplotypes=[[1, 0, 1, 0],
+                                     [1, 0, 0, 1]],
                          hap_samples=["samp1", "samp2"])
         
         test_data.setup()
@@ -2011,7 +2072,7 @@ class TestHaplotypesSingleEnd:
         # with all possible configurations of the two alleles, except
         # for the original configuration.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 12
 
@@ -2075,8 +2136,8 @@ class TestHaplotypesSingleEnd:
                          read1_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
                          read1_quals=["BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
                          genome_seqs=["ACTGACTGACTGACTGACTGACTGACTGACTG"],
-                         haplotypes=[[1,0,1,0],
-                                     [1,0,0,1]],
+                         haplotypes=[[1, 0, 1, 0],
+                                     [1, 0, 0, 1]],
                          hap_samples=["samp1", "samp2"])
         
         test_data.setup()
@@ -2095,7 +2156,7 @@ class TestHaplotypesSingleEnd:
 
         # Verify new fastq is correct. There should be 2 reads
         # representing both haplotypes from samp2
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 8
 
@@ -2152,7 +2213,7 @@ class TestHaplotypesSingleEnd:
 
         # Verify new fastq is correct. There should be 1 read
         # representing non-reference haplotype from samp1
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -2199,7 +2260,7 @@ class TestHaplotypesSingleEnd:
 
         # generate all possible 1024 haplotype configurations for 10 SNPs:
         import itertools
-        haplotypes = np.array([x for x in itertools.product([0,1], repeat=10)])
+        haplotypes = np.array([x for x in itertools.product([0, 1], repeat=10)])
         haplotypes = haplotypes.T
 
         test_data = Data(snp_list=snp_list,
@@ -2222,7 +2283,7 @@ class TestHaplotypesSingleEnd:
         # because reads with greater than 10 allelic combinations
         # are thrown out
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 0
 
@@ -2260,7 +2321,7 @@ class TestHaplotypesSingleEnd:
         # with all possible configurations of the two alleles, except
         # for the original configuration.
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4*1023
 
@@ -2348,7 +2409,7 @@ class TestHaplotypesSingleEnd:
         # (there are 4 unique haplotypes, and one of them is 
         # the original configuration)
         #
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4*3
 
@@ -2440,7 +2501,7 @@ class TestHaplotypesSingleEnd:
         # should be switched from a A to G, but base 61 should be not
         # be changed because it is in soft-clipped region of
         # alignment
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -2511,7 +2572,7 @@ class TestHaplotypesSingleEnd:
         #  genome:  AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATTTTTTTTTTATTTTTTTTTTTTTTTTTCTG
         #
 
-        with gzip.open(test_data.fastq_remap_filename) as f:
+        with gzip.open(test_data.fastq_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
         assert len(lines) == 4
 
@@ -2608,19 +2669,19 @@ class TestHaplotypesPairedEnd:
                                     haplotype_filename=test_data.haplotype_filename,
                                     is_paired_end=True, is_sorted=False)
 
-        expect_reads = set([("AACGAAAAGGAGAC", "AAGAAACAACACAA"),
+        expect_reads = {("AACGAAAAGGAGAC", "AAGAAACAACACAA"),
                             ("AAAAAAATTTAAAA", "AAAAATACAAAATA"),
                             ("ACAAAAAGTTAAAA", "AAAAATACAAAATA"),
-                            ("ACAAAAAGTTAAAA", "AAAAATAAAAAATA")])
+                            ("ACAAAAAGTTAAAA", "AAAAATAAAAAATA")}
 
         #
         # Verify fastq1 and fastq2 have appropriate read pairs
         #
-        with gzip.open(test_data.fastq1_remap_filename) as f:
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
             lines1 = [x.strip() for x in f.readlines()]
         assert len(lines1) == len(expect_reads) * 4
 
-        with gzip.open(test_data.fastq2_remap_filename) as f:
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
             lines2 = [x.strip() for x in f.readlines()]
         assert len(lines2) == len(expect_reads) * 4
         for i in range(1, len(lines2), 4):
@@ -2694,11 +2755,11 @@ class TestHaplotypesPairedEnd:
         #
         # Verify fastq1 and fastq2 have appropriate read pairs
         #
-        with gzip.open(test_data.fastq1_remap_filename) as f:
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
             lines1 = [x.strip() for x in f.readlines()]
         assert len(lines1) == 4
 
-        with gzip.open(test_data.fastq2_remap_filename) as f:
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
             lines2 = [x.strip() for x in f.readlines()]
         assert len(lines2) == 4
         

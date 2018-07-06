@@ -61,7 +61,7 @@ def open_input_files(in_filename):
         exit(2)
 
     # read file that contains list of input files
-    in_file = open(in_filename)
+    in_file = open(in_filename, "rt")
 
     infiles = []
     for line in in_file:
@@ -74,7 +74,7 @@ def open_input_files(in_filename):
         if util.is_gzipped(filename):
             f = gzip.open(filename, "rt")
         else:
-            f = open(filename)
+            f = open(filename, "rt")
 
         # skip header
         f.readline()
@@ -95,7 +95,7 @@ def main():
 
     sys.stderr.write("reading input filenames from %s\n")
     infiles = open_input_files(options.infile_list)
-    outfile = open(options.out_file, "w")
+    outfile = open(options.out_file, "wt")
     dup_snp_warn = True
 
     sys.stderr.write("estimating allele-specific dispersion coefficients\n")
@@ -203,6 +203,6 @@ def AS_betabinom_loglike(logps, sigma, AS1, AS2, hetp, error):
     if hetp == 0:
         return addlogs(e1, e2)
 
-    return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1,e2))
+    return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1, e2))
 
 main()

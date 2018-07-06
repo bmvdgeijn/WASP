@@ -90,7 +90,7 @@ def main(input_bam, output_bam):
 
 def update_read_cache(cur_by_mpos, keep_cache, discard_cache,
                       read_stats, outfile):
-    for mpos, read_list in cur_by_mpos.items():
+    for mpos, read_list in list(cur_by_mpos.items()):
         # only keep one read from list with same pos,mate_pos pair
         # shuffle order of reads in list and take first
         # as 'keep' read
@@ -162,10 +162,10 @@ def filter_reads(infile, outfile):
                                                    len(discard_cache)
                 
                 sys.stderr.write("keep_cache:\n")
-                for r in keep_cache.values():
+                for r in list(keep_cache.values()):
                     sys.stderr.write("  %s\n" % r.qname)
                 sys.stderr.write("discard_cache:\n")
-                for r in discard_cache.values():
+                for r in list(discard_cache.values()):
                     sys.stderr.write("  %s\n" % r.qname)
                                     
             keep_cache = {}

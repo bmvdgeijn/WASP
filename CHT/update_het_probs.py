@@ -55,15 +55,15 @@ def main():
     if util.is_gzipped(args.infile):
         infile = gzip.open(args.infile, "rt")
     else:
-        infile = open(args.infile, "r")
+        infile = open(args.infile, "rt")
         
     if args.outfile.endswith(".gz"):
-        outfile = gzip.open(args.outfile,"w")
+        outfile = gzip.open(args.outfile, "wt")
     else:
-        outfile = open(args.outfile,"w")
+        outfile = open(args.outfile, "wt")
 
-    ref_count_h5 = tables.openFile(args.ref_as_counts)
-    alt_count_h5 = tables.openFile(args.alt_as_counts)
+    ref_count_h5 = tables.open_file(args.ref_as_counts)
+    alt_count_h5 = tables.open_file(args.alt_as_counts)
 
     snp_line = infile.readline()
     if snp_line:
@@ -98,8 +98,8 @@ def process_one_snp(snpinfo, ref_count_h5, alt_count_h5, error):
     hetps = [float(y.strip()) for y in snpinfo[10].split(';')]
     update_hetps = []
 
-    ref_node = ref_count_h5.getNode("/%s" % chrm)
-    alt_node = alt_count_h5.getNode("/%s" % chrm)
+    ref_node = ref_count_h5.get_node("/%s" % chrm)
+    alt_node = alt_count_h5.get_node("/%s" % chrm)
     
     for i in range(len(snplocs)):
         pos = snplocs[i]

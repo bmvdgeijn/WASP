@@ -1,3 +1,15 @@
+Version 0.3.0 - July 3, 2018
+-----------
+This release moves the codebase from Python2 to Python3 and includes several additional improvements.
+
+Changes include:
+* Switch to Python3 from Python2
+* Switch to PyTables version 3
+* General cleanup of code to conform to PEP8 style
+* Better matching of VCF files to chromosomes in snp2h5 (uses name of chromosome within VCF, rather than relying on filename)
+* add --txt_counts option to bam2h5.py as a simple way to obtain a file with allele-specific counts. The bam2h5.py should now be used instead of the get_as_counts.py script (which double counts reads that overlap multiple SNPs).
+
+
 Version 0.2.2 - November 15, 2017
 -----------
 

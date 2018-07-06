@@ -120,7 +120,7 @@ import pysam
 
 import chromosome
 import chromstat
-
+import util
 
 # codes used by pysam for aligned read CIGAR strings
 BAM_CMATCH     = 0 # M
@@ -162,7 +162,7 @@ def create_carray(h5f, chrom, data_type):
 
     # create CArray for this chromosome
     shape = [chrom.length]
-    carray = h5f.createCArray(h5f.root, chrom.name,
+    carray = h5f.create_carray(h5f.root, chrom.name,
                               atom, shape, filters=zlib_filter)
 
     return carray
@@ -170,7 +170,7 @@ def create_carray(h5f, chrom, data_type):
 
 
 def get_carray(h5f, chrom):
-    return h5f.getNode("/%s" % chrom)
+    return h5f.get_node("/%s" % chrom)
 
 
 
@@ -389,11 +389,13 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
         return
 
     snp = snp_tab[snp_idx]
+    allele1 = snp['allele1'].decode("utf-8")
+    allele2 = snp['allele2'].decode("utf-8")
 
     base = read.seq[read_offset]
     snp_pos = snp['pos']
 
-    if base == snp['allele1']:
+    if base == allele1:
         # matches reference allele
         if ref_array[snp_pos-1] < max_count:
             ref_array[snp_pos-1] += 1
@@ -401,7 +403,7 @@ def add_read_count(read, chrom, ref_array, alt_array, other_array,
             sys.stderr.write("WARNING ref allele count at position %d "
                              "exceeds max %d\n" % (snp_pos, max_count))
             warned_pos[snp_pos] = True
-    elif base == snp['allele2']:
+    elif base == allele2:
         # matches alternate allele
         if alt_array[snp_pos-1] < max_count:
             alt_array[snp_pos-1] += 1
@@ -550,7 +552,7 @@ def parse_args():
 def lookup_individual_index(samples_file, ind_name, population=None):
     """Gets the index of individual that is used
     to lookup information in the genotype and haplotype tables"""
-    f = open(samples_file)
+    f = open(samples_file, "rt")
 
     if population:
         p = population.lower()
@@ -597,20 +599,28 @@ def lookup_individual_index(samples_file, ind_name, population=None):
 def main():
     args = parse_args()
 
-    snp_tab_h5 = tables.openFile(args.snp_tab, "r")
-    snp_index_h5 = tables.openFile(args.snp_index, "r")
+    sys.stderr.write("command line: %s\n" % " ".join(sys.argv))
+    sys.stderr.write("python version: %s\n" % sys.version)
+    sys.stderr.write("pysam version: %s\n" % pysam.__version__)
+    sys.stderr.write("pytables version: %s\n" % tables.__version__)
+
+    util.check_pysam_version()
+    util.check_pytables_version()
+    
+    snp_tab_h5 = tables.open_file(args.snp_tab, "r")
+    snp_index_h5 = tables.open_file(args.snp_index, "r")
 
     if args.haplotype:
-        hap_h5 = tables.openFile(args.haplotype, "r")
+        hap_h5 = tables.open_file(args.haplotype, "r")
         ind_idx = lookup_individual_index(args.samples, args.individual)
     else:
         hap_h5 = None
         ind_idx = None
 
-    ref_count_h5 = tables.openFile(args.ref_as_counts, "w")
-    alt_count_h5 = tables.openFile(args.alt_as_counts, "w")
-    other_count_h5 = tables.openFile(args.other_as_counts, "w")
-    read_count_h5 = tables.openFile(args.read_counts, "w")
+    ref_count_h5 = tables.open_file(args.ref_as_counts, "w")
+    alt_count_h5 = tables.open_file(args.alt_as_counts, "w")
+    other_count_h5 = tables.open_file(args.other_as_counts, "w")
+    read_count_h5 = tables.open_file(args.read_counts, "w")
 
     output_h5 = [ref_count_h5, alt_count_h5, other_count_h5, read_count_h5]
 
@@ -652,10 +662,10 @@ def main():
 
         sys.stderr.write("fetching SNPs\n")
 
-        snp_tab = snp_tab_h5.getNode("/%s" % chrom.name)
-        snp_index_array = snp_index_h5.getNode("/%s" % chrom.name)[:]
+        snp_tab = snp_tab_h5.get_node("/%s" % chrom.name)
+        snp_index_array = snp_index_h5.get_node("/%s" % chrom.name)[:]
         if hap_h5:
-            hap_tab = hap_h5.getNode("/%s" % chrom.name)
+            hap_tab = hap_h5.get_node("/%s" % chrom.name)
         else:
             hap_tab = None
 

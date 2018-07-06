@@ -1,5 +1,4 @@
 import sys
-import string
 import subprocess
 import os
 
@@ -11,8 +10,8 @@ def comp(seq_str):
     global DNA_COMP
 
     if DNA_COMP is None:
-        DNA_COMP = string.maketrans("ATCGMRWSYKNatcgmrwsykn",
-                                    "TAGCKYWSRMNtagckywsrmn")
+        DNA_COMP = str.maketrans("ATCGMRWSYKNatcgmrwsykn",
+                                 "TAGCKYWSRMNtagckywsrmn")
     return seq_str.translate(DNA_COMP)
 
 
@@ -75,7 +74,8 @@ def is_gzipped(filename):
     f.close()
 
     # check against gzip magic number 1f8b
-    return (byte1 == chr(0x1f)) and (byte2 == chr(0x8b))
+    # return (byte1 == chr(0x1f)) and (byte2 == chr(0x8b))
+    return (byte1 == b'\x1f') and (byte2== b'\x8b')
 
 
 
@@ -103,16 +103,17 @@ def check_pysam_version(min_pysam_ver="0.8.4"):
 
 
 def check_pytables_version():
-    """Checks that PyTables version 2 is being used. PyTables version 3 
-    changes the names of many functions and is not backwards compatible.
-    Future versions of WASP should switch to use version 3 functions."""
+    """Checks that PyTables version 3 is being used. PyTables version 3 
+    changes the names of many functions and is not backwards compatible
+    with PyTables 2. Previous versions of WASP used version 2, but switch
+    to version 3 was made at same time as switch to python3."""
     import tables
 
     pytables_ver = [int(x) for x in tables.__version__.split(".")]
 
-    if pytables_ver[0] != 2:
+    if pytables_ver[0] < 3:
         raise ImportWarning("pytables version is %s, but pytables version "
-                            "2 is required" % (tables.__version__))
+                            ">=3 is required" % (tables.__version__))
 
     return 0
 

@@ -50,8 +50,6 @@ Chromosome *chrom_guess_from_file(char *path,
       for(j = 0; j < n2 - n1 + 1; j++) {
 	if(strncmp(chroms[i].name, &filename[j], n1) == 0) {
 	  /* chromosome name is present in this filename */
-	  fprintf(stderr, "match_len: %d, '%s' matches at '%s'\n",
-		  n1, chroms[i].name, &filename[j]);
 	  match_chrom = &chroms[i];
 	  longest_match = n1;
 	  break;

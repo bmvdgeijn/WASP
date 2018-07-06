@@ -93,7 +93,7 @@ def parse_options():
 
 def main():
     args = parse_options()
-    inlist = [line.strip() for line in open(args.infile_list, "r")]
+    inlist = [line.strip() for line in open(args.infile_list, "rt")]
 
     for i in inlist:
         sys.stderr.write(i + "\n")
@@ -113,7 +113,7 @@ def main():
         write_splines(coefs_list, args.fit_out_file)
     else:
         outlist = [line.strip() for 
-                   line in open(args.outfile_list,"r")]
+                   line in open(args.outfile_list, "rt")]
         
         update_totals(inlist, outlist, count_table, coefs_list,
                       keep_list)
@@ -143,7 +143,7 @@ def open_files(file_list, r_w):
 def get_at_gc_count(seq_h5, chrm, start, end):
     # seq HDF5 file contains ascii values for nucleotides
     # e.g. A = 65
-    node = seq_h5.getNode("/%s" % chrm)
+    node = seq_h5.get_node("/%s" % chrm)
     vals = node[start-1:end]
 
     counts = np.bincount(vals)
@@ -169,7 +169,7 @@ def get_at_gc_count(seq_h5, chrm, start, end):
 def load_data(inlist, seq_h5_filename, min_counts, skips):
     infiles = open_files(inlist, "rt")
 
-    seq_h5 = tables.openFile(seq_h5_filename, "r")
+    seq_h5 = tables.open_file(seq_h5_filename, "r")
     
     end_of_file = False
     count_table = []
@@ -232,6 +232,7 @@ def load_data(inlist, seq_h5_filename, min_counts, skips):
 
     for infile in infiles:
         infile.close()
+    
     count_table = np.array(count_table, dtype=np.float64)
 
     seq_h5.close()
@@ -241,7 +242,7 @@ def load_data(inlist, seq_h5_filename, min_counts, skips):
 
 
 def read_splines(fit_in_file):
-    spline_file = open(fit_in_file,"r")
+    spline_file = open(fit_in_file, "rt")
     coefs = []
     for line in spline_file:
         coefs.append([float(x) for x in line.strip().split()])
@@ -249,8 +250,8 @@ def read_splines(fit_in_file):
     return coefs
 
 
-def write_splines(coefs,fit_out_file):
-    spline_file = open(fit_out_file,"w")
+def write_splines(coefs, fit_out_file):
+    spline_file = open(fit_out_file, "wt")
     for ind in coefs:
         spline_file.write("\t".join([str(x) for x in ind]) + "\n")
     spline_file.close()
@@ -260,43 +261,48 @@ def write_splines(coefs,fit_out_file):
 def fit_splines(count_table):
     coefs=[]
     #iterate through each individual
-    col_sums = np.sum(count_table,0)
+    col_sums = np.sum(count_table, 0)
 
+    if len(count_table.shape) == 1:
+        # empty table
+        sys.stderr.write("WARNING: count table contains no data\n")
+        return [0] * 15
+    
     for col in range(2, count_table.shape[1]):
         slope_start = col_sums[col]/col_sums[1]
         sys.stderr.write(str(slope_start)+"\n")
 
-        arg_list = (count_table[:,0], count_table[:,1], 
-                    count_table[:,col])
+        arg_list = (count_table[:, 0], count_table[:, 1], 
+                    count_table[:, col])
         slope = fmin(splineone, [slope_start], args=arg_list, 
                      maxiter=500000, maxfun=500000)
         
         # Fit a slope only model (total read depth is different 
         # between individuls within an individual reads per region 
         # is linear
-        coefs_slope = [0,0,0,0,0,0,slope[0],0,0,0]
+        coefs_slope = [0, 0, 0, 0, 0, 0, slope[0], 0, 0, 0]
         sys.stderr.write(str(coefs_slope)+"\n")
         
         # Read shift only (allowing more or fewer reads to fall 
         # in peaks)
-        arg_list = ([0,0,0,0,0], count_table[:,0],
-                    count_table[:,1], count_table[:,col])
-        coefs_depth = fmin(splineread, [0, slope[0],0,0,0],
+        arg_list = ([0, 0, 0, 0, 0], count_table[:, 0],
+                    count_table[:, 1], count_table[:, col])
+        coefs_depth = fmin(splineread, [0, slope[0], 0, 0, 0],
                            args=arg_list, maxiter=500000,
                            maxfun=500000)
         sys.stderr.write(str(coefs_depth) + "\n")
 
         # GC correct and total count only
-        arg_list = ([0,slope[0],0,0,0], count_table[:,0],
-                    count_table[:,1], count_table[:,col])
+        arg_list = ([0, slope[0], 0, 0, 0], count_table[:, 0],
+                    count_table[:, 1], count_table[:, col])
         
-        coefs_gc = fmin(splinegc, [0,0,0,0,0],
+        coefs_gc = fmin(splinegc, [0, 0, 0, 0, 0],
                         args=arg_list, maxiter=500000, maxfun=500000)
         sys.stderr.write(str(coefs_gc)+"\n")
         
         # GC correct plus count shift
-        arg_list = (count_table[:,0],count_table[:,1],
-                    count_table[:,col])
+        arg_list = (count_table[:, 0], count_table[:, 1],
+                    count_table[:, col])
         coefs_full = fmin(splinefit, 
                           list(coefs_gc) + list(coefs_depth),
                           args=arg_list, 
@@ -307,18 +313,18 @@ def fit_splines(count_table):
     return(coefs)
 
     
-def splineone(slope,x1,x2,y):
-    return splinefit([0,0,0,0,0,0,slope[0],0,0,0],x1,x2,y)
+def splineone(slope, x1, x2, y):
+    return splinefit([0, 0, 0, 0, 0, 0, slope[0], 0, 0, 0], x1, x2, y)
 
 
-def splinegc(gcargs,otherargs,x1,x2,y):
-    a=np.hstack((gcargs,otherargs))
-    return splinefit(a,x1,x2,y)
+def splinegc(gcargs, otherargs, x1, x2, y):
+    a=np.hstack((gcargs, otherargs))
+    return splinefit(a, x1, x2, y)
 
 
-def splineread(otherargs,gcargs,x1,x2,y):
-    a=np.hstack((gcargs,otherargs))
-    return splinefit(a,x1,x2,y)
+def splineread(otherargs, gcargs, x1, x2, y):
+    a=np.hstack((gcargs, otherargs))
+    return splinefit(a, x1, x2, y)
 
 
 def splinefit(arg, x1, x2,  y):
@@ -336,8 +342,8 @@ def splinefit(arg, x1, x2,  y):
 
 def update_totals(inlist, outlist, count_table, coefs_table,
                   keep_list):
-    infiles = open_files(inlist,"rt")
-    outfiles = open_files(outlist,"w")
+    infiles = open_files(inlist, "rt")
+    outfiles = open_files(outlist, "wt")
     row = 0
     count_row = 0
 
@@ -354,7 +360,7 @@ def update_totals(inlist, outlist, count_table, coefs_table,
         if keep_list[row] == 1:
             for ind in range(len(infiles)):
 
-                if count_table[count_row,2+ind]<0:
+                if count_table[count_row, 2+ind]<0:
                     has_NAs=True
                     break
 

@@ -80,7 +80,7 @@ def read_bam(bam):
     the bam file (with the newline stripped). The header is discarded.
     """
     res = subprocess.check_output('samtools view %s' % bam, shell=True)
-    return res.strip().split('\n')
+    return res.decode("utf-8").strip().split('\n')
 
 
 def test_rmdup_pe():

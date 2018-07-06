@@ -172,22 +172,22 @@ def main():
     
     out_files = []
     sys.stderr.write("creating output files:\n")
-    file_list = open("%s_file_list.txt" % options.prefix, "w")
+    file_list = open("%s_file_list.txt" % options.prefix, "wt")
     for i in range(options.num_inds):
         out_filename = "%s_%d.txt" % (options.prefix, i+1)
         sys.stderr.write("  %s\n" % out_filename)
 
-        out_files.append(open(out_filename, "w"))
+        out_files.append(open(out_filename, "wt"))
         # write_options(out_files[i], options)
         write_header(out_files[i])
         file_list.write(out_filename + "\n")
     file_list.close()
     
     
-    ASseq_Y_file = open("%s_Y.txt" % options.prefix, "w")
-    ASseq_Y1_file = open("%s_Y1.txt" % options.prefix, "w")
-    ASseq_Y2_file = open("%s_Y2.txt" % options.prefix, "w")
-    ASseq_Z_file = open("%s_Z.txt" % options.prefix, "w")
+    ASseq_Y_file = open("%s_Y.txt" % options.prefix, "wt")
+    ASseq_Y1_file = open("%s_Y1.txt" % options.prefix, "wt")
+    ASseq_Y2_file = open("%s_Y2.txt" % options.prefix, "wt")
+    ASseq_Z_file = open("%s_Z.txt" % options.prefix, "wt")
 
     test = 1
     while test <= options.num_tests:
@@ -238,15 +238,15 @@ def main():
             n_minor = int(random() < options.maf) + int(random() < options.maf)
             if n_minor == 0:
                 # no minor alleles
-                haps = [0,0]
+                haps = [0, 0]
             elif n_minor == 1:
                 # heterozygous
-                haps = [0,1]
+                haps = [0, 1]
                 num_hets += 1
                 is_het = True
             else:
                 # two minor alleles
-                haps = [1,1]
+                haps = [1, 1]
             
             # Expected number of reads based on genotypes
             ind_mean_counts = mean_counts * ((2 - n_minor) + (n_minor * alt_expr))
@@ -311,7 +311,7 @@ def main():
             test+=1
 
 class TestSNP:
-    def __init__(self,effect,test_num,haps,count,as_ref,as_alt,hetp):
+    def __init__(self, effect, test_num, haps, count, as_ref, as_alt, hetp):
         self.chrm = effect
         self.pos = test_num
         self.ref_allele = "A"
@@ -353,8 +353,8 @@ def simulate_BB(tot, mean_p, sigma):
     a = mean_p * (1/sigma**2 - 1)
     b = (1-mean_p) * (1/sigma**2 - 1)
 
-    p = beta(a,b)
-    counts = binomial(tot,p)
+    p = beta(a, b)
+    counts = binomial(tot, p)
     #sys.stderr.write("%f %f %i\n"%(mean_p,p,counts))
     return counts, (tot-counts)
 

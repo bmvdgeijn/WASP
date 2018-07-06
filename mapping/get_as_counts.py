@@ -18,13 +18,13 @@ def write_results(out_f, chrom_name, snp_tab, ref_matches,
     
     if geno_sample:
         # get index for this sample in the haplotype table
-        samp_idx_dict = dict(zip(snp_tab.samples,
-                                 range(len(snp_tab.samples))))
+        samp_idx_dict = dict(list(zip(snp_tab.samples,
+                                 list(range(len(snp_tab.samples))))))
 
         if geno_sample in samp_idx_dict:
             idx = samp_idx_dict[geno_sample]
             geno_hap_idx = np.array([idx*2, idx*2+1], dtype=np.int)
-            haps = snp_tab.haplotypes[:,geno_hap_idx]
+            haps = snp_tab.haplotypes[:, geno_hap_idx]
             has_haps = True
             sys.stderr.write("geno_hap_idx: %s\n" % repr(geno_hap_idx))
         else:
@@ -64,9 +64,9 @@ def parse_samples(samples_str):
         samples = []
 
         if util.is_gzipped(samples_str):
-            f = gzip.open(samples_str)
+            f = gzip.open(samples_str, "rt")
         else:
-            f = open(samples_str)
+            f = open(samples_str, "rt")
 
         for line in f:
             # assume first token in line is sample name
@@ -228,9 +228,9 @@ def main(bam_filename, snp_dir=None, snp_tab_filename=None,
         if (not snp_index_filename) or (not haplotype_filename):
             raise ValueError("--snp_index and --haplotype must be provided "
                              "if --snp_tab is provided")
-        snp_tab_h5 = tables.openFile(snp_tab_filename, "r")
-        snp_index_h5 = tables.openFile(snp_index_filename, "r")
-        hap_h5 = tables.openFile(haplotype_filename, "r")
+        snp_tab_h5 = tables.open_file(snp_tab_filename, "r")
+        snp_index_h5 = tables.open_file(snp_index_filename, "r")
+        hap_h5 = tables.open_file(haplotype_filename, "r")
     else:
         snp_tab_h5 = None
         snp_index_h5 = None

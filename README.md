@@ -49,19 +49,17 @@ known as [HDF5](https://www.hdfgroup.org/HDF5/).
 
 WASP depends on the following:
 
-* python version 2.6.x or 2.7.x (code is not tested with python 3)
+* python version 3.x
 
 * [numpy](http://www.numpy.org)
 
 * [scipy](http://www.scipy.org).
 
-* [argparse](https://code.google.com/p/argparse/) (included by default in python >= 2.7).
-
 * [pysam](https://github.com/pysam-developers/pysam) version 0.8.4 or higher.
 
-* the HDF5 C library version 1.6 or higher
+* the HDF5 C library version 1.8 or higher
 
-* [PyTables](http://www.pytables.org/)
+* [PyTables](http://www.pytables.org/) version 3.x
 
 
 The easiest way to install [HDF5](https://www.hdfgroup.org/HDF5/),

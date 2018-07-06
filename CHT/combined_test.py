@@ -68,7 +68,7 @@ def open_input_files(in_filename):
         exit(2)
 
     # read file that contains list of input files
-    in_file = open(in_filename)
+    in_file = open(in_filename, "rt")
 
     infiles = []
     for line in in_file:
@@ -81,7 +81,7 @@ def open_input_files(in_filename):
         if util.is_gzipped(filename):
             f = gzip.open(filename, "rt")
         else:
-            f = open(filename, "r")
+            f = open(filename, "rt")
 
         # skip header
         f.readline()
@@ -112,7 +112,7 @@ def read_bnb_sigmas(options, infiles):
     """Read overdispersion parameters for beta-negative binomial.
     Expect one for each individual."""
     if (options.bnb_disp):
-        disp_file = open(options.bnb_disp)
+        disp_file = open(options.bnb_disp, "rt")
         line = disp_file.readline()
         bnb_sigmas = []
         while line:
@@ -136,7 +136,7 @@ def read_as_sigmas(options, infiles):
     (Beta-Binomial). Expect one for each individual."""
 
     if (options.as_disp):
-        disp_file = open(options.as_disp)
+        disp_file = open(options.as_disp, "rt")
         line = disp_file.readline()
         as_sigmas = []
         while line:
@@ -194,7 +194,7 @@ def write_results(outfile, snpinfo, loglike1par, loglike2par,
 
     # compute likelihood ratio test statistic:
     chisq = 2 * (loglike1par - loglike2par)
-    pval = (1-scipy.stats.chi2.cdf(chisq,1)),
+    pval = (1-scipy.stats.chi2.cdf(chisq, 1)),
 
     outfile.write("\t".join([snpinfo[0][0], snpinfo[0][1],
                              snpinfo[0][2], snpinfo[0][3],
@@ -246,15 +246,15 @@ def main():
         num_pcs = 0
 
     if options.out_file.endswith(".gz"):
-        outfile = gzip.open(options.out_file, "wb")
+        outfile = gzip.open(options.out_file, "wt")
     else:
-        outfile = open(options.out_file, 'w')
+        outfile = open(options.out_file, "wt")
 
     if options.benchmark:
         if options.benchmark == "-":
             bench_file = sys.stderr
         else:
-            bench_file = open(options.benchmark, "w")
+            bench_file = open(options.benchmark, "wt")
 
         bench_file.write("TEST.TYPE TIME\n")
 
@@ -323,7 +323,7 @@ def main():
 
             if options.shuffle:
                 # permute genotypes
-                perm = range(len(test_snps))
+                perm = list(range(len(test_snps)))
                 random.shuffle(perm)
                 geno1temp = [test_snps[y].geno_hap1 for y in perm]
                 geno2temp = [test_snps[y].geno_hap2 for y in perm]
@@ -499,7 +499,7 @@ def parse_options():
     parser.add_argument("--pc_file", action='store',
                         dest='pc_file',
                         help="file containing PC covariates to include in the model"
-                        ,default=None)
+                        , default=None)
 
     parser.add_argument("-b", "--bnb_disp", action='store', dest='bnb_disp',
                         help="file containing depth (Beta Negative Binomial)"
@@ -569,14 +569,14 @@ def AS_betabinom_loglike(logps, sigma, AS1, AS2, hetp, error):
     if hetp == 0:
         return addlogs(e1, e2)
 
-    return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1,e2))
+    return addlogs(math.log(hetp)+part1, math.log(1-hetp) + addlogs(e1, e2))
 
-def betaln_asym(a,b):
+def betaln_asym(a, b):
     if b > a:
-        a,b = b,a
+        a, b = b, a
 
     if a < 1e6:
-        return betaln(a,b)
+        return betaln(a, b)
 
     l=gammaln(b)
 
@@ -587,11 +587,11 @@ def betaln_asym(a,b):
 
     return l
 
-def BNB_loglike(k,mean,sigma,n):
+def BNB_loglike(k, mean, sigma, n):
     #Put variables in beta-NB form (n,a,b)
     #sys.stderr.write(str(sigma)+"\n")
     try:
-        mean = max(mean,0.00001)
+        mean = max(mean, 0.00001)
         logps = [math.log(n) - math.log(n + mean),
                  math.log(mean) - math.log(n + mean)]
     except:
@@ -602,7 +602,7 @@ def BNB_loglike(k,mean,sigma,n):
     p=np.float64(n/(n+mean))
 
     if sigma < 0.00001: #> 18: #20:
-        loglike=-betaln(n,k+1)-math.log(n+k)+n*logps[0]+k*logps[1]
+        loglike=-betaln(n, k+1)-math.log(n+k)+n*logps[0]+k*logps[1]
         return loglike
 
     sigma=(1/sigma)**2 #+sigma*n
@@ -613,15 +613,15 @@ def BNB_loglike(k,mean,sigma,n):
 
     #Rising Pochhammer = gamma(k+n)/gamma(n)
     if k>0:
-        loglike=-betaln_asym(n,k)-math.log(k)
+        loglike=-betaln_asym(n, k)-math.log(k)
     else:
         loglike=0
 
     #Add log(beta(a+n,b+k))
-    loglike += betaln_asym(a+n,b+k)
+    loglike += betaln_asym(a+n, b+k)
 
     #Subtract log(beta(a,b))
-    loglike -= betaln_asym(a,b)
+    loglike -= betaln_asym(a, b)
 
     return loglike
 
@@ -641,9 +641,9 @@ def ll_pc(x, params, test_snps, is_bnb_only, is_as_only, bnb_sigmas,
     alpha = params[0]
     beta = params[0]
     r = params[1]
-    pc_coefs=np.concatenate([other_pc_coefs,x])
+    pc_coefs=np.concatenate([other_pc_coefs, x])
     return loglikelihood(alpha, beta, r, test_snps, is_bnb_only,
-                         is_as_only, bnb_sigmas, as_sigmas, error, pc_coefs,pc_matrix)
+                         is_as_only, bnb_sigmas, as_sigmas, error, pc_coefs, pc_matrix)
 
 
 def ll_two(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas,
@@ -661,7 +661,7 @@ def ll_two(x, test_snps, is_bnb_only, is_as_only, bnb_sigmas,
 
 def calc_pc_factor(pc_fits, pcs, i):
     if len(pc_fits) > 0:
-        return 1 + sum(pc_fits * pcs[i,:len(pc_fits)])
+        return 1 + sum(pc_fits * pcs[i, :len(pc_fits)])
     else:
         return 1
 
@@ -777,7 +777,7 @@ def parse_test_snp(snpinfo, options):
                        snp_as_alt, snp_hetps, tot, count)
 
 def load_covariates(cov_file):
-    infile=open(cov_file)
+    infile = open(cov_file, "rt")
     cov_table=[]
     while True:
         line=infile.readline()

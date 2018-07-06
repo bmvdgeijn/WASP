@@ -71,7 +71,7 @@ def calc_stats(h5f, chrom_list, verbose=False):
         chrom_stat = ChromStats()
         node_name = "/%s" % chrom.name
         if node_name in h5f:
-            node = h5f.getNode("/%s" % chrom.name)
+            node = h5f.get_node("/%s" % chrom.name)
             vals = node[:]
             chrom_stat.set_from_vals(vals)
             if verbose:
@@ -96,7 +96,7 @@ def set_stats(h5f, chrom_list, verbose=False):
         if node_name in h5f:
             chrom_stat = ChromStats()
 
-            node = h5f.getNode(node_name)
+            node = h5f.get_node(node_name)
             chrom_stat.set_from_vals(node[:])
 
             node.attrs.n = chrom_stat.n
@@ -126,7 +126,7 @@ def get_stats(h5f, chrom_list, verbose=False):
     for chrom in chrom_list:
         node_name = "/%s" % chrom.name
         if node_name in h5f:
-            node = h5f.getNode(node_name)
+            node = h5f.get_node(node_name)
             if 'n' not in node.attrs:
                 raise ValueError("Stat attributes are not set for track %s"
                                  % track.name)

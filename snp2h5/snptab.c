@@ -122,8 +122,22 @@ void snp_tab_append_row(SNPTab *tab, SNP *data) {
   tab->n_record += 1;
   
   if(status < 0) {
-    my_err("%s:%d: failed to write record to SNP table\n",
-	   __FILE__, __LINE__);
+    my_err("%s:%d: failed to write record %ld for SNP '%s' to SNP table\n",
+	   __FILE__, __LINE__, tab->n_record, data->name);
   }
+  
+  /* if((tab->n_record % 10000) == 0) { */
+  /*   /\* there is a problem where HDF5 library can run out of  */
+  /*    * identifiers. Try to flush periodically as workaround. */
+  /*    * (see https://github.com/JuliaIO/HDF5.jl/issues/172 */
+  /*    *  and  http://hdf-forum.184993.n3.nabble.com/H5SL-insert-common-can-t-insert-duplicate-key-with-HDF5-1-8-13-td4027464.html) */
+  /*    *\/ */
+  /*   if(H5Fflush(tab->h5file, H5F_SCOPE_GLOBAL) < 0) { */
+  /*     my_err("%s:%d: failed to flush SNP table buffers\n", */
+  /* 	     __FILE__, __LINE__); */
+  /*   } */
+  /* } */
+  
+
 }
 

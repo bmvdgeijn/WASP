@@ -60,13 +60,6 @@ BAM files must be sorted and indexed.
     counts are randomly assigned to ONE of overlapping SNPs (regardless of 
     their genotype).
 
-* --samples SAMPLES_TXT_FILE [optional]
-
-    Path to text file containing a list of individual identifiers. The
-    ordering of individuals must be consistent with the haplotype
-    file. The samples file is assumed to have one identifier per line
-    in the first column (other columns are ignored).
-
 * --individual INDIVIDUAL [optional]
 
     Identifier for individual, used to determine which
@@ -125,6 +118,6 @@ BAM files must be sorted and indexed.
 	      --alt_as_counts alt_as_counts.$INDIVIDUAL.h5 \
 	      --other_as_counts other_as_counts.$INDIVIDUAL.h5 \
 	      --read_counts read_counts.$INDIVIDUAL.h5 \
-	      --text_counts counts.$INDIVIDUAL.txt.gz \
+	      --txt_counts counts.$INDIVIDUAL.txt.gz \
 	      H3K27ac/$INDIVIDUAL.chr*.keep.rmdup.bam
 

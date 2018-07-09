@@ -35,7 +35,7 @@ def write_results(out_f, chrom_name, snp_tab, ref_matches,
 
     for i in range(snp_tab.n_snp):
         if has_haps:
-            geno_str = "%d|%d" % (haps[i, 0], haps[i, 1])
+            geno_str = "{}|{}".format(haps[i, 0], haps[i, 1])
         else:
             geno_str = "NA"
         out_f.write("%s %d %s %s %s %d %d %d\n" %

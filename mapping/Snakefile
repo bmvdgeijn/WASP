@@ -216,20 +216,29 @@ rule rmdup_pe:
 rule get_as_counts:
     """get allele-specific read counts for SNPs"""
     input:
-         bam=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam",
-         snp_index=config["snp_h5_dir"] + "/snp_index.h5",
-         snp_tab=config["snp_h5_dir"] + "/snp_tab.h5",
-         haplotype=config['snp_h5_dir'] + "/haplotype.h5",
+        bam=config['output_dir'] + "/rmdup/{sample}.keep.merge.rmdup.sort.bam",
+        snp_index=config["snp_h5_dir"] + "/snp_index.h5",
+        snp_tab=config["snp_h5_dir"] + "/snp_tab.h5",
+        haplotype=config['snp_h5_dir'] + "/haplotype.h5",
+        chrom=config['chrom_info']
     params:
-         samp1kg=lambda wildcards: SAMP_TO_1KG[wildcards.sample]
+        samp1kg=lambda wildcards: SAMP_TO_1KG[wildcards.sample]
     output:
-        config['output_dir'] + "/as_counts/{sample}.as_counts.txt.gz"
+        ref_as=config['output_dir'] + "/as_counts/{sample}.ref_as_counts.h5",
+        alt_as=config['output_dir'] + "/as_counts/{sample}.alt_as_counts.h5",
+        other_as=config['output_dir'] + "/as_counts/{sample}.other_as_counts.h5",
+        read_counts=config['output_dir'] + "/as_counts/{sample}.read_counts.h5",
+        txt_counts=config['output_dir'] + "/as_counts/{sample}.as_counts.txt.gz"
     shell:
-        "python {config[wasp_dir]}/mapping/get_as_counts.py "
-        "  --snp_tab {input.snp_tab} "
+        "python {config[wasp_dir]}/CHT/bam2h5.py "
+        "  --chrom {input.chrom} "
         "  --snp_index {input.snp_index} "
+        "  --snp_tab {input.snp_tab} "
         "  --haplotype {input.haplotype} "
-        "  --samples {config[sample_file]} "
-        "  --genotype_sample {params.samp1kg} "
-        "  {input.bam} | gzip > {output}"
-
+        "  --individual {params.samp1kg} "
+        "  --ref_as_counts {output.ref_as} "
+        "  --alt_as_counts {output.alt_as} "
+        "  --other_as_counts {output.other_as} "
+        "  --read_counts {output.read_counts} "
+        "  --txt_counts {output.txt_counts} "
+        "{input.bam}"

@@ -53,10 +53,12 @@ def filter_reads(remap_bam):
     # names of reads that should be kept
     keep_reads = set([])
     bad_reads = set([])
+    cigar_strings = {}
     
     for read in remap_bam:
-        if read.is_secondary:
-            # only keep primary alignments and discard 'secondary' alignments
+        # only keep primary alignments and discard 'secondary'
+        # and 'supplementary' alignments
+        if read.is_secondary or read.is_supplementary:
             continue
         
         # parse name of read, which should contain:
@@ -78,6 +80,9 @@ def filter_reads(remap_bam):
         coord_str, num_str, total_str = words[len(words)-3:]
         num = int(num_str)
         total = int(total_str)
+
+        # add the cigars for this read
+        cigar_strings.setdefault(orig_name, set()).add(read.cigarstring)
 
         correct_map = False
         
@@ -109,7 +114,7 @@ def filter_reads(remap_bam):
                     correct_map = True
             else:
                 # this is right end of read
-                continue   
+                continue
         else:
             # single end read
             pos = int(coord_str)
@@ -138,12 +143,13 @@ def filter_reads(remap_bam):
             # read maps to different location
             bad_reads.add(orig_name)
 
-    return keep_reads, bad_reads
+    return keep_reads, bad_reads, cigar_strings
     
 
 
 
-def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads):
+def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
+    """writes reads but also checks cigar strings"""
 
     keep_count = 0
     bad_count = 0
@@ -153,8 +159,14 @@ def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads):
         if read.qname in bad_reads:
             bad_count += 1
         elif read.qname in keep_reads:
-            keep_count += 1
-            keep_bam.write(read)
+            if (
+                read.cigarstring in cigar_strings[read.qname]
+                and len(cigar_strings[read.qname]) == 1
+            ):
+                keep_count += 1
+                keep_bam.write(read)
+            else:
+                bad_count += 1
         else:
             discard_count += 1
 
@@ -169,9 +181,9 @@ def main(to_remap_bam_path, remap_bam_path, keep_bam_path):
     remap_bam = pysam.Samfile(remap_bam_path)
     keep_bam = pysam.Samfile(keep_bam_path, "wb", template=to_remap_bam)
 
-    keep_reads, bad_reads = filter_reads(remap_bam)
+    keep_reads, bad_reads, cigar_strings = filter_reads(remap_bam)
     
-    write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads)
+    write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings)
         
 
 

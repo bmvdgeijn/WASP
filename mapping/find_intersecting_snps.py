@@ -187,7 +187,7 @@ class ReadStats(object):
         self.discard_secondary = 0
 
         # number of chimeric reads discarded
-        self.is_supplementary = 0
+        self.discard_supplementary = 0
 
         # number of reads discarded because of too many overlapping SNPs
         self.discard_excess_snps = 0

@@ -641,15 +641,15 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
             sys.stderr.write("processing reads\n")
 
         if read.is_secondary:
-          # this is a secondary alignment (i.e. read was aligned more than
-          # once and this has align score that <= best score)
-          read_stats.discard_secondary += 1
-          continue
+            # this is a secondary alignment (i.e. read was aligned more than
+            # once and this has align score that <= best score)
+            read_stats.discard_secondary += 1
+            continue
 
         if read.is_supplementary:
-          # this is a supplementary alignment (ie chimeric and not the representative alignment)
-          read_stats.discard_supplementary += 1
-          continue
+            # this is a supplementary alignment (ie chimeric and not the representative alignment)
+            read_stats.discard_supplementary += 1
+            continue
 
         if read.is_paired:
             if read.mate_is_unmapped:

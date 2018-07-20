@@ -144,8 +144,6 @@ def filter_reads(remap_bam):
             bad_reads.add(orig_name)
 
     return keep_reads, bad_reads, cigar_strings
-    
-
 
 
 def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
@@ -155,20 +153,33 @@ def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
     bad_count = 0
     discard_count = 0
 
+    read_pair_cache = {}
+
     for read in to_remap_bam:
         if read.qname in bad_reads:
             bad_count += 1
         elif read.qname in keep_reads:
             if (
+                # check that there is only one cigar string
+                # and that it is the correct one
                 read.cigarstring in cigar_strings[read.qname]
                 and len(cigar_strings[read.qname]) == 1
             ):
-                keep_count += 1
-                keep_bam.write(read)
+                # cache reads until you see their pair
+                # then, write both of them to file together
+                if read.qname in read_pair_cache:
+                    keep_bam.write(read_pair_cache[read.qname])
+                    del read_pair_cache[read.qname]
+                    keep_bam.write(read)
+                    keep_count += 2
+                else:
+                    read_pair_cache[read.qname] = read
             else:
-                bad_count += 1
+                discard_count += 1
         else:
             discard_count += 1
+    # any reads remaining in the cache have been discarded
+    discard_count += len(read_pair_cache)
 
     sys.stderr.write("keep_reads: %d\n" % keep_count)
     sys.stderr.write("bad_reads: %d\n" % bad_count)

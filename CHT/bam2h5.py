@@ -145,6 +145,8 @@ SNP_UNDEF = -1
 MAX_UINT8_COUNT = 255
 MAX_UINT16_COUNT = 65535
 
+unimplemented_CIGAR = [0, set()]
+
 
 
 def create_carray(h5f, chrom, data_type):
@@ -280,9 +282,11 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             # in read and not used in alignment
             pass
         else:
-            sys.stderr.write("skipping because contains CIGAR code %s "
-                             " which is not currently implemented\n" %
-                             BAM_CIGAR_DICT[op])
+            unimplemented_CIGAR[0] += 1
+            unimplemented_CIGAR[1].add(BAM_CIGAR_DICT[op])
+            # sys.stderr.write("skipping because contains CIGAR code %s "
+            #                  " which is not currently implemented\n" %
+            #                  BAM_CIGAR_DICT[op])
 
     # are any of the SNPs indels? If so, discard.
     for i in snp_idx:
@@ -582,10 +586,12 @@ def main():
     else:
         raise NotImplementedError("unsupported datatype %s" % args.data_type)
 
-    # create a list to hold the counts that will be later written
-    # to a txt file
+    # create a txt file to also holds the counts
     if args.txt_counts is not None:
-        txt_counts = list()
+        if os.path.splitext(args.txt_counts)[1] == ".gz":
+            txt_counts = gzip.open(args.txt_counts, 'a+')
+        else:
+            txt_counts = open(args.txt_counts, 'a+')
 
     for chrom in chrom_list:
         sys.stderr.write("%s\n" % chrom.name)
@@ -666,22 +672,26 @@ def main():
                                          for hap in hap_tab])
                 else:
                     genotype = np.empty((len(snp_tab), 0))
-                txt_counts.append(
+                # write an np array to a txt file
+                np.savetxt(
+                    txt_counts,
                     np.column_stack((chrom, pos, ref, alt, genotype,
-                                     ref_array[pos-1],
-                                     alt_array[pos-1],
-                                     other_array[pos-1]))
+                                    ref_array[pos-1],
+                                    alt_array[pos-1],
+                                    other_array[pos-1])),
+                    fmt="%1s",
+                    delimiter=" "
                 )
 
 
             samfile.close()
 
-    # write the txt_counts np arrays to a txt file
-    if args.txt_counts is not None:
-        # we use vstack to combine np arrays row-wise into a multi-dimensional
-        # array
-        np.savetxt(args.txt_counts, np.vstack(tuple(txt_counts)),
-                   fmt="%1s", delimiter=" ")
+    if args.txt_counts:
+        # close the open txt file handler
+        txt_counts.close()
+
+    # check if any of the reads contained an unimplemented CIGAR
+    sys.stderr.write("WARNING: Encountered "+str(unimplemented_CIGAR[0])+" instances of any of the following CIGAR codes: "+str(unimplemented_CIGAR[1])+". The regions of reads with these CIGAR codes were skipped because these CIGAR codes are currently unimplemented.\n")
 
     # set track statistics and close HDF5 files
 

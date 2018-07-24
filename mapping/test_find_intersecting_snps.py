@@ -2947,8 +2947,6 @@ class TestFiltering:
 
         test_data.cleanup()
 
-        assert False
-
     def test_keep_secondary_alignments_pe(self):
         """Test that secondary alignments don't appear in keep files
         for paired end reads"""
@@ -3018,7 +3016,43 @@ class TestFiltering:
 
     def test_remap_supplementary_alignments(self):
         """Test that supplementary alignments don't appear in remap files"""
-        pass
+        test_data = Data()
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_single_bowtie2()
+        test_data.sam2bam()
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    is_paired_end=False,
+                                    is_sorted=False,
+                                    snp_dir=test_data.snp_dir)
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        # now, let's alter the flag of the read and
+        # rerun find_intersecting_snps
+        bam = pysam.Samfile(test_data.bam_filename, "rb")
+        new_bam_file = test_data.bam_filename[:-4] + "2.bam"
+        new_bam = pysam.AlignmentFile(new_bam_file, "wb", template=bam)
+        for read in bam:
+            read.flag = 2048
+            new_bam.write(read)
+        bam.close()
+        new_bam.close()
+        # replace old bam file
+        os.rename(new_bam_file, test_data.bam_filename)
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir, is_paired_end=False,
+                                    is_sorted=False)
+
+        # now, the remap file shouldn't have any reads
+        lines = read_bam(test_data.bam_remap_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
 
     def test_keep_supplementary_alignments(self):
         """Test that supplementary alignments don't appear in keep files"""
@@ -3076,7 +3110,73 @@ class TestFiltering:
     def test_remap_supplementary_alignments_pe(self):
         """Test that supplementary alignments don't appear in remap file
         for paired end reads"""
-        pass
+        read1_seqs = ["AACGAAAAGGAGAA",
+                      "AAAAAAATTTAAAA"]
+        read2_seqs = ["AAGAAACAACACAA",
+                      "AAGAAACAACACAA"]
+        read1_quals = ["B" * len(read1_seqs[0]),
+                       "C" * len(read1_seqs[1])]
+        read2_quals = ["D" * len(read2_seqs[0]),
+                       "E" * len(read2_seqs[1])]
+        # POS           123456789012345678901234567890
+        # read1[0]          AACGAAAAGGAGAA
+        # read1[1]                      AAAAAAATTTAAAA
+        # SNP                            ^
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
+        # read2[0]                      AACACAACAAAGAA
+        # read2[1]                      AACACAACAAAGAA
+        # POS           123456789012345678901234567890
+        # first, initiate an empty snp list so that reads are kept
+        snp_list = [['test_chrom', 18, "A", "C"]]
+        test_data = Data(genome_seqs=genome_seq,
+                         read1_seqs=read1_seqs,
+                         read2_seqs=read2_seqs,
+                         read1_quals=read1_quals,
+                         read2_quals=read2_quals,
+                         snp_list=snp_list)
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_paired_bowtie2()
+        test_data.sam2bam()
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir, 
+                                    is_paired_end=True, is_sorted=False)
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        # now, let's alter the flag of one of the reads in each pair
+        # and rerun find_intersecting_snps
+        bam = pysam.Samfile(test_data.bam_filename, "rb")
+        new_bam_file = test_data.bam_filename[:-4] + "2.bam"
+        new_bam = pysam.AlignmentFile(new_bam_file, "wb", template=bam)
+        for read in bam:
+            # make first in read pair a secondary alignment
+            if read.qname == 'read1' and read.flag == 99:
+                read.flag = 2147
+            # make the second in the read pair a secondary alignment
+            elif read.qname == 'read2' and read.flag == 147:
+                read.flag = 2195
+            new_bam.write(read)
+        bam.close()
+        new_bam.close()
+        # replace old bam file
+        os.rename(new_bam_file, test_data.bam_filename)
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir, is_paired_end=False,
+                                    is_sorted=False)
+
+        # now, the remap file shouldn't have any reads
+        lines = read_bam(test_data.bam_remap_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
 
     def test_keep_supplementary_alignments_pe(self):
         """Test that supplementary alignments don't appear in keep file

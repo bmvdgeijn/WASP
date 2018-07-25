@@ -355,7 +355,8 @@ def test_filter_different_CIGAR():
 
     # now what if the CIGAR changes in only one read but not its pair?
     # then both reads should be discarded
-    remap_CIGAR_sam_lines[1] = remap_CIGAR_sam_lines[1].replace("\t101M\t", "\t101M1D\t")
+    new_remap_CIGAR_sam_lines = remap_CIGAR_sam_lines
+    new_remap_CIGAR_sam_lines[1] = new_remap_CIGAR_sam_lines[1].replace("\t101M\t", "\t101M1D\t")
     # write test input data
     write_to_remap_bam_pe(
         sam_lines=to_remap_CIGAR_sam_lines,
@@ -363,7 +364,7 @@ def test_filter_different_CIGAR():
         bam_filename=to_remap_bam_filename
     )
     write_remap_bam_pe(
-        sam_lines=remap_CIGAR_sam_lines,
+        sam_lines=new_remap_CIGAR_sam_lines,
         data_dir=test_dir,
         bam_filename=remap_bam_filename
     )
@@ -391,18 +392,59 @@ def test_filter_different_CIGAR():
     # now what if the CIGARs are different between pairs
     # originally but become the same later?
     # then both reads should be discarded
-    to_remap_CIGAR_sam_lines[1] = to_remap_CIGAR_sam_lines[1].replace("\t101M\t", "\t101M1D\t")
+    new_to_remap_CIGAR_sam_lines = to_remap_CIGAR_sam_lines
+    new_to_remap_CIGAR_sam_lines[1] = new_to_remap_CIGAR_sam_lines[1].replace("\t101M\t", "\t101M1D\t")
     # change this back to what it was
-    remap_CIGAR_sam_lines[1] = remap_CIGAR_sam_lines[1].replace("\t101M1D\t", "\t101M\t")
-    print(to_remap_CIGAR_sam_lines)
-    # write test input data
+    new_remap_CIGAR_sam_lines = remap_CIGAR_sam_lines
     write_to_remap_bam_pe(
-        sam_lines=to_remap_CIGAR_sam_lines,
+        sam_lines=new_to_remap_CIGAR_sam_lines,
         data_dir=test_dir,
         bam_filename=to_remap_bam_filename
     )
     write_remap_bam_pe(
-        sam_lines=remap_CIGAR_sam_lines,
+        sam_lines=new_remap_CIGAR_sam_lines,
+        data_dir=test_dir,
+        bam_filename=remap_bam_filename
+    )
+    # run filter remapped reads
+    filter_remapped_reads.main(
+        to_remap_bam_filename,
+        remap_bam_filename,
+        keep_bam_filename
+    )
+    # read in filtered reads
+    lines = read_bam(keep_bam_filename)
+    # read lines from keep BAM file
+    read_dict = {}
+    for line in lines:
+        words = line.split()
+        read_name = words[0]
+        if read_name in read_dict:
+            read_dict[read_name].append(words)
+        else:
+            read_dict[read_name] = [words]
+    # verify that filtered reads look correct
+    # we expect a read pair with this identifier to be absent:
+    assert "SRR1658224.34085432" not in read_dict
+
+    # now what if the CIGARs are different between pairs
+    # originally and stay the same as they were after the second remapping
+    # in both alternative reads?
+    # then both of the pairs should be kept
+    new_to_remap_CIGAR_sam_lines = to_remap_CIGAR_sam_lines
+    new_to_remap_CIGAR_sam_lines[1] = new_to_remap_CIGAR_sam_lines[1].replace("\t101M\t", "\t101M1D\t")
+    # change this, as well
+    new_remap_CIGAR_sam_lines = remap_CIGAR_sam_lines
+    new_remap_CIGAR_sam_lines[1] = new_remap_CIGAR_sam_lines[1].replace("\t101M\t", "\t101M1D\t")
+    new_remap_CIGAR_sam_lines[3] = new_remap_CIGAR_sam_lines[3].replace("\t101M\t", "\t101M1D\t")
+    # write test input data
+    write_to_remap_bam_pe(
+        sam_lines=new_to_remap_CIGAR_sam_lines,
+        data_dir=test_dir,
+        bam_filename=to_remap_bam_filename
+    )
+    write_remap_bam_pe(
+        sam_lines=new_remap_CIGAR_sam_lines,
         data_dir=test_dir,
         bam_filename=remap_bam_filename
     )
@@ -425,4 +467,4 @@ def test_filter_different_CIGAR():
             read_dict[read_name] = [words]
     # verify that filtered reads look correct
     # we expect a read pair with this identifier:
-    assert "SRR1658224.34085432" not in read_dict
+    assert "SRR1658224.34085432" in read_dict

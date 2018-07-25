@@ -53,6 +53,9 @@ def filter_reads(remap_bam):
     # names of reads that should be kept
     keep_reads = set([])
     bad_reads = set([])
+
+    # a dictionary of lists for each read
+    # each list contains two sets of CIGAR strings, one for each pair
     cigar_strings = {}
     
     for read in remap_bam:
@@ -82,7 +85,10 @@ def filter_reads(remap_bam):
         total = int(total_str)
 
         # add the cigars for this read
-        cigar_strings.setdefault(orig_name, set()).add(read.cigarstring)
+        # use setdefault to initialize the list of sets if it doesn't exist yet
+        cigar_strings \
+            .setdefault(orig_name, [set(), set()])[read.is_read2] \
+            .add(read.cigarstring)
 
         correct_map = False
         
@@ -159,11 +165,11 @@ def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
         if read.qname in bad_reads:
             bad_count += 1
         elif read.qname in keep_reads:
+            # check that the cigar strings match up
+            # and that all alternative versions of this read had the same CIGAR
             if (
-                # check that there is only one cigar string
-                # and that it is the correct one
-                read.cigarstring in cigar_strings[read.qname]
-                and len(cigar_strings[read.qname]) == 1
+                read.cigarstring in cigar_strings[read.qname][read.is_read2]
+                and len(cigar_strings[read.qname][read.is_read2]) == 1
             ):
                 # cache reads until you see their pair
                 # then, write both of them to file together

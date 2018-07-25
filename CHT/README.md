@@ -151,7 +151,6 @@ before bam2h5.py can be run.
 	      --snp_index example_data/snp_index.h5 \
 	      --snp_tab example_data/snp_tab.h5 \
 	      --haplotype example_data/haps.h5 \
-	      --samples $ALL_SAMPLES_FILE \
 	      --individual $INDIVIDUAL \
 	      --ref_as_counts example_data/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
 	      --alt_as_counts example_data/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \

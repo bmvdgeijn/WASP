@@ -53,10 +53,15 @@ def filter_reads(remap_bam):
     # names of reads that should be kept
     keep_reads = set([])
     bad_reads = set([])
+
+    # a dictionary of lists for each read
+    # each list contains two sets of CIGAR strings, one for each pair
+    cigar_strings = {}
     
     for read in remap_bam:
-        if read.is_secondary:
-            # only keep primary alignments and discard 'secondary' alignments
+        # only keep primary alignments and discard 'secondary'
+        # and 'supplementary' alignments
+        if read.is_secondary or read.is_supplementary:
             continue
         
         # parse name of read, which should contain:
@@ -78,6 +83,12 @@ def filter_reads(remap_bam):
         coord_str, num_str, total_str = words[len(words)-3:]
         num = int(num_str)
         total = int(total_str)
+
+        # add the cigars for this read
+        # use setdefault to initialize the list of sets if it doesn't exist yet
+        cigar_strings \
+            .setdefault(orig_name, [set(), set()])[read.is_read2] \
+            .add(read.cigarstring)
 
         correct_map = False
         
@@ -109,7 +120,7 @@ def filter_reads(remap_bam):
                     correct_map = True
             else:
                 # this is right end of read
-                continue   
+                continue
         else:
             # single end read
             pos = int(coord_str)
@@ -138,25 +149,43 @@ def filter_reads(remap_bam):
             # read maps to different location
             bad_reads.add(orig_name)
 
-    return keep_reads, bad_reads
-    
+    return keep_reads, bad_reads, cigar_strings
 
 
-
-def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads):
+def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
+    """writes reads but also checks cigar strings"""
 
     keep_count = 0
     bad_count = 0
     discard_count = 0
 
+    read_pair_cache = {}
+
     for read in to_remap_bam:
         if read.qname in bad_reads:
             bad_count += 1
         elif read.qname in keep_reads:
-            keep_count += 1
-            keep_bam.write(read)
+            # check that the cigar strings match up
+            # and that all alternative versions of this read had the same CIGAR
+            if (
+                read.cigarstring in cigar_strings[read.qname][read.is_read2]
+                and len(cigar_strings[read.qname][read.is_read2]) == 1
+            ):
+                # cache reads until you see their pair
+                # then, write both of them to file together
+                if read.qname in read_pair_cache:
+                    keep_bam.write(read_pair_cache[read.qname])
+                    del read_pair_cache[read.qname]
+                    keep_bam.write(read)
+                    keep_count += 2
+                else:
+                    read_pair_cache[read.qname] = read
+            else:
+                discard_count += 1
         else:
             discard_count += 1
+    # any reads remaining in the cache have been discarded
+    discard_count += len(read_pair_cache)
 
     sys.stderr.write("keep_reads: %d\n" % keep_count)
     sys.stderr.write("bad_reads: %d\n" % bad_count)
@@ -169,9 +198,9 @@ def main(to_remap_bam_path, remap_bam_path, keep_bam_path):
     remap_bam = pysam.Samfile(remap_bam_path)
     keep_bam = pysam.Samfile(keep_bam_path, "wb", template=to_remap_bam)
 
-    keep_reads, bad_reads = filter_reads(remap_bam)
+    keep_reads, bad_reads, cigar_strings = filter_reads(remap_bam)
     
-    write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads)
+    write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings)
         
 
 

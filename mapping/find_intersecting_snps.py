@@ -186,6 +186,9 @@ class ReadStats(object):
         # number of reads discarded because secondary match
         self.discard_secondary = 0
 
+        # number of chimeric reads discarded
+        self.discard_supplementary = 0
+
         # number of reads discarded because of too many overlapping SNPs
         self.discard_excess_snps = 0
         
@@ -215,6 +218,7 @@ class ReadStats(object):
                          "  different chromosome: %d\n"
                          "  indel: %d\n"
                          "  secondary alignment: %d\n"
+                         "  supplementary alignment: %d\n"
                          "  excess overlapping snps: %d\n"
                          "  excess allelic combinations: %d\n"
                          "  missing pairs (e.g. mismatched read names): %d\n"
@@ -230,6 +234,7 @@ class ReadStats(object):
                           self.discard_different_chromosome,
                           self.discard_indel,
                           self.discard_secondary,
+                          self.discard_supplementary,
                           self.discard_excess_snps,
                           self.discard_excess_reads,
                           self.discard_missing_pair,
@@ -639,6 +644,11 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
             # this is a secondary alignment (i.e. read was aligned more than
             # once and this has align score that <= best score)
             read_stats.discard_secondary += 1
+            continue
+
+        if read.is_supplementary:
+            # this is a supplementary alignment (ie chimeric and not the representative alignment)
+            read_stats.discard_supplementary += 1
             continue
 
         if read.is_paired:

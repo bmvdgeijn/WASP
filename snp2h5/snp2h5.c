@@ -485,7 +485,7 @@ void init_h5matrix(H5MatrixInfo *info,
 void write_h5matrix_row(H5MatrixInfo *info, hsize_t row_num,
 			void *row_data) {
   hsize_t offset[2];
-  hsize_t count[1];
+  hsize_t count[2];
   herr_t status;
   
   /* select a hyperslab that corresponds to a 

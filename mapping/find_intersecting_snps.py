@@ -439,7 +439,7 @@ def get_unique_haplotypes(haplotypes, snp_idx):
 
             
 def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
-                         haplo_tab, paired=False):
+                         haplo_tab):
     """
       read_seq - a string representing the the sequence of the read in question
       snp_index - a list of indices of SNPs that this read overlaps
@@ -518,14 +518,14 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
     
 
             
-def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles, paired=False):
+def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles):
     """Recursively generate set of reads with all possible combinations
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
     reads = [read_seq]
     i = 0
-    while i != len(read_pos)-1:
+    while i != len(read_pos):
         idx = read_pos[i]-1
         new_reads = []
         for read in reads:
@@ -716,27 +716,39 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
     read_stats.write(sys.stderr)
 
 
+def read_pair_combinations(new_reads, max_seqs, snp_idx, snp_pos):
+    """collect all unique combinations of read pairs"""
+    unique_pairs = set([])
+    n_unique_pairs = 0
+    for new_read1 in new_reads[0]:
+        for new_read2 in new_reads[1]:
+            pair = (new_read1, new_read2)
+            if pair in unique_pairs:
+                pass
+            else:
+                n_unique_pairs += 1
+                if n_unique_pairs > max_seqs:
+                    return False
+                unique_pairs.add(pair)
+    return unique_pairs
+
+
 def process_paired_read(read1, read2, read_stats, files,
                         snp_tab, max_seqs, max_snps):
     """Checks if either end of read pair overlaps SNPs or indels
-    and writes read pair (or generated read pairs) to appropriate 
+    and writes read pair (or generated read pairs) to appropriate
     output files"""
 
     new_reads = []
-    pair_read_seqs = []
     pair_snp_idx = []
-    pair_snp_read_pos = []
-    pair_ref_alleles = []
-    pair_alt_alleles = []
-    pair_snp_haps = []
+    pair_snp_pos = []
 
-    # first, extract information about the reads
     for read in (read1, read2):
         # check if either read overlaps SNPs or indels
         # check if read overlaps SNPs or indels
         snp_idx, snp_read_pos, \
             indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
-
+        
         if len(indel_idx) > 0:
             # for now discard this read pair, we want to improve this to handle
             # the indel reads appropriately
@@ -757,69 +769,24 @@ def process_paired_read(read1, read2, read_stats, files,
                 read_stats.discard_excess_snps += 1
                 return
 
-            pair_read_seqs.append(read.query_sequence)
-            pair_snp_read_pos.append(snp_read_pos)
-            pair_ref_alleles.append(ref_alleles)
-            pair_alt_alleles.append(alt_alleles)
-
             if files.hap_h5:
-                pair_snp_idx.append(snp_idx)
-                pair_snp_haps.append(snp_tab.haplotype)
-
-            new_reads.append(True)
+                # generate reads using observed set of haplotypes
+                read_seqs = generate_haplo_reads(read.query_sequence,
+                                                 snp_idx,
+                                                 snp_read_pos,
+                                                 ref_alleles, alt_alleles,
+                                                 snp_tab.haplotypes)
+            else:
+                # generate all possible allelic combinations of reads
+                read_seqs = generate_reads(read.query_sequence, snp_read_pos,
+                                           ref_alleles, alt_alleles)
+            
+            pair_snp_idx.append(snp_idx)
+            pair_snp_pos.append(snp_read_pos)
+            new_reads.append(read_seqs)
         else:
             # no SNPs or indels overlap this read
-            new_reads.append(False)
-
-    # now, generate reads using whatever information is available
-    # note: the below code is messy. please fix it later
-    if new_reads == [True, True]:
-        if files.hap_h5:
-            # generate reads using observed set of haplotypes
-            new_reads = generate_haplo_reads(
-                pair_read_seqs,
-                pair_snp_idx,
-                pair_ref_alleles,
-                pair_alt_alleles,
-                pair_snp_haps,
-                True
-            )
-        else:
-            # generate all possible allelic combinations of reads
-            new_reads = generate_reads(
-                pair_read_seqs,
-                pair_snp_read_pos,
-                pair_ref_alleles,
-                pair_alt_alleles,
-                True
-            )
-    elif True in new_reads:
-        # get the index of the read that has snps in it
-        snp_read = new_reads.index(True)
-        new_reads[not snp_read] = []
-        if files.hap_h5:
-            # generate reads using observed set of haplotypes
-            new_reads[snp_read] = generate_haplo_reads(
-                pair_read_seqs[snp_read],
-                pair_snp_idx[snp_read],
-                pair_ref_alleles[snp_read],
-                pair_alt_alleles[snp_read],
-                pair_snp_haps[snp_read]
-            )
-        else:
-            # generate all possible allelic combinations of reads
-            new_reads[snp_read] = generate_reads(
-                pair_read_seqs[snp_read],
-                pair_snp_read_pos[snp_read],
-                pair_ref_alleles[snp_read],
-                pair_alt_alleles[snp_read]
-            )
-    else:
-        new_reads = [[], []]
-
-
-    print('-----------')
-    print(read1.query_sequence, read2.query_sequence, tuple(new_reads), tuple(snp_idxs), tuple(snp_read_positions))
+            new_reads.append([])
 
     if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:
         # neither read overlapped SNPs or indels
@@ -834,26 +801,17 @@ def process_paired_read(read1, read2, read_stats, files,
         if len(new_reads[0]) + len(new_reads[1]) > max_seqs:
             # quit now before generating a lot of read pairs
             read_stats.discard_excess_reads += 2
-            return 
+            return
 
-        # collect all unique combinations of read pairs
-        unique_pairs = set([])
-        n_unique_pairs = 0
-        for new_read1 in new_reads[0]:
-            for new_read2 in new_reads[1]:
-                pair = (new_read1, new_read2)
-                if pair in unique_pairs:
-                    pass
-                else:
-                    n_unique_pairs += 1
-                    if n_unique_pairs > max_seqs:
-                        read_stats.discard_excess_reads += 2
-                        return
-                    unique_pairs.add(pair)
+        unique_pairs = read_pair_combinations(
+            new_reads, max_seqs, pair_snp_idx, pair_snp_pos
+        )
+        if not unique_pairs:
+            read_stats.discard_excess_reads += 2
+            return
 
         # remove original read pair, if present
         orig_pair = (read1.query_sequence, read2.query_sequence)
-                                 
         if orig_pair in unique_pairs:
             unique_pairs.remove(orig_pair)
             

@@ -1336,7 +1336,7 @@ class TestPairedEnd:
         # read2[0]                      AACACAACAAAGAA
         # read2[1]                      AACACAACAAAGAA
         # POS           123456789012345678901234567890
-        
+
         snp_list = [['test_chrom', 18, "A", "C"]]
         
         test_data = Data(genome_seqs=genome_seq,
@@ -2603,7 +2603,7 @@ class TestHaplotypesSingleEnd:
         assert len(lines) == 1
         assert lines[0] == ''
 
-        # test_data.cleanup()
+        test_data.cleanup()
 
 
 
@@ -2774,7 +2774,7 @@ class TestHaplotypesPairedEnd:
         assert lines2[1] == test_data.read2_seqs[0]
         assert lines2[3] == test_data.read2_quals[0]
 
-        # test_data.cleanup()
+        test_data.cleanup()
 
 
 class TestFiltering:

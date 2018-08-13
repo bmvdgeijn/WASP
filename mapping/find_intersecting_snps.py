@@ -439,9 +439,8 @@ def get_unique_haplotypes(haplotypes, snp_idx):
 
             
 def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
-                         haplo_tab):
+                         haplo_tab, paired=False):
     """
-    Input:
       read_seq - a string representing the the sequence of the read in question
       snp_index - a list of indices of SNPs that this read overlaps
       read_pos - a list of positions in read_seq that overlap SNPs
@@ -519,29 +518,25 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
     
 
             
-def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles, i):
+def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles, paired=False):
     """Recursively generate set of reads with all possible combinations
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
-    # TODO: this would use a lot less memory if re-implemented
-    # to not use recursion
-    
-    # create new version of this read with both reference and
-    # alternative versions of allele at this index
-    idx = read_pos[i]-1
-    ref_read = read_seq[:idx] + ref_alleles[i].decode("utf-8") + read_seq[idx+1:]
-    alt_read = read_seq[:idx] + alt_alleles[i].decode("utf-8") + read_seq[idx+1:]
-
-    if i == len(read_pos)-1:
-        # this was the last SNP
-        return [ref_read, alt_read]
-
-    # continue recursively with other SNPs overlapping this read
-    reads1 = generate_reads(ref_read, read_pos, ref_alleles, alt_alleles, i+1)
-    reads2 = generate_reads(alt_read, read_pos, ref_alleles, alt_alleles,  i+1)
-
-    return reads1 + reads2
+    reads = [read_seq]
+    i = 0
+    while i != len(read_pos)-1:
+        idx = read_pos[i]-1
+        new_reads = []
+        for read in reads:
+            # create new version of this read with both reference and
+            # alternative versions of allele at this index
+            ref_read = read[:idx] + ref_alleles[i].decode("utf-8") + read[idx+1:]
+            alt_read = read[:idx] + alt_alleles[i].decode("utf-8") + read[idx+1:]
+            new_reads += [ref_read, alt_read]
+        reads = new_reads
+        i += 1
+    return reads
 
 
 def write_fastq(fastq_file, orig_read, new_seqs):
@@ -786,7 +781,8 @@ def process_paired_read(read1, read2, read_stats, files,
                 pair_snp_idx,
                 pair_ref_alleles,
                 pair_alt_alleles,
-                pair_snp_haps
+                pair_snp_haps,
+                True
             )
         else:
             # generate all possible allelic combinations of reads
@@ -795,7 +791,7 @@ def process_paired_read(read1, read2, read_stats, files,
                 pair_snp_read_pos,
                 pair_ref_alleles,
                 pair_alt_alleles,
-                0
+                True
             )
     elif True in new_reads:
         # get the index of the read that has snps in it
@@ -816,8 +812,7 @@ def process_paired_read(read1, read2, read_stats, files,
                 pair_read_seqs[snp_read],
                 pair_snp_read_pos[snp_read],
                 pair_ref_alleles[snp_read],
-                pair_alt_alleles[snp_read],
-                0
+                pair_alt_alleles[snp_read]
             )
     else:
         new_reads = [[], []]
@@ -916,7 +911,7 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
                                              snp_tab.haplotypes)
         else:
             read_seqs = generate_reads(read.query_sequence,  snp_read_pos,
-                                       ref_alleles, alt_alleles, 0)
+                                       ref_alleles, alt_alleles)
 
         # make set of unique reads, we don't want to remap
         # duplicates, or the read that matches original

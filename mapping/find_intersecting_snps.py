@@ -718,6 +718,22 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
 
 def read_pair_combinations(new_reads, max_seqs, snp_idx, snp_pos):
     """collect all unique combinations of read pairs"""
+
+    # get a list of the snps that are in both reads
+    shared_snp_idxs = list(set(snp_idx[0]) & set(snp_idx[1]))
+    # find the index of each snp_index in snp_idx
+    idx_idxs = (
+        np.array([snp_idx[0].index(idx) for idx in shared_snp_idxs], dtype=int),
+        np.array([snp_idx[1].index(idx) for idx in shared_snp_idxs], dtype=int)
+    )
+    # use idx_idxs to get the read positions of each snp that appears in
+    # both reads
+    snp_pos = np.column_stack((
+        np.array(snp_pos[0], dtype=int)[idx_idxs[0]],
+        np.array(snp_pos[1], dtype=int)[idx_idxs[1]],
+    ))
+    print(snp_pos)
+
     unique_pairs = set([])
     n_unique_pairs = 0
     for new_read1 in new_reads[0]:
@@ -786,6 +802,8 @@ def process_paired_read(read1, read2, read_stats, files,
             new_reads.append(read_seqs)
         else:
             # no SNPs or indels overlap this read
+            pair_snp_idx.append([])
+            pair_snp_pos.append([])
             new_reads.append([])
 
     if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:

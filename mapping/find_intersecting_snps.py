@@ -440,6 +440,18 @@ def get_unique_haplotypes(haplotypes, snp_idx):
             
 def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
                          haplo_tab):
+    """
+    Input:
+      read_seq - a string representing the the sequence of the read in question
+      snp_index - a list of indices of SNPs that this read overlaps
+      read_pos - a list of positions in read_seq that overlap SNPs
+      ref_alleles - a np array of reference alleles with
+                    indices corresponding to snp_index
+      alt_alleles - a np array of alternate alleles with
+                    indices corresponding to snp_index
+      haplo_tab - a pytables node with haplotypes from haplotype.h5
+    """
+
     haps = get_unique_haplotypes(haplo_tab, snp_idx)
 
     # sys.stderr.write("UNIQUE haplotypes: %s\n"
@@ -530,7 +542,6 @@ def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles, i):
     reads2 = generate_reads(alt_read, read_pos, ref_alleles, alt_alleles,  i+1)
 
     return reads1 + reads2
-                
 
 
 def write_fastq(fastq_file, orig_read, new_seqs):
@@ -708,7 +719,58 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
         read_stats.discard_missing_pair += len(read_pair_cache)
     
     read_stats.write(sys.stderr)
-                     
+
+
+def fix_read_pair_independence(old_reads, read_seqs, snp_idxs, snp_read_positions):
+    """Finds read pairs that overlap the same SNP and ensures they haven't been
+    modified independently of each other. All inputs should be tuples of two
+    elements, representing the value for both read pairs."""
+
+    new_reads = []
+    # get a list of the snps that are in both reads
+    shared_snp_idxs = list(set(snp_idxs[0]) & set(snp_idxs[1]))
+    # check: are there any shared SNPs?
+    if len(shared_snp_idxs) > 0:
+        print("we found a shared snp!")
+        # find the index of each snp_index in snp_idxs
+        idx_idxs = (
+            np.array([snp_idxs[0].index(idx) for idx in shared_snp_idxs]),
+            np.array([snp_idxs[1].index(idx) for idx in shared_snp_idxs])
+        )
+        print(idx_idxs)
+        return read_seqs
+        # use idx_idxs to get the read positions of each snp that appears in
+        # both reads
+        snp_read_positions = np.array(
+            np.array(snp_read_positions[0])[idx_idxs[0]],
+            np.array(snp_read_positions[1])[idx_idxs[1]],
+        )
+        # iterate through the sequences of the second pair of generated reads
+        # and make them match those of the first at the SNP positions
+        print(snp_read_positions)
+        for snp_pos in snp_read_positions.T:
+            # retrieve the first read that differs from the original in a
+            # shared SNP location
+            for new_read in read_seqs[0]:
+                if new_read[snp_pos[0]-1] != old_reads[0][snp_pos[0]-1]:
+                    break
+            # get the new allele that was placed there
+            new_allele = new_read[snp_pos[0]-1]
+            # find any generated reads that differ from the original in
+            # shared SNP locations and change them to match the pair
+            new_read_seqs = []
+            for new_read in read_seqs[1]:
+                if new_read[snp_pos[1]-1] != old_reads[1][snp_pos[1]-1]:
+                    new_read_seqs.append(
+                        new_read[:read_pos[i]-1]
+                        + new_allele
+                        + new_read[read_pos[i]-1:]
+                    )
+                else:
+                    new_read_seqs.append(new_read)
+        return new_read_seqs
+    else:
+        return read_seqs
 
 def process_paired_read(read1, read2, read_stats, files,
                         snp_tab, max_seqs, max_snps):
@@ -716,13 +778,19 @@ def process_paired_read(read1, read2, read_stats, files,
     and writes read pair (or generated read pairs) to appropriate 
     output files"""
 
-    new_reads = []    
+    new_reads = []
+    snp_idxs = []
+    snp_read_positions = []
+
     for read in (read1, read2):
         # check if either read overlaps SNPs or indels
         # check if read overlaps SNPs or indels
         snp_idx, snp_read_pos, \
             indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
-        
+
+        snp_idxs.append(snp_idx)
+        snp_read_positions.append(snp_read_pos)
+
         if len(indel_idx) > 0:
             # for now discard this read pair, we want to improve this to handle
             # the indel reads appropriately
@@ -759,7 +827,16 @@ def process_paired_read(read1, read2, read_stats, files,
         else:
             # no SNPs or indels overlap this read
             new_reads.append([])
-            
+
+    print('-----------')
+    print(read1.query_sequence, read2.query_sequence, tuple(new_reads), tuple(snp_idxs), tuple(snp_read_positions))
+    new_reads = fix_read_pair_independence(
+        (read1.query_sequence, read2.query_sequence),
+        tuple(new_reads),
+        tuple(snp_idxs),
+        tuple(snp_read_positions)
+    )
+
     if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:
         # neither read overlapped SNPs or indels
         files.keep_bam.write(read1)

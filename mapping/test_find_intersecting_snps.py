@@ -3242,3 +3242,112 @@ class TestFiltering:
         lines = read_bam(test_data.bam_keep_filename)
         assert len(lines) == 1
         assert lines[0] == ''
+
+
+class TestOverlappingPEReads:
+    """tests that bad reads are filtered correctly"""
+
+    def test_overlap_paired_two_reads_one_snp(self):
+        """Simple test of whether 1 pair of reads with both pairs
+        overlapping 1 SNP works correctly"""
+        test_data = Data()
+
+        read1_seqs = ["AACGAAAAGGAGAA",
+                      "TTTATTTTTTATTT"]
+        read2_seqs = ["TTTTAAATTTTTTT",
+                      "ACAACACAAAAAAA"]
+
+        read1_quals = ["B" * len(read1_seqs[0]),
+                       "C" * len(read1_seqs[1])]
+        read2_quals = ["D" * len(read2_seqs[0]),
+                       "E" * len(read2_seqs[1])]
+
+        # POS           123456789012345678901234567890
+        # read1[0]          AACGAAAAGGAGAA
+        # read2[0]                      TTTTAAATTTTTTT
+        # SNP                            ^
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
+        # read1[1]      TTTATTTTTTATTT
+        # read2[1]                 ACAACACAAAAAAA
+        # SNP                       ^
+        # POS           123456789012345678901234567890
+
+        snp_list = [['test_chrom', 18, "A", "C"],
+                    ['test_chrom', 43, "T", "G"]]
+
+        test_data = Data(genome_seqs=genome_seq,
+                         read1_seqs=read1_seqs,
+                         read2_seqs=read2_seqs,
+                         read1_quals=read1_quals,
+                         read2_quals=read2_quals,
+                         snp_list=snp_list)
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_paired_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=True, is_sorted=False)
+
+        #
+        # Verify new fastq1 is correct.
+        #
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 8
+
+        l = list(test_data.read1_seqs[0])
+        # last base of first read should be changed from A to C
+        l[13] = 'C'
+        new_seq = "".join(l)
+        assert lines[1] == new_seq
+        assert lines[3] == test_data.read1_quals[0]
+
+        l = list(test_data.read1_seqs[1])
+        # second to last base of second read should be changed from T to G
+        l[12] = 'G'
+        new_seq = "".join(l)
+        assert(lines[5] == new_seq)
+        assert(lines[7] == test_data.read1_quals[1])
+
+        #
+        # verify fastq2 is correct
+        #
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert len(lines) == 8
+
+        l = list(test_data.read1_seqs[0])
+        # second to last base of first read should be changed from T to G (since G is the complement of C)
+        l[12] = 'G'
+        new_seq = "".join(l)
+        assert lines[1] == new_seq
+        assert lines[3] == test_data.read1_quals[0]
+
+        l = list(test_data.read1_seqs[1])
+        # second to last base of second read should be changed from A to C (since C is the complement of G)
+        l[12] = 'C'
+        new_seq = "".join(l)
+        assert(lines[5] == new_seq)
+        assert(lines[7] == test_data.read1_quals[1])
+
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()

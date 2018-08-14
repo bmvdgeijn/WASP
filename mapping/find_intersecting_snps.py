@@ -424,19 +424,16 @@ def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
 
 def get_unique_haplotypes(haplotypes, snp_idx):
     """returns list of vectors of unique haplotypes for this set of SNPs"""
-    if haplotypes is None:
-        # generate an iterator that gives all possible combinations
-        # of genotypes (ie all possible haplotypes)
-        return product([0, 1], repeat=len(snp_idx))
-    else:
-        haps = haplotypes[snp_idx, :].T
-        # create view of data that joins all elements of column
-        # into single void datatype
-        h = np.ascontiguousarray(haps).view(np.dtype((np.void, haps.dtype.itemsize * haps.shape[1])))
-        # get index of unique columns
-        _, idx = np.unique(h, return_index=True)
-        return haps[idx, :]
+    haps = haplotypes[snp_idx,:].T
+    
+    # create view of data that joins all elements of column
+    # into single void datatype
+    h = np.ascontiguousarray(haps).view(np.dtype((np.void, haps.dtype.itemsize * haps.shape[1])))
 
+    # get index of unique columns
+    _, idx = np.unique(h, return_index=True)
+
+    return haps[idx,:]
 
             
 def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
@@ -718,7 +715,10 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
 
 def slice_read(read, indices):
     """slice a read by an array of indices"""
-    return "".join(np.array(list(read))[indices])
+    if indices:
+        return "".join(np.array(list(read))[indices])
+    else:
+        return ""
 
 def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
     """
@@ -736,41 +736,27 @@ def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
     reads.sort()
     # group the reads by the snp string and create a dictionary to hold them
     return {
-        hap: list(reads) for hap, reads in
+        hap: set(reads) for hap, reads in
         groupby(reads, lambda read: slice_read(read, snp_pos))
     }
 
-def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos, ref_alleles, alt_alleles, haplo_tab=None):
+def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos):
     """collect all unique combinations of read pairs"""
     unique_pairs = set([])
-
     # get a list of the snps that are in both reads
     shared_snp_idxs = list(set(snp_idx[0]) & set(snp_idx[1]))
-
-    if len(shared_snp_idxs) > 0:
-        for i in range(len(new_reads)):
-            new_reads[i] = group_reads_by_snps(
-                new_reads[i], snp_idx[i], shared_snp_idxs, snp_pos[i]
-            )
-        for snp_str in new_reads[0].keys():
-            for pair in product(new_reads[0][snp_str], new_reads[1][snp_str]):
-                if len(unique_pairs) != max_seqs:
-                    unique_pairs.add(pair)
-                else:
-                    return unique_pairs
-    else:
-        unique_pairs = set([])
-        n_unique_pairs = 0
-        for new_read1 in new_reads[0]:
-            for new_read2 in new_reads[1]:
-                pair = (new_read1, new_read2)
-                if pair in unique_pairs:
-                    pass
-                else:
-                    n_unique_pairs += 1
-                    if n_unique_pairs > max_seqs:
-                        return False
-                    unique_pairs.add(pair)
+    # get a dictionary grouping of the reads
+    for i in range(len(new_reads)):
+        new_reads[i] = group_reads_by_snps(
+            new_reads[i], snp_idx[i], shared_snp_idxs, snp_pos[i]
+        )
+    # calculate the unique combinations of read pairs only among the same group
+    for snp_str in new_reads[0].keys():
+        for pair in product(new_reads[0][snp_str], new_reads[1][snp_str]):
+            if len(unique_pairs) <= max_seqs:
+                unique_pairs.add(pair)
+            else:
+                return False
     return unique_pairs
 
 
@@ -783,8 +769,6 @@ def process_paired_read(read1, read2, read_stats, files,
     new_reads = []
     pair_snp_idx = []
     pair_snp_pos = []
-    pair_ref_alleles = []
-    pair_alt_alleles = []
 
     for read in (read1, read2):
         # check if either read overlaps SNPs or indels
@@ -827,15 +811,11 @@ def process_paired_read(read1, read2, read_stats, files,
             new_reads.append(read_seqs)
             pair_snp_idx.append(snp_idx)
             pair_snp_pos.append(snp_read_pos)
-            pair_ref_alleles.append(ref_alleles)
-            pair_alt_alleles.append(alt_alleles)
         else:
             # no SNPs or indels overlap this read
             new_reads.append([])
             pair_snp_idx.append([])
             pair_snp_pos.append([])
-            pair_ref_alleles.append([])
-            pair_alt_alleles.append([])
 
     if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:
         # neither read overlapped SNPs or indels
@@ -852,13 +832,9 @@ def process_paired_read(read1, read2, read_stats, files,
             read_stats.discard_excess_reads += 2
             return
 
-        haps = None
-        if files.hap_h5:
-            haps = snp_tab.haplotypes
         # get all unique combinations of read pairs
         unique_pairs = read_pair_combos(
-            new_reads, max_seqs, pair_snp_idx, pair_snp_pos,
-            pair_ref_alleles, pair_alt_alleles, haps
+            new_reads, max_seqs, pair_snp_idx, pair_snp_pos
         )
         if not unique_pairs:
             read_stats.discard_excess_reads += 2

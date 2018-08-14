@@ -517,7 +517,7 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
 
             
 def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles):
-    """Recursively generate set of reads with all possible combinations
+    """Generate set of reads with all possible combinations
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
@@ -715,25 +715,22 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
 
 def slice_read(read, indices):
     """slice a read by an array of indices"""
-    if indices:
-        return "".join(np.array(list(read))[indices])
-    else:
-        return ""
+    return "".join(np.array(list(read))[indices])
 
 def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
     """
     group the reads by strings containing the combinations of ref/alt alleles
     among the reads at the shared_snps. return a dictionary of
-    string/list pairs
+    string/set pairs
     """
     # first, get the index of each snp_index in snp_idx
     idx_idx = np.array([snp_idx.index(idx) for idx in snps], dtype=int)
     # now, use the indices in idx_idx to get the relavent snp positions
     snp_pos = np.array(snp_pos, dtype=int)[idx_idx]
     # convert positions to indices
-    snp_pos = tuple(np.subtract(pos, 1) for pos in snp_pos)
-    # itertools.groupby needs the reads to be sorted
-    reads.sort()
+    snp_pos = np.subtract(snp_pos, 1)
+    # itertools.groupby needs the reads to be sorted by the same key func
+    reads.sort(key=lambda read: slice_read(read, snp_pos))
     # group the reads by the snp string and create a dictionary to hold them
     return {
         hap: set(reads) for hap, reads in
@@ -741,7 +738,10 @@ def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
     }
 
 def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos):
-    """collect all unique combinations of read pairs"""
+    """
+    collect all unique combinations of read pairs.
+    returns False before more than max_seqs pairs are created
+    """
     unique_pairs = set([])
     # get a list of the snps that are in both reads
     shared_snp_idxs = list(set(snp_idx[0]) & set(snp_idx[1]))
@@ -751,8 +751,8 @@ def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos):
             new_reads[i], snp_idx[i], shared_snp_idxs, snp_pos[i]
         )
     # calculate the unique combinations of read pairs only among the same group
-    for snp_str in new_reads[0].keys():
-        for pair in product(new_reads[0][snp_str], new_reads[1][snp_str]):
+    for snps_str in new_reads[0].keys():
+        for pair in product(new_reads[0][snps_str], new_reads[1][snps_str]):
             if len(unique_pairs) <= max_seqs:
                 unique_pairs.add(pair)
             else:

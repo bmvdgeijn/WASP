@@ -3,6 +3,7 @@ import os
 import gzip
 import argparse
 import numpy as np
+from itertools import product
 
 import pysam
 
@@ -423,18 +424,18 @@ def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
 
 def get_unique_haplotypes(haplotypes, snp_idx):
     """returns list of vectors of unique haplotypes for this set of SNPs"""
-    haps = haplotypes[snp_idx,:].T
-    
-    # create view of data that joins all elements of column
-    # into single void datatype
-    h = np.ascontiguousarray(haps).view(np.dtype((np.void, haps.dtype.itemsize * haps.shape[1])))
-
-    # get index of unique columns
-    _, idx = np.unique(h, return_index=True)
-
-    return haps[idx,:]
-    
-
+    if haplotypes is None:
+        # generate an iterator that gives all possible combinations
+        # of genotypes (ie all possible haplotypes)
+        return product([0, 1], repeat=len(snp_idx))
+    else:
+        haps = haplotypes[snp_idx, :].T
+        # create view of data that joins all elements of column
+        # into single void datatype
+        h = np.ascontiguousarray(haps).view(np.dtype((np.void, haps.dtype.itemsize * haps.shape[1])))
+        # get index of unique columns
+        _, idx = np.unique(h, return_index=True)
+        return haps[idx, :]
 
 
             
@@ -716,7 +717,7 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
     read_stats.write(sys.stderr)
 
 
-def read_pair_combinations(new_reads, max_seqs, snp_idx, snp_pos):
+def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos, ref_alleles, alt_alleles, haplo_tab=None):
     """collect all unique combinations of read pairs"""
 
     # get a list of the snps that are in both reads
@@ -732,7 +733,13 @@ def read_pair_combinations(new_reads, max_seqs, snp_idx, snp_pos):
         np.array(snp_pos[0], dtype=int)[idx_idxs[0]],
         np.array(snp_pos[1], dtype=int)[idx_idxs[1]],
     ))
-    print(snp_pos)
+
+    alleles = np.column_stack(ref_alleles, alt_alleles)
+
+    # now, iterate through all possible combinations of haplotypes
+    for hap in get_unique_haplotypes(haplo_tab, shared_snp_idxs):
+        # get the combination of alleles for this haplotype
+        hap_combo = alleles[np.arange(len(alleles)), hap]
 
     unique_pairs = set([])
     n_unique_pairs = 0
@@ -758,6 +765,8 @@ def process_paired_read(read1, read2, read_stats, files,
     new_reads = []
     pair_snp_idx = []
     pair_snp_pos = []
+    pair_ref_alleles = []
+    pair_alt_alleles = []
 
     for read in (read1, read2):
         # check if either read overlaps SNPs or indels
@@ -797,14 +806,18 @@ def process_paired_read(read1, read2, read_stats, files,
                 read_seqs = generate_reads(read.query_sequence, snp_read_pos,
                                            ref_alleles, alt_alleles)
             
+            new_reads.append(read_seqs)
             pair_snp_idx.append(snp_idx)
             pair_snp_pos.append(snp_read_pos)
-            new_reads.append(read_seqs)
+            pair_ref_alleles.append(ref_alleles)
+            pair_alt_alleles.append(alt_alleles)
         else:
             # no SNPs or indels overlap this read
+            new_reads.append([])
             pair_snp_idx.append([])
             pair_snp_pos.append([])
-            new_reads.append([])
+            pair_ref_alleles.append([])
+            pair_alt_alleles.append([])
 
     if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:
         # neither read overlapped SNPs or indels
@@ -821,8 +834,13 @@ def process_paired_read(read1, read2, read_stats, files,
             read_stats.discard_excess_reads += 2
             return
 
-        unique_pairs = read_pair_combinations(
-            new_reads, max_seqs, pair_snp_idx, pair_snp_pos
+        haps = None
+        if files.hap_h5:
+            haps = snp_tab.haplotypes
+        # get all unique combinations of read pairs
+        unique_pairs = read_pair_combos(
+            new_reads, max_seqs, pair_snp_idx, pair_snp_pos,
+            pair_ref_alleles, pair_alt_alleles, haps
         )
         if not unique_pairs:
             read_stats.discard_excess_reads += 2

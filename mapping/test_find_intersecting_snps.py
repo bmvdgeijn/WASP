@@ -3297,14 +3297,14 @@ class TestOverlappingPEReads:
         #
         with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
-        assert len(lines) == 8
+        assert(len(lines) == 8)
 
         l = list(test_data.read1_seqs[0])
         # last base of first read should be changed from A to C
         l[13] = 'C'
         new_seq = "".join(l)
-        assert lines[1] == new_seq
-        assert lines[3] == test_data.read1_quals[0]
+        assert(lines[1] == new_seq)
+        assert(lines[3] == test_data.read1_quals[0])
 
         l = list(test_data.read1_seqs[1])
         # second to last base of second read should be changed from T to G
@@ -3318,21 +3318,21 @@ class TestOverlappingPEReads:
         #
         with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
             lines = [x.strip() for x in f.readlines()]
-        assert len(lines) == 8
+        assert(len(lines) == 8)
 
-        l = list(test_data.read1_seqs[0])
+        l = list(test_data.read2_seqs[0])
         # second to last base of first read should be changed from T to G (since G is the complement of C)
         l[12] = 'G'
         new_seq = "".join(l)
-        assert lines[1] == new_seq
-        assert lines[3] == test_data.read1_quals[0]
+        assert(lines[1] == new_seq)
+        assert(lines[3] == test_data.read2_quals[0])
 
-        l = list(test_data.read1_seqs[1])
+        l = list(test_data.read2_seqs[1])
         # second to last base of second read should be changed from A to C (since C is the complement of G)
         l[12] = 'C'
         new_seq = "".join(l)
         assert(lines[5] == new_seq)
-        assert(lines[7] == test_data.read1_quals[1])
+        assert(lines[7] == test_data.read2_quals[1])
 
         #
         # Verify to.remap bam is the same as the input bam file.

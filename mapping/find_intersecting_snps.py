@@ -3,7 +3,7 @@ import os
 import gzip
 import argparse
 import numpy as np
-from itertools import product
+from itertools import product, groupby
 
 import pysam
 
@@ -716,43 +716,61 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
     
     read_stats.write(sys.stderr)
 
+def slice_read(read, indices):
+    """slice a read by an array of indices"""
+    return "".join(np.array(list(read))[indices])
+
+def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
+    """
+    group the reads by strings containing the combinations of ref/alt alleles
+    among the reads at the shared_snps. return a dictionary of
+    string/list pairs
+    """
+    # first, get the index of each snp_index in snp_idx
+    idx_idx = np.array([snp_idx.index(idx) for idx in snps], dtype=int)
+    # now, use the indices in idx_idx to get the relavent snp positions
+    snp_pos = np.array(snp_pos, dtype=int)[idx_idx]
+    # convert positions to indices
+    snp_pos = tuple(np.subtract(pos, 1) for pos in snp_pos)
+    # itertools.groupby needs the reads to be sorted
+    reads.sort()
+    # group the reads by the snp string and create a dictionary to hold them
+    return {
+        hap: list(reads) for hap, reads in
+        groupby(reads, lambda read: slice_read(read, snp_pos))
+    }
 
 def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos, ref_alleles, alt_alleles, haplo_tab=None):
     """collect all unique combinations of read pairs"""
+    unique_pairs = set([])
 
     # get a list of the snps that are in both reads
     shared_snp_idxs = list(set(snp_idx[0]) & set(snp_idx[1]))
-    # find the index of each snp_index in snp_idx
-    idx_idxs = (
-        np.array([snp_idx[0].index(idx) for idx in shared_snp_idxs], dtype=int),
-        np.array([snp_idx[1].index(idx) for idx in shared_snp_idxs], dtype=int)
-    )
-    # use idx_idxs to get the read positions of each snp that appears in
-    # both reads
-    snp_pos = np.column_stack((
-        np.array(snp_pos[0], dtype=int)[idx_idxs[0]],
-        np.array(snp_pos[1], dtype=int)[idx_idxs[1]],
-    ))
 
-    alleles = np.column_stack(ref_alleles, alt_alleles)
-
-    # now, iterate through all possible combinations of haplotypes
-    for hap in get_unique_haplotypes(haplo_tab, shared_snp_idxs):
-        # get the combination of alleles for this haplotype
-        hap_combo = alleles[np.arange(len(alleles)), hap]
-
-    unique_pairs = set([])
-    n_unique_pairs = 0
-    for new_read1 in new_reads[0]:
-        for new_read2 in new_reads[1]:
-            pair = (new_read1, new_read2)
-            if pair in unique_pairs:
-                pass
-            else:
-                n_unique_pairs += 1
-                if n_unique_pairs > max_seqs:
-                    return False
-                unique_pairs.add(pair)
+    if len(shared_snp_idxs) > 0:
+        for i in range(len(new_reads)):
+            new_reads[i] = group_reads_by_snps(
+                new_reads[i], snp_idx[i], shared_snp_idxs, snp_pos[i]
+            )
+        for snp_str in new_reads[0].keys():
+            for pair in product(new_reads[0][snp_str], new_reads[1][snp_str]):
+                if len(unique_pairs) != max_seqs:
+                    unique_pairs.add(pair)
+                else:
+                    return unique_pairs
+    else:
+        unique_pairs = set([])
+        n_unique_pairs = 0
+        for new_read1 in new_reads[0]:
+            for new_read2 in new_reads[1]:
+                pair = (new_read1, new_read2)
+                if pair in unique_pairs:
+                    pass
+                else:
+                    n_unique_pairs += 1
+                    if n_unique_pairs > max_seqs:
+                        return False
+                    unique_pairs.add(pair)
     return unique_pairs
 
 

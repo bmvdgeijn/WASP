@@ -171,15 +171,19 @@ def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
                 read.cigarstring in cigar_strings[read.qname][read.is_read2]
                 and len(cigar_strings[read.qname][read.is_read2]) == 1
             ):
-                # cache reads until you see their pair
-                # then, write both of them to file together
-                if read.qname in read_pair_cache:
-                    keep_bam.write(read_pair_cache[read.qname])
-                    del read_pair_cache[read.qname]
-                    keep_bam.write(read)
-                    keep_count += 2
+                if read.is_paired:
+                    # cache reads until you see their pair
+                    # then, write both of them to file together
+                    if read.qname in read_pair_cache:
+                        keep_bam.write(read_pair_cache[read.qname])
+                        del read_pair_cache[read.qname]
+                        keep_bam.write(read)
+                        keep_count += 2
+                    else:
+                        read_pair_cache[read.qname] = read
                 else:
-                    read_pair_cache[read.qname] = read
+                    keep_bam.write(read)
+                    keep_count += 1
             else:
                 discard_count += 1
         else:

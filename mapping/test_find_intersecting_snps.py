@@ -3543,12 +3543,14 @@ class TestOverlappingPEReads:
         # which pairs of reads do we expect to see?
         # the reads below are grouped by whether they contain the shared snp
         expect_reads1 = [
+            # reads with the reference allele on the shared snp
             set([
                 # original read
                 'AACGAAAAGGAGAA',
                 # ninth to last base of read should be changed from A to T
                 'AACGATAAGGAGAA'
             ]),
+            # reads with the alternate allele on the shared snp
             set([
                 # last base of read should be changed from A to C
                 'AACGAAAAGGAGAC',
@@ -3558,12 +3560,14 @@ class TestOverlappingPEReads:
             ])
         ]
         expect_reads2 = [
+            # reads with the reference allele on the shared snp
             set([
                 # original read
                 'TTTTAAATTTTTTT',
                 # third to last base of read should be changed from T to G
                 'TTTTAAATTTTGTT'
             ]),
+            # reads with the alternate allele on the shared snp
             set([
                 # second to last base of read should be changed from T to G
                 'TTTTAAATTTTTGT',
@@ -3589,6 +3593,74 @@ class TestOverlappingPEReads:
         old_lines = read_bam(test_data.bam_filename)
         new_lines = read_bam(test_data.bam_remap_filename)
         assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+    def test_overlap_paired_one_read_one_discordant_snp(self):
+        """Test of 1 pair of reads with both pairs
+        overlapping the same SNP but with each pair having
+        a different allele"""
+        test_data = Data()
+
+        read1_seqs = ["AACGAAAAGGAGAA"]
+        read2_seqs = ["TTTTAAATTTTTGT"]  # ACAAAAATTTAAAA
+
+        read1_quals = ["B" * len(read1_seqs[0])]
+        read2_quals = ["D" * len(read2_seqs[0])]
+
+        # POS           123456789012345678901234567890
+        # read1[0]          AACGAAAAGGAGAA
+        # read2[0]                      ACAAAAATTTAAAA
+        # SNPs                           ^
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
+
+        snp_list = [['test_chrom', 18, "A", "C"]]
+
+        test_data = Data(genome_seqs=genome_seq,
+                         read1_seqs=read1_seqs,
+                         read2_seqs=read2_seqs,
+                         read1_quals=read1_quals,
+                         read2_quals=read2_quals,
+                         snp_list=snp_list)
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_paired_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=True, is_sorted=False)
+
+        #
+        # Verify new fastq1 and fastq2 are correct.
+        #
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+            # the reads should have been tossed out
+            assert(len(lines) == 0)
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+            # the reads should have been tossed out
+            assert(len(lines) == 0)
+
+        #
+        # Verify to.remap bam is empty since all reads were
+        # tossed. Note that read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_remap_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
 
         #
         # Verify that the keep file is empty since only

@@ -844,9 +844,7 @@ def process_paired_read(read1, read2, read_stats, files,
             return
 
         # remove original read pair, if present
-        orig_pair = (read1.query_sequence, read2.query_sequence)
-        if orig_pair in unique_pairs:
-            unique_pairs.remove(orig_pair)
+        unique_pairs.discard((read1.query_sequence, read2.query_sequence))
             
         # write read pair to fastqs for remapping
         write_pair_fastq(files.fastq1, files.fastq2, read1, read2,

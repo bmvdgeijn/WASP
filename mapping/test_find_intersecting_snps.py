@@ -3254,8 +3254,8 @@ class TestOverlappingPEReads:
 
         read1_seqs = ["AACGAAAAGGAGAA",
                       "TTTATTTTTTATTT"]
-        read2_seqs = ["TTTTAAATTTTTTT",
-                      "ACAACACAAAAAAA"]
+        read2_seqs = ["TTTTAAATTTTTTT",  # AAAAAAATTTAAAA
+                      "ACAACACAAAAAAA"]  # TTTTTTTGTGTTGT
 
         read1_quals = ["B" * len(read1_seqs[0]),
                        "C" * len(read1_seqs[1])]
@@ -3264,12 +3264,12 @@ class TestOverlappingPEReads:
 
         # POS           123456789012345678901234567890
         # read1[0]          AACGAAAAGGAGAA
-        # read2[0]                      TTTTAAATTTTTTT
+        # read2[0]                      AAAAAAATTTAAAA
         # SNP                            ^
         genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
                        "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
         # read1[1]      TTTATTTTTTATTT
-        # read2[1]                 ACAACACAAAAAAA
+        # read2[1]                 TTTTTTTGTGTTGT
         # SNP                       ^
         # POS           123456789012345678901234567890
 
@@ -3359,8 +3359,8 @@ class TestOverlappingPEReads:
 
         read1_seqs = ["AACGAAAAGGAGAA",
                       "TTTATTTTTTATTT"]
-        read2_seqs = ["TTTTAAATTTTTTT",
-                      "ACAACACAAAAAAA"]
+        read2_seqs = ["TTTTAAATTTTTTT",  # AAAAAAATTTAAAA
+                      "ACAACACAAAAAAA"]  # TTTTTTTGTGTTGT
 
         read1_quals = ["B" * len(read1_seqs[0]),
                        "C" * len(read1_seqs[1])]
@@ -3369,13 +3369,13 @@ class TestOverlappingPEReads:
 
         # POS           123456789012345678901234567890
         # read1[0]          AACGAAAAGGAGAA
-        # read2[0]                      TTTTAAATTTTTTT
-        # SNP                           ^^
+        # read2[0]                      AAAAAAATTTAAAA
+        # SNPs                          ^^
         genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
                        "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
         # read1[1]      TTTATTTTTTATTT
-        # read2[1]                 ACAACACAAAAAAA
-        # SNP                      ^^
+        # read2[1]                 TTTTTTTGTGTTGT
+        # SNPs                     ^^
         # POS           123456789012345678901234567890
 
         snp_list = [['test_chrom', 17, "A", "T"],
@@ -3404,13 +3404,13 @@ class TestOverlappingPEReads:
         #
         with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
             seqs1 = [x.strip() for x in f.readlines()][1::4]
-            # there are two pairs of reads and two snps (each with two alleles),
+            # there are two pairs of reads and two snps (each with two alleles)
             # leading to 2^2 combinations of alleles. however, one of those
             # combinations is the original pair (hence why we subtract by one)
             assert(len(set(seqs1)) == 2*(2**2-1))
         with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
             seqs2 = [x.strip() for x in f.readlines()][1::4]
-            # there are two pairs of reads and two snps (each with two alleles),
+            # there are two pairs of reads and two snps (each with two alleles)
             # leading to 2^2 combinations of alleles. however, one of those
             # combinations is the original pair (hence why we subtract by one)
             assert(len(set(seqs2)) == 2*(2**2-1))
@@ -3419,33 +3419,45 @@ class TestOverlappingPEReads:
         expect_reads1 = [
             # only last base of first read should be changed from A to C
             "AACGAAAAGGAGAC",
-            # only second to last base of first read should be changed from A to T
+            # only second to last base of first read should be changed from A
+            # to T
             "AACGAAAAGGAGTA",
             # last base of first read should be changed from A to C
-            # AND second to last base of first read should be changed from A to T
+            # AND second to last base of first read should be changed from A
+            # to T
             "AACGAAAAGGAGTC",
             # second to last base of second read should be changed from T to G
             "TTTATTTTTTATGT",
-            # only third to last base of second read should be changed from T to A
+            # only third to last base of second read should be changed from T
+            # to A
             "TTTATTTTTTAATT",
             # second to last base of second read should be changed from T to G
-            # AND third to last base of second read should be changed from T to A
+            # AND third to last base of second read should be changed from T
+            # to A
             "TTTATTTTTTAAGT"
         ]
         expect_reads2 = [
-            # only second to last base of first read should be changed from T to G
+            # only second to last base of first read should be changed from T
+            # to G (since it is the complement of C)
             "TTTTAAATTTTTGT",
-            # only last base of first read should be changed from T to A
+            # only last base of first read should be changed from T to A (since
+            # it is the complement of T)
             "TTTTAAATTTTTTA",
-            # last base of first read should be changed from T to A
-            # AND second to last base of first read should be changed from T to G
+            # last base of first read should be changed from T to A (since it
+            # is the complement of T)
+            # AND second to last base of first read should be changed from T
+            # to G (since it is the complement of C)
             "TTTTAAATTTTTGA",
             # second to last base of second read should be changed from A to C
+            # (since it is the complement of G)
             "ACAACACAAAAACA",
-            # last base of second read should be changed from A to T
+            # last base of second read should be changed from A to T (since it
+            # is the complement of C)
             "ACAACACAAAAAAT",
-            # last base of second read should be changed from A to T
-            # AND second to last base of second read should be changed from A to C
+            # last base of second read should be changed from A to T (since it
+            # is the complement of A)
+            # AND second to last base of second read should be changed from A
+            # to C (since it is the complement of G)
             "ACAACACAAAAACT"
         ]
         expect_pairs = list(zip(expect_reads1, expect_reads2))
@@ -3479,15 +3491,15 @@ class TestOverlappingPEReads:
         test_data = Data()
 
         read1_seqs = ["AACGAAAAGGAGAA"]
-        read2_seqs = ["TTTTAAATTTTTTT"]
+        read2_seqs = ["TTTTAAATTTTTTT"]  # AAAAAAATTTAAAA
 
         read1_quals = ["B" * len(read1_seqs[0])]
         read2_quals = ["D" * len(read2_seqs[0])]
 
         # POS           123456789012345678901234567890
         # read1[0]          AACGAAAAGGAGAA
-        # read2[0]                      TTTTAAATTTTTTT
-        # SNP                    ^       ^^
+        # read2[0]                      AAAAAAATTTAAAA
+        # SNPs                   ^       ^^
         genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
                        "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
 

@@ -3491,13 +3491,13 @@ class TestOverlappingPEReads:
         # POS           123456789012345678901234567890
         # read1[0]          AACGAAAAGGAGAA
         # read2[0]                      TTTTAAATTTTTTT
-        # SNP                    ^       ^    ^
+        # SNP                    ^       ^^
         genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
                        "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
 
         snp_list = [['test_chrom', 10, "A", "T"],
                     ['test_chrom', 18, "A", "C"],
-                    ['test_chrom', 33, "A", "G"]]
+                    ['test_chrom', 19, "A", "C"]]
 
         test_data = Data(genome_seqs=genome_seq,
                          read1_seqs=read1_seqs,
@@ -3516,50 +3516,62 @@ class TestOverlappingPEReads:
                                     is_paired_end=True, is_sorted=False)
 
         #
-        # Verify new fastq1 is correct.
+        # Verify new fastq1 and fastq2 are correct.
         #
         with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
-            lines = [x.strip() for x in f.readlines()]
-        seqs = set(lines[1::4])
-        # there is one pair of reads and two snps (each with two alleles),
-        # leading to 2^2 combinations of alleles. however, one of those
-        # combinations is the original pair (hence why we subtract by one)
-        assert(len(seqs) == 2**2-1)
-
-        expect_reads = set([
-            # last base of read should be changed from A to C
-            'AACGAAAAGGAGAC',
-            # ninth to last base of read should be changed from A to T
-            'AACGATAAGGAGAA',
-            # last base of read should be changed from A to C
-            # AND ninth to last base of read should be changed from A to T
-            'AACGATAAGGAGAC'
-        ])
-        for read in expect_reads:
-            assert(read in seqs)
-
-        #
-        # verify fastq2 is correct
-        #
+            seqs1 = [x.strip() for x in f.readlines()][1::4]
+            # there is one pair of reads and two snps (each with two alleles),
+            # leading to 2^2 combinations of alleles. one of those
+            # combinations is the original pair (hence why we subtract by one)
+            assert(len(set(seqs1)) == 2**2)
         with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
-            lines = [x.strip() for x in f.readlines()]
-        seqs = set(lines[1::4])
-        # there is one pair of reads and two snps (each with two alleles),
-        # leading to 2^2 combinations of alleles. however, one of those
-        # combinations is the original pair (hence why we subtract by one)
-        assert(len(seqs) == 2**2-1)
+            seqs2 = [x.strip() for x in f.readlines()][1::4]
+            # there is one pair of reads and two snps (each with two alleles),
+            # leading to 2^2 combinations of alleles. one of those
+            # combinations is the original pair (hence why we subtract by one)
+            assert(len(set(seqs2)) == 2**2)
+        pairs = list(zip(seqs1, seqs2))
 
-        expect_reads = set([
-            # second to last base of read should be changed from T to G
-            'TTTTAAATTTTTGT',
-            # eigth to last base of read should be changed from A to C
-            'TTTTACATTTTTTT',
-            # second to last base of read should be changed from T to G
-            # AND eigth to last base of read should be changed from A to C
-            'TTTTACATTTTTGT'
-        ])
-        for read in expect_reads:
-            assert(read in seqs)
+        # which pairs of reads do we expect to see?
+        # the reads below are grouped by whether they contain the shared snp
+        expect_reads1 = [
+            set([
+                # original read
+                'AACGAAAAGGAGAA',
+                # ninth to last base of read should be changed from A to T
+                'AACGATAAGGAGAA'
+            ]),
+            set([
+                # last base of read should be changed from A to C
+                'AACGAAAAGGAGAC',
+                # last base of read should be changed from A to C
+                # AND ninth to last base of read should be changed from A to T
+                'AACGATAAGGAGAC'
+            ])
+        ]
+        expect_reads2 = [
+            set([
+                # original read
+                'TTTTAAATTTTTTT',
+                # third to last base of read should be changed from T to G
+                'TTTTAAATTTTGTT'
+            ]),
+            set([
+                # second to last base of read should be changed from T to G
+                'TTTTAAATTTTTGT',
+                # second to last base of read should be changed from T to G
+                # AND third to last base of read should be changed from T to G
+                'TTTTAAATTTTGGT'
+            ])
+        ]
+        from itertools import product
+        # only compute combinations of reads from the same group
+        expect_pairs = list(product(expect_reads1[0], expect_reads2[0])) + list(product(expect_reads1[1], expect_reads2[1]))
+        # remove the original pair
+        expect_pairs.remove((test_data.read1_seqs[0], test_data.read2_seqs[0]))
+        # are all of the pairs there?
+        for pair in expect_pairs:
+            assert(pair in pairs)
 
         #
         # Verify to.remap bam is the same as the input bam file.

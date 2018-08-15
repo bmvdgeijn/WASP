@@ -713,15 +713,17 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
     
     read_stats.write(sys.stderr)
 
+
 def slice_read(read, indices):
     """slice a read by an array of indices"""
     return "".join(np.array(list(read))[indices])
 
+
 def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
     """
     group the reads by strings containing the combinations of ref/alt alleles
-    among the reads at the shared_snps. return a dictionary of
-    string/set pairs
+    among the reads at the shared_snps. return a list of sets of reads - one
+    for each group
     """
     # first, get the index of each snp_index in snp_idx
     idx_idx = np.array([snp_idx.index(idx) for idx in snps], dtype=int)
@@ -731,11 +733,12 @@ def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
     snp_pos = np.subtract(snp_pos, 1)
     # itertools.groupby needs the reads to be sorted by the same key func
     reads.sort(key=lambda read: slice_read(read, snp_pos))
-    # group the reads by the snp string and create a dictionary to hold them
-    return {
-        hap: set(reads) for hap, reads in
+    # group the reads by the snp string and create a list to hold the groups
+    return [
+        set(reads) for hap, reads in
         groupby(reads, lambda read: slice_read(read, snp_pos))
-    }
+    ]
+
 
 def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos):
     """
@@ -745,14 +748,14 @@ def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos):
     unique_pairs = set([])
     # get a list of the snps that are in both reads
     shared_snp_idxs = list(set(snp_idx[0]) & set(snp_idx[1]))
-    # get a dictionary grouping of the reads
+    # get a grouping of the reads
     for i in range(len(new_reads)):
         new_reads[i] = group_reads_by_snps(
             new_reads[i], snp_idx[i], shared_snp_idxs, snp_pos[i]
         )
     # calculate the unique combinations of read pairs only among the same group
-    for snps_str in new_reads[0].keys():
-        for pair in product(new_reads[0][snps_str], new_reads[1][snps_str]):
+    for group in range(len(new_reads[0])):
+        for pair in product(new_reads[0][group], new_reads[1][group]):
             if len(unique_pairs) <= max_seqs:
                 unique_pairs.add(pair)
             else:
@@ -775,7 +778,7 @@ def process_paired_read(read1, read2, read_stats, files,
         # check if read overlaps SNPs or indels
         snp_idx, snp_read_pos, \
             indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
-        
+
         if len(indel_idx) > 0:
             # for now discard this read pair, we want to improve this to handle
             # the indel reads appropriately

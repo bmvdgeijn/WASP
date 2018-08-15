@@ -192,11 +192,7 @@ void seq_write_fasta_record(Seq *seq, gzFile f) {
   int line_len;
 
   /* write header */
-  if(seq->name == NULL) {
-    gzprintf(f, ">\n");
-  } else {
-    gzprintf(f, ">%s\n", seq->name);
-  }
+  gzprintf(f, ">%s\n", seq->name);
 
   line_len = 0;
 

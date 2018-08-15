@@ -719,7 +719,7 @@ def slice_read(read, indices):
     return "".join(np.array(list(read))[indices])
 
 
-def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
+def group_reads_by_snps(reads, snp_idx, snps, snp_read_pos):
     """
     group the reads by strings containing the combinations of ref/alt alleles
     among the reads at the shared_snps. return a list of sets of reads - one
@@ -728,19 +728,19 @@ def group_reads_by_snps(reads, snp_idx, snps, snp_pos):
     # first, get the index of each snp_index in snp_idx
     idx_idx = np.array([snp_idx.index(idx) for idx in snps], dtype=int)
     # now, use the indices in idx_idx to get the relavent snp positions
-    snp_pos = np.array(snp_pos, dtype=int)[idx_idx]
+    snp_read_pos = np.array(snp_read_pos, dtype=int)[idx_idx]
     # convert positions to indices
-    snp_pos = np.subtract(snp_pos, 1)
+    snp_read_pos = np.subtract(snp_read_pos, 1)
     # itertools.groupby needs the reads to be sorted by the same key func
-    reads.sort(key=lambda read: slice_read(read, snp_pos))
+    reads.sort(key=lambda read: slice_read(read, snp_read_pos))
     # group the reads by the snp string and create a list to hold the groups
     return [
         set(reads) for hap, reads in
-        groupby(reads, lambda read: slice_read(read, snp_pos))
+        groupby(reads, lambda read: slice_read(read, snp_read_pos))
     ]
 
 
-def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos):
+def read_pair_combos(new_reads, max_seqs, snp_idx, snp_read_pos):
     """
     collect all unique combinations of read pairs.
     returns False before more than max_seqs pairs are created
@@ -751,7 +751,7 @@ def read_pair_combos(new_reads, max_seqs, snp_idx, snp_pos):
     # get a grouping of the reads
     for i in range(len(new_reads)):
         new_reads[i] = group_reads_by_snps(
-            new_reads[i], snp_idx[i], shared_snp_idxs, snp_pos[i]
+            new_reads[i], snp_idx[i], shared_snp_idxs, snp_read_pos[i]
         )
     # calculate the unique combinations of read pairs only among the same group
     for group in range(len(new_reads[0])):
@@ -771,7 +771,7 @@ def process_paired_read(read1, read2, read_stats, files,
 
     new_reads = []
     pair_snp_idx = []
-    pair_snp_pos = []
+    pair_snp_read_pos = []
 
     for read in (read1, read2):
         # check if either read overlaps SNPs or indels
@@ -813,12 +813,12 @@ def process_paired_read(read1, read2, read_stats, files,
             
             new_reads.append(read_seqs)
             pair_snp_idx.append(snp_idx)
-            pair_snp_pos.append(snp_read_pos)
+            pair_snp_read_pos.append(snp_read_pos)
         else:
             # no SNPs or indels overlap this read
             new_reads.append([])
             pair_snp_idx.append([])
-            pair_snp_pos.append([])
+            pair_snp_read_pos.append([])
 
     if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:
         # neither read overlapped SNPs or indels
@@ -837,7 +837,7 @@ def process_paired_read(read1, read2, read_stats, files,
 
         # get all unique combinations of read pairs
         unique_pairs = read_pair_combos(
-            new_reads, max_seqs, pair_snp_idx, pair_snp_pos
+            new_reads, max_seqs, pair_snp_idx, pair_snp_read_pos
         )
         if not unique_pairs:
             read_stats.discard_excess_reads += 2

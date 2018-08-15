@@ -3400,17 +3400,23 @@ class TestOverlappingPEReads:
                                     is_paired_end=True, is_sorted=False)
 
         #
-        # Verify new fastq1 is correct.
+        # Verify new fastq1 and fastq2 is correct.
         #
         with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
-            lines = [x.strip() for x in f.readlines()]
-        seqs = set(lines[1::4])
-        # there are two pairs of reads and two snps (each with two alleles),
-        # leading to 2^2 combinations of alleles. however, one of those
-        # combinations is the original pair (hence why we subtract by one)
-        assert(len(seqs) == 2*(2**2-1))
+            seqs1 = [x.strip() for x in f.readlines()][1::4]
+            # there are two pairs of reads and two snps (each with two alleles),
+            # leading to 2^2 combinations of alleles. however, one of those
+            # combinations is the original pair (hence why we subtract by one)
+            assert(len(set(seqs1)) == 2*(2**2-1))
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
+            seqs2 = [x.strip() for x in f.readlines()][1::4]
+            # there are two pairs of reads and two snps (each with two alleles),
+            # leading to 2^2 combinations of alleles. however, one of those
+            # combinations is the original pair (hence why we subtract by one)
+            assert(len(set(seqs2)) == 2*(2**2-1))
+        pairs = list(zip(seqs1, seqs2))
 
-        expect_reads = set([
+        expect_reads1 = [
             # only last base of first read should be changed from A to C
             "AACGAAAAGGAGAC",
             # only second to last base of first read should be changed from A to T
@@ -3425,39 +3431,29 @@ class TestOverlappingPEReads:
             # second to last base of second read should be changed from T to G
             # AND third to last base of second read should be changed from T to A
             "TTTATTTTTTAAGT"
-        ])
-        for read in expect_reads:
-            assert(read in seqs)
-
-        #
-        # verify fastq2 is correct
-        #
-        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
-            lines = [x.strip() for x in f.readlines()]
-        seqs = set(lines[1::4])
-        # there are two pairs of reads and two snps (each with two alleles),
-        # leading to 2^2 combinations of alleles. however, one of those
-        # combinations is the original pair (hence why we subtract by one)
-        assert(len(seqs) == 2*(2**2-1))
-
-        expect_reads = set([
-            # only last base of first read should be changed from T to A
-            "TTTTAAATTTTTTA",
+        ]
+        expect_reads2 = [
             # only second to last base of first read should be changed from T to G
             "TTTTAAATTTTTGT",
+            # only last base of first read should be changed from T to A
+            "TTTTAAATTTTTTA",
             # last base of first read should be changed from T to A
             # AND second to last base of first read should be changed from T to G
             "TTTTAAATTTTTGA",
-            # last base of second read should be changed from A to T
-            "ACAACACAAAAAAT",
             # second to last base of second read should be changed from A to C
             "ACAACACAAAAACA",
             # last base of second read should be changed from A to T
+            "ACAACACAAAAAAT",
+            # last base of second read should be changed from A to T
             # AND second to last base of second read should be changed from A to C
             "ACAACACAAAAACT"
-        ])
-        for read in expect_reads:
-            assert(read in seqs)
+        ]
+        expect_pairs = list(zip(expect_reads1, expect_reads2))
+
+        # are all of the pairs there?
+        assert(len(expect_pairs) == len(pairs))
+        for pair in expect_pairs:
+            assert(pair in pairs)
 
         #
         # Verify to.remap bam is the same as the input bam file.
@@ -3569,7 +3565,9 @@ class TestOverlappingPEReads:
         expect_pairs = list(product(expect_reads1[0], expect_reads2[0])) + list(product(expect_reads1[1], expect_reads2[1]))
         # remove the original pair
         expect_pairs.remove((test_data.read1_seqs[0], test_data.read2_seqs[0]))
+
         # are all of the pairs there?
+        assert(len(expect_pairs) == len(pairs))
         for pair in expect_pairs:
             assert(pair in pairs)
 

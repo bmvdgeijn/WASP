@@ -82,7 +82,7 @@ char *vcf_get_chrom_name(const char *filename) {
   vcf_read_header(gzf, vcf_info);
 
   /* read first line */
-  ret = vcf_read_line(gzf, vcf_info, &snp, NULL, NULL);
+  ret = vcf_read_line(gzf, vcf_info, &snp, NULL, NULL, NULL);
 
   if(ret == -1) {
     /* at end of file */
@@ -214,11 +214,11 @@ int get_format_index(const char *format_str, const char *label) {
 
 
 void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
-			  char *cur) {
-  int gt_idx, hap1, hap2, i, n;
+			  char *cur, char *haplotypes_phase) {
+  int gt_idx, hap1, hap2, i, n, phase;
   static int warn_phase = TRUE;
   static int warn_parse = TRUE;
-  long expect_haps, n_haps;
+  long expect_haps, n_haps, expect_phase, n_phase;
   char gt_str[VCF_MAX_FORMAT];
   
   /* char delim[] = " \t"; */
@@ -237,8 +237,10 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
   }
   
   expect_haps = vcf_info->n_sample * 2;
+  expect_phase = vcf_info->n_sample;
   
   n_haps = 0;
+  n_phase = 0;
   
   while((tok = strsep(&cur, delim)) != NULL) {
     /* Each genotype string is delimited by ':'
@@ -252,11 +254,13 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
     while((i <= gt_idx) && (inner_tok = strsep(&inner_cur, inner_delim)) != NULL) {
       if(i == gt_idx) {
 	n = sscanf(inner_tok, "%d|%d", &hap1, &hap2);
+  phase = 1;
 	if(n != 2) {
 	  /* try with '/' separator instead */
 	  n = sscanf(inner_tok, "%d/%d", &hap1, &hap2);
 
 	  if(n == 2) {
+      phase = 0;
 	    if(warn_phase) {
 	      my_warn("%s:%d: some genotypes are unphased (delimited "
 		      "with '/' instead of '|')\n", __FILE__, __LINE__,
@@ -293,8 +297,10 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
 	}
 	haplotypes[n_haps] = hap1;
 	haplotypes[n_haps+1] = hap2;
+  haplotypes_phase[n_phase] = phase;
 
 	n_haps += 2;
+  n_phase += 1;
       }
       
       i++;
@@ -305,6 +311,11 @@ void vcf_parse_haplotypes(VCFInfo *vcf_info, char *haplotypes,
     my_err("%s:%d: expected %ld genotype values per line, but got "
 	   "%ld (line: %ld)", __FILE__, __LINE__,
 	   expect_haps, n_haps, vcf_info->cur_line);
+  }
+  if(n_phase != expect_phase) {
+    my_err("%s:%d: expected %ld phase values per line, but got "
+     "%ld (line: %ld)", __FILE__, __LINE__,
+     expect_phase, n_phase, vcf_info->cur_line);
   }
 }
 
@@ -499,7 +510,7 @@ void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs, char *cur) {
  * Returns 0 on success, -1 if at EOF.
  */
 int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
-		  float *geno_probs, char *haplotypes) {
+		  float *geno_probs, char *haplotypes, char *haplotypes_phase) {
   char *cur, *token;
   int n_fix_header, ref_len, alt_len;
   size_t tok_num;
@@ -632,11 +643,11 @@ int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
       vcf_parse_geno_probs(vcf_info, geno_probs, cur_copy);
       my_free(cur_copy);
 
-      vcf_parse_haplotypes(vcf_info, haplotypes, cur);
+      vcf_parse_haplotypes(vcf_info, haplotypes, cur, haplotypes_phase);
     } else if(geno_probs) {
       vcf_parse_geno_probs(vcf_info, geno_probs, cur);
     } else if(haplotypes) {
-      vcf_parse_haplotypes(vcf_info, haplotypes, cur);
+      vcf_parse_haplotypes(vcf_info, haplotypes, cur, haplotypes_phase);
     }
   } else {
     /* header specifies no FORMAT string */

@@ -4,6 +4,7 @@ import gzip
 import argparse
 import numpy as np
 from itertools import product, groupby
+from collections import deque
 
 import pysam
 
@@ -457,7 +458,7 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
     
     read_len = len(read_seq)
 
-    new_read_list = []
+    new_read_list = set()
 
     # loop over haplotypes
     for hap in haps:
@@ -509,7 +510,7 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
                                     repr(read_pos), repr(snp_idx),
                                     repr(haps)))
 
-            new_read_list.append("".join(new_seq))
+            new_read_list.add("".join(new_seq))
 
     return new_read_list
 
@@ -521,20 +522,28 @@ def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles):
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
-    reads = [read_seq]
+    # use a deque so that we can use the same object in memory when we get to
+    # the nested while loop (rather than recreating a new list every time)
+    reads = deque([read_seq])
     i = 0
+    # iterate through all snp locations
     while i != len(read_pos):
         idx = read_pos[i]-1
-        new_reads = []
-        for read in reads:
-            # create new version of this read with both reference and
-            # alternative versions of allele at this index
-            ref_read = read[:idx] + ref_alleles[i].decode("utf-8") + read[idx+1:]
-            alt_read = read[:idx] + alt_alleles[i].decode("utf-8") + read[idx+1:]
-            new_reads += [ref_read, alt_read]
-        reads = new_reads
+        j = len(reads)
+        # for each read we've already created...
+        while j > 0:
+            read = reads.popleft()
+            # create a new version of this read with both reference...
+            reads.append(
+              read[:idx] + ref_alleles[i].decode("utf-8") + read[idx+1:]
+            )
+            # and alternative versions of the allele at this index
+            reads.append(
+              read[:idx] + alt_alleles[i].decode("utf-8") + read[idx+1:]
+            )
+            j -= 1
         i += 1
-    return reads
+    return set(reads)
 
 
 def write_fastq(fastq_file, orig_read, new_seqs):
@@ -731,12 +740,14 @@ def group_reads_by_snps(reads, snp_idx, snps, snp_read_pos):
     snp_read_pos = np.array(snp_read_pos, dtype=int)[idx_idx]
     # convert positions to indices
     snp_read_pos = np.subtract(snp_read_pos, 1)
-    # itertools.groupby needs the reads to be sorted by the same key func
-    reads.sort(key=lambda read: slice_read(read, snp_read_pos))
     # group the reads by the snp string and create a list to hold the groups
     return [
         set(reads) for hap, reads in
-        groupby(reads, lambda read: slice_read(read, snp_read_pos))
+        groupby(
+          # note that groupby needs the data to be sorted by the same key func
+          sorted(reads, key=lambda read: slice_read(read, snp_read_pos)),
+          key=lambda read: slice_read(read, snp_read_pos)
+        )
     ]
 
 
@@ -745,7 +756,7 @@ def read_pair_combos(new_reads, max_seqs, snp_idx, snp_read_pos):
     collect all unique combinations of read pairs.
     returns False before more than max_seqs pairs are created
     """
-    unique_pairs = set([])
+    unique_pairs = set()
     # get a list of the snps that are in both reads
     shared_snp_idxs = list(set(snp_idx[0]) & set(snp_idx[1]))
     # get a grouping of the reads
@@ -816,7 +827,7 @@ def process_paired_read(read1, read2, read_stats, files,
             pair_snp_read_pos.append(snp_read_pos)
         else:
             # no SNPs or indels overlap this read
-            new_reads.append([])
+            new_reads.append(set())
             pair_snp_idx.append([])
             pair_snp_read_pos.append([])
 
@@ -827,8 +838,8 @@ def process_paired_read(read1, read2, read_stats, files,
         read_stats.keep_pair += 1
     else:
         # add original version of both sides of pair
-        new_reads[0].append(read1.query_sequence)
-        new_reads[1].append(read2.query_sequence)
+        new_reads[0].add(read1.query_sequence)
+        new_reads[1].add(read2.query_sequence)
 
         if len(new_reads[0]) + len(new_reads[1]) > max_seqs:
             # quit now before generating a lot of read pairs
@@ -902,20 +913,17 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
             read_seqs = generate_reads(read.query_sequence,  snp_read_pos,
                                        ref_alleles, alt_alleles)
 
-        # make set of unique reads, we don't want to remap
-        # duplicates, or the read that matches original
-        unique_reads = set(read_seqs)
-        if read.query_sequence in unique_reads:
-            unique_reads.remove(read.query_sequence)
+        # we don't want the read that matches the original
+        read_seqs.discard(read.query_sequence)
         
-        if len(unique_reads) == 0:
+        if len(read_seqs) == 0:
             # only read generated matches original read,
             # so keep original
             files.keep_bam.write(read)
             read_stats.keep_single += 1
-        elif len(unique_reads) < max_seqs:
+        elif len(read_seqs) < max_seqs:
             # write read to fastq file for remapping
-            write_fastq(files.fastq_single, read, unique_reads)
+            write_fastq(files.fastq_single, read, read_seqs)
 
             # write read to 'to remap' BAM
             # this is probably not necessary with new implmentation

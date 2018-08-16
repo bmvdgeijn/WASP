@@ -51,7 +51,7 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info);
 
 int vcf_read_line(gzFile vcf_fh, VCFInfo *vcf_info, SNP *snp,
 		  float *geno_probs,
-		  char *haplotypes);
+		  char *haplotypes, char *haplotypes_phase);
 
 
 #endif

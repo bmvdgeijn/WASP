@@ -1336,7 +1336,7 @@ class TestPairedEnd:
         # read2[0]                      AACACAACAAAGAA
         # read2[1]                      AACACAACAAAGAA
         # POS           123456789012345678901234567890
-        
+
         snp_list = [['test_chrom', 18, "A", "C"]]
         
         test_data = Data(genome_seqs=genome_seq,
@@ -2603,7 +2603,7 @@ class TestHaplotypesSingleEnd:
         assert len(lines) == 1
         assert lines[0] == ''
 
-        # test_data.cleanup()
+        test_data.cleanup()
 
 
 
@@ -2774,7 +2774,7 @@ class TestHaplotypesPairedEnd:
         assert lines2[1] == test_data.read2_seqs[0]
         assert lines2[3] == test_data.read2_quals[0]
 
-        # test_data.cleanup()
+        test_data.cleanup()
 
 
 class TestFiltering:
@@ -3242,3 +3242,433 @@ class TestFiltering:
         lines = read_bam(test_data.bam_keep_filename)
         assert len(lines) == 1
         assert lines[0] == ''
+
+
+class TestOverlappingPEReads:
+    """tests that bad reads are filtered correctly"""
+
+    def test_overlap_paired_two_reads_one_snp(self):
+        """Simple test of whether 2 pairs of reads with both pairs
+        overlapping a SNP works correctly"""
+        test_data = Data()
+
+        read1_seqs = ["AACGAAAAGGAGAA",
+                      "TTTATTTTTTATTT"]
+        read2_seqs = ["TTTTAAATTTTTTT",  # AAAAAAATTTAAAA
+                      "ACAACACAAAAAAA"]  # TTTTTTTGTGTTGT
+
+        read1_quals = ["B" * len(read1_seqs[0]),
+                       "C" * len(read1_seqs[1])]
+        read2_quals = ["D" * len(read2_seqs[0]),
+                       "E" * len(read2_seqs[1])]
+
+        # POS           123456789012345678901234567890
+        # read1[0]          AACGAAAAGGAGAA
+        # read2[0]                      AAAAAAATTTAAAA
+        # SNP                            ^
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
+        # read1[1]      TTTATTTTTTATTT
+        # read2[1]                 TTTTTTTGTGTTGT
+        # SNP                       ^
+        # POS           123456789012345678901234567890
+
+        snp_list = [['test_chrom', 18, "A", "C"],
+                    ['test_chrom', 43, "T", "G"]]
+
+        test_data = Data(genome_seqs=genome_seq,
+                         read1_seqs=read1_seqs,
+                         read2_seqs=read2_seqs,
+                         read1_quals=read1_quals,
+                         read2_quals=read2_quals,
+                         snp_list=snp_list)
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_paired_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=True, is_sorted=False)
+
+        #
+        # Verify new fastq1 is correct.
+        #
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert(len(lines) == 8)
+
+        l = list(test_data.read1_seqs[0])
+        # last base of first read should be changed from A to C
+        l[13] = 'C'
+        new_seq = "".join(l)
+        assert(lines[1] == new_seq)
+        assert(lines[3] == test_data.read1_quals[0])
+
+        l = list(test_data.read1_seqs[1])
+        # second to last base of second read should be changed from T to G
+        l[12] = 'G'
+        new_seq = "".join(l)
+        assert(lines[5] == new_seq)
+        assert(lines[7] == test_data.read1_quals[1])
+
+        #
+        # verify fastq2 is correct
+        #
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+        assert(len(lines) == 8)
+
+        l = list(test_data.read2_seqs[0])
+        # second to last base of first read should be changed from T to G (since G is the complement of C)
+        l[12] = 'G'
+        new_seq = "".join(l)
+        assert(lines[1] == new_seq)
+        assert(lines[3] == test_data.read2_quals[0])
+
+        l = list(test_data.read2_seqs[1])
+        # second to last base of second read should be changed from A to C (since C is the complement of G)
+        l[12] = 'C'
+        new_seq = "".join(l)
+        assert(lines[5] == new_seq)
+        assert(lines[7] == test_data.read2_quals[1])
+
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+    def test_overlap_paired_two_reads_two_snps(self):
+        """Test of whether 2 pairs of reads with both pairs
+        overlapping 2 SNPs works correctly"""
+        test_data = Data()
+
+        read1_seqs = ["AACGAAAAGGAGAA",
+                      "TTTATTTTTTATTT"]
+        read2_seqs = ["TTTTAAATTTTTTT",  # AAAAAAATTTAAAA
+                      "ACAACACAAAAAAA"]  # TTTTTTTGTGTTGT
+
+        read1_quals = ["B" * len(read1_seqs[0]),
+                       "C" * len(read1_seqs[1])]
+        read2_quals = ["D" * len(read2_seqs[0]),
+                       "E" * len(read2_seqs[1])]
+
+        # POS           123456789012345678901234567890
+        # read1[0]          AACGAAAAGGAGAA
+        # read2[0]                      AAAAAAATTTAAAA
+        # SNPs                          ^^
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
+        # read1[1]      TTTATTTTTTATTT
+        # read2[1]                 TTTTTTTGTGTTGT
+        # SNPs                     ^^
+        # POS           123456789012345678901234567890
+
+        snp_list = [['test_chrom', 17, "A", "T"],
+                    ['test_chrom', 18, "A", "C"],
+                    ['test_chrom', 42, "T", "A"],
+                    ['test_chrom', 43, "T", "G"]]
+
+        test_data = Data(genome_seqs=genome_seq,
+                         read1_seqs=read1_seqs,
+                         read2_seqs=read2_seqs,
+                         read1_quals=read1_quals,
+                         read2_quals=read2_quals,
+                         snp_list=snp_list)
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_paired_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=True, is_sorted=False)
+
+        #
+        # Verify new fastq1 and fastq2 is correct.
+        #
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
+            seqs1 = [x.strip() for x in f.readlines()][1::4]
+            # there are two pairs of reads and two snps (each with two alleles)
+            # leading to 2^2 combinations of alleles. however, one of those
+            # combinations is the original pair (hence why we subtract by one)
+            assert(len(set(seqs1)) == 2*(2**2-1))
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
+            seqs2 = [x.strip() for x in f.readlines()][1::4]
+            # there are two pairs of reads and two snps (each with two alleles)
+            # leading to 2^2 combinations of alleles. however, one of those
+            # combinations is the original pair (hence why we subtract by one)
+            assert(len(set(seqs2)) == 2*(2**2-1))
+        pairs = list(zip(seqs1, seqs2))
+
+        expect_reads1 = [
+            # only last base of first read should be changed from A to C
+            "AACGAAAAGGAGAC",
+            # only second to last base of first read should be changed from A
+            # to T
+            "AACGAAAAGGAGTA",
+            # last base of first read should be changed from A to C
+            # AND second to last base of first read should be changed from A
+            # to T
+            "AACGAAAAGGAGTC",
+            # second to last base of second read should be changed from T to G
+            "TTTATTTTTTATGT",
+            # only third to last base of second read should be changed from T
+            # to A
+            "TTTATTTTTTAATT",
+            # second to last base of second read should be changed from T to G
+            # AND third to last base of second read should be changed from T
+            # to A
+            "TTTATTTTTTAAGT"
+        ]
+        expect_reads2 = [
+            # only second to last base of first read should be changed from T
+            # to G (since it is the complement of C)
+            "TTTTAAATTTTTGT",
+            # only last base of first read should be changed from T to A (since
+            # it is the complement of T)
+            "TTTTAAATTTTTTA",
+            # last base of first read should be changed from T to A (since it
+            # is the complement of T)
+            # AND second to last base of first read should be changed from T
+            # to G (since it is the complement of C)
+            "TTTTAAATTTTTGA",
+            # second to last base of second read should be changed from A to C
+            # (since it is the complement of G)
+            "ACAACACAAAAACA",
+            # last base of second read should be changed from A to T (since it
+            # is the complement of C)
+            "ACAACACAAAAAAT",
+            # last base of second read should be changed from A to T (since it
+            # is the complement of A)
+            # AND second to last base of second read should be changed from A
+            # to C (since it is the complement of G)
+            "ACAACACAAAAACT"
+        ]
+        expect_pairs = list(zip(expect_reads1, expect_reads2))
+
+        # are all of the pairs there?
+        assert(len(expect_pairs) == len(pairs))
+        for pair in expect_pairs:
+            assert(pair in pairs)
+
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+    def test_overlap_paired_one_read_one_snp_one_snp(self):
+        """Test of whether 1 pair of reads with both pairs
+        overlapping the same SNP and one other SNP works correctly"""
+        test_data = Data()
+
+        read1_seqs = ["AACGAAAAGGAGAA"]
+        read2_seqs = ["TTTTAAATTTTTTT"]  # AAAAAAATTTAAAA
+
+        read1_quals = ["B" * len(read1_seqs[0])]
+        read2_quals = ["D" * len(read2_seqs[0])]
+
+        # POS           123456789012345678901234567890
+        # read1[0]          AACGAAAAGGAGAA
+        # read2[0]                      AAAAAAATTTAAAA
+        # SNPs                   ^       ^^
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
+
+        snp_list = [['test_chrom', 10, "A", "T"],
+                    ['test_chrom', 18, "A", "C"],
+                    ['test_chrom', 19, "A", "C"]]
+
+        test_data = Data(genome_seqs=genome_seq,
+                         read1_seqs=read1_seqs,
+                         read2_seqs=read2_seqs,
+                         read1_quals=read1_quals,
+                         read2_quals=read2_quals,
+                         snp_list=snp_list)
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_paired_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=True, is_sorted=False)
+
+        #
+        # Verify new fastq1 and fastq2 are correct.
+        #
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
+            seqs1 = [x.strip() for x in f.readlines()][1::4]
+            # there is one pair of reads and two snps (each with two alleles),
+            # leading to 2^2 combinations of alleles. one of those
+            # combinations is the original pair (hence why we subtract by one)
+            assert(len(set(seqs1)) == 2**2)
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
+            seqs2 = [x.strip() for x in f.readlines()][1::4]
+            # there is one pair of reads and two snps (each with two alleles),
+            # leading to 2^2 combinations of alleles. one of those
+            # combinations is the original pair (hence why we subtract by one)
+            assert(len(set(seqs2)) == 2**2)
+        pairs = list(zip(seqs1, seqs2))
+
+        # which pairs of reads do we expect to see?
+        # the reads below are grouped by whether they contain the shared snp
+        expect_reads1 = [
+            # reads with the reference allele on the shared snp
+            set([
+                # original read
+                'AACGAAAAGGAGAA',
+                # ninth to last base of read should be changed from A to T
+                'AACGATAAGGAGAA'
+            ]),
+            # reads with the alternate allele on the shared snp
+            set([
+                # last base of read should be changed from A to C
+                'AACGAAAAGGAGAC',
+                # last base of read should be changed from A to C
+                # AND ninth to last base of read should be changed from A to T
+                'AACGATAAGGAGAC'
+            ])
+        ]
+        expect_reads2 = [
+            # reads with the reference allele on the shared snp
+            set([
+                # original read
+                'TTTTAAATTTTTTT',
+                # third to last base of read should be changed from T to G
+                'TTTTAAATTTTGTT'
+            ]),
+            # reads with the alternate allele on the shared snp
+            set([
+                # second to last base of read should be changed from T to G
+                'TTTTAAATTTTTGT',
+                # second to last base of read should be changed from T to G
+                # AND third to last base of read should be changed from T to G
+                'TTTTAAATTTTGGT'
+            ])
+        ]
+        from itertools import product
+        # only compute combinations of reads from the same group
+        expect_pairs = list(product(expect_reads1[0], expect_reads2[0])) + list(product(expect_reads1[1], expect_reads2[1]))
+        # remove the original pair
+        expect_pairs.remove((test_data.read1_seqs[0], test_data.read2_seqs[0]))
+
+        # are all of the pairs there?
+        assert(len(expect_pairs) == len(pairs))
+        for pair in expect_pairs:
+            assert(pair in pairs)
+
+        #
+        # Verify to.remap bam is the same as the input bam file.
+        #
+        old_lines = read_bam(test_data.bam_filename)
+        new_lines = read_bam(test_data.bam_remap_filename)
+        assert old_lines == new_lines
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()
+
+    def test_overlap_paired_one_read_one_discordant_snp(self):
+        """Test of 1 pair of reads with both pairs
+        overlapping the same SNP but with each pair having
+        a different allele"""
+        test_data = Data()
+
+        read1_seqs = ["AACGAAAAGGAGAA"]
+        read2_seqs = ["TTTTAAATTTTTGT"]  # ACAAAAATTTAAAA
+
+        read1_quals = ["B" * len(read1_seqs[0])]
+        read2_quals = ["D" * len(read2_seqs[0])]
+
+        # POS           123456789012345678901234567890
+        # read1[0]          AACGAAAAGGAGAA
+        # read2[0]                      ACAAAAATTTAAAA
+        # SNPs                           ^
+        genome_seq =  ["AAAAAACGAAAAGGAGAAAAAAATTTAAAA\n"
+                       "TTTATTTTTTATTTTTTTGTGTTGTTTCTT"]
+
+        snp_list = [['test_chrom', 18, "A", "C"]]
+
+        test_data = Data(genome_seqs=genome_seq,
+                         read1_seqs=read1_seqs,
+                         read2_seqs=read2_seqs,
+                         read1_quals=read1_quals,
+                         read2_quals=read2_quals,
+                         snp_list=snp_list)
+
+        test_data.setup()
+        test_data.index_genome_bowtie2()
+        test_data.map_paired_bowtie2()
+        test_data.sam2bam()
+
+        find_intersecting_snps.main(test_data.bam_filename,
+                                    snp_dir=test_data.snp_dir,
+                                    is_paired_end=True, is_sorted=False)
+
+        #
+        # Verify new fastq1 and fastq2 are correct.
+        #
+        with gzip.open(test_data.fastq1_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+            # the reads should have been tossed out
+            assert(len(lines) == 0)
+        with gzip.open(test_data.fastq2_remap_filename, "rt") as f:
+            lines = [x.strip() for x in f.readlines()]
+            # the reads should have been tossed out
+            assert(len(lines) == 0)
+
+        #
+        # Verify to.remap bam is empty since all reads were
+        # tossed. Note that read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_remap_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        #
+        # Verify that the keep file is empty since only
+        # read needs to be remapped. Note that the
+        # read_bam still gives back one empty line.
+        #
+        lines = read_bam(test_data.bam_keep_filename)
+        assert len(lines) == 1
+        assert lines[0] == ''
+
+        test_data.cleanup()

@@ -3,6 +3,8 @@ import os
 import gzip
 import argparse
 import numpy as np
+from itertools import product, groupby
+from collections import deque
 
 import pysam
 
@@ -194,6 +196,9 @@ class ReadStats(object):
         
         # number of reads discarded because too many allelic combinations
         self.discard_excess_reads = 0
+
+        # when read pairs share SNP locations but have different alleles there
+        self.discard_discordant_shared_snp = 0
         
         # reads where we expected to see other pair, but it was missing
         # possibly due to read-pairs with different names
@@ -221,6 +226,7 @@ class ReadStats(object):
                          "  supplementary alignment: %d\n"
                          "  excess overlapping snps: %d\n"
                          "  excess allelic combinations: %d\n"
+                         "  read pairs with discordant shared SNPs: %d\n"
                          "  missing pairs (e.g. mismatched read names): %d\n"
                          "KEEP reads:\n"
                          "  single-end: %d\n"
@@ -237,6 +243,7 @@ class ReadStats(object):
                           self.discard_supplementary,
                           self.discard_excess_snps,
                           self.discard_excess_reads,
+                          self.discard_discordant_shared_snp,
                           self.discard_missing_pair,
                           self.keep_single,
                           self.keep_pair,
@@ -433,13 +440,21 @@ def get_unique_haplotypes(haplotypes, snp_idx):
     _, idx = np.unique(h, return_index=True)
 
     return haps[idx,:]
-    
-
-
 
             
 def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
                          haplo_tab):
+    """
+      read_seq - a string representing the the sequence of the read in question
+      snp_index - a list of indices of SNPs that this read overlaps
+      read_pos - a list of positions in read_seq that overlap SNPs
+      ref_alleles - a np array of reference alleles with
+                    indices corresponding to snp_index
+      alt_alleles - a np array of alternate alleles with
+                    indices corresponding to snp_index
+      haplo_tab - a pytables node with haplotypes from haplotype.h5
+    """
+
     haps = get_unique_haplotypes(haplo_tab, snp_idx)
 
     # sys.stderr.write("UNIQUE haplotypes: %s\n"
@@ -448,7 +463,7 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
     
     read_len = len(read_seq)
 
-    new_read_list = []
+    new_read_list = set()
 
     # loop over haplotypes
     for hap in haps:
@@ -500,37 +515,36 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
                                     repr(read_pos), repr(snp_idx),
                                     repr(haps)))
 
-            new_read_list.append("".join(new_seq))
+            new_read_list.add("".join(new_seq))
 
     return new_read_list
 
     
 
             
-def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles, i):
-    """Recursively generate set of reads with all possible combinations
+def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles):
+    """Generate set of reads with all possible combinations
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
-    # TODO: this would use a lot less memory if re-implemented
-    # to not use recursion
-    
-    # create new version of this read with both reference and
-    # alternative versions of allele at this index
-    idx = read_pos[i]-1
-    ref_read = read_seq[:idx] + ref_alleles[i].decode("utf-8") + read_seq[idx+1:]
-    alt_read = read_seq[:idx] + alt_alleles[i].decode("utf-8") + read_seq[idx+1:]
-
-    if i == len(read_pos)-1:
-        # this was the last SNP
-        return [ref_read, alt_read]
-
-    # continue recursively with other SNPs overlapping this read
-    reads1 = generate_reads(ref_read, read_pos, ref_alleles, alt_alleles, i+1)
-    reads2 = generate_reads(alt_read, read_pos, ref_alleles, alt_alleles,  i+1)
-
-    return reads1 + reads2
-                
+    # use a deque so that we can use the same object in memory after
+    # the nested for loop (rather than recreating a new list every time)
+    reads = deque([read_seq])
+    # iterate through all snp locations
+    for i in range(len(read_pos)):
+        idx = read_pos[i]-1
+        # for each read we've already created...
+        for j in range(len(reads)):
+            read = reads.popleft()
+            # create a new version of this read with both reference
+            # and alternative versions of the allele at this index
+            reads.append(
+              read[:idx] + ref_alleles[i].decode("utf-8") + read[idx+1:]
+            )
+            reads.append(
+              read[:idx] + alt_alleles[i].decode("utf-8") + read[idx+1:]
+            )
+    return set(reads)
 
 
 def write_fastq(fastq_file, orig_read, new_seqs):
@@ -708,21 +722,96 @@ def filter_reads(files, max_seqs=MAX_SEQS_DEFAULT, max_snps=MAX_SNPS_DEFAULT,
         read_stats.discard_missing_pair += len(read_pair_cache)
     
     read_stats.write(sys.stderr)
-                     
+
+
+def slice_read(read, indices):
+    """slice a read by an array of indices"""
+    return "".join(np.array(list(read))[indices])
+
+
+def group_reads_by_snps(reads, snp_read_pos):
+    """
+    group the reads by strings containing the combinations of ref/alt alleles
+    among the reads at the shared_snps. return a list of sets of reads - one
+    for each group
+    """
+    # group the reads by the snp string and create a list to hold the groups
+    return [
+        set(reads) for hap, reads in
+        groupby(
+          # note that groupby needs the data to be sorted by the same key func
+          sorted(reads, key=lambda read: slice_read(read, snp_read_pos)),
+          key=lambda read: slice_read(read, snp_read_pos)
+        )
+    ]
+
+
+def read_pair_combos(old_reads, new_reads, max_seqs, snp_idx, snp_read_pos):
+    """
+    collect all unique combinations of read pairs.
+    returns False before more than max_seqs pairs are created and
+    None when the original read pair has discordant alleles at shared SNPs
+    Input:
+        old_reads - a tuple of length 2, containing the pair of original reads
+        new_reads - a list of two sets, each containing the reads generated
+                    from old_reads for remapping
+        snp_index - a list of two lists of the indices of SNPs that overlap
+                    with old_reads
+        snp_read_pos - a list of two lists of the positions in old_reads where
+                       SNPs are located
+    Output:
+        unique_pairs - a set of tuples, each representing a unique pair of
+                       new_reads
+    """
+    # get the indices of the SNPs that are in both reads
+    shared_snp_idxs = set(snp_idx[0]).intersection(snp_idx[1])
+    # get the indices of the shared SNPs in old_reads
+    for i in range(len(snp_read_pos)):
+        # first, get the index of each snp_index in snp_idx
+        idx_idx = np.array([snp_idx[i].index(idx) for idx in shared_snp_idxs], dtype=int)
+        # now, use the indices in idx_idx to get the relavent snp positions
+        snp_read_pos[i] = np.array(snp_read_pos[i], dtype=int)[idx_idx]
+        # convert positions to indices
+        snp_read_pos[i] = np.subtract(snp_read_pos[i], 1)
+    # check: are there discordant alleles at the shared SNPs?
+    # if so, discard these reads
+    if (
+        slice_read(old_reads[0], snp_read_pos[0])
+        != slice_read(old_reads[1], snp_read_pos[1])
+    ):
+        return None
+    # group reads by their shared SNPs
+    for i in range(len(new_reads)):
+        new_reads[i] = group_reads_by_snps(
+            new_reads[i], snp_read_pos[i]
+        )
+    unique_pairs = set()
+    # calculate the unique combinations of read pairs only among the same group
+    for group in range(len(new_reads[0])):
+        for pair in product(new_reads[0][group], new_reads[1][group]):
+            if len(unique_pairs) <= max_seqs:
+                unique_pairs.add(pair)
+            else:
+                return False
+    return unique_pairs
+
 
 def process_paired_read(read1, read2, read_stats, files,
                         snp_tab, max_seqs, max_snps):
     """Checks if either end of read pair overlaps SNPs or indels
-    and writes read pair (or generated read pairs) to appropriate 
+    and writes read pair (or generated read pairs) to appropriate
     output files"""
 
-    new_reads = []    
+    new_reads = []
+    pair_snp_idx = []
+    pair_snp_read_pos = []
+
     for read in (read1, read2):
         # check if either read overlaps SNPs or indels
         # check if read overlaps SNPs or indels
         snp_idx, snp_read_pos, \
             indel_idx, indel_read_pos = snp_tab.get_overlapping_snps(read)
-        
+
         if len(indel_idx) > 0:
             # for now discard this read pair, we want to improve this to handle
             # the indel reads appropriately
@@ -753,13 +842,17 @@ def process_paired_read(read1, read2, read_stats, files,
             else:
                 # generate all possible allelic combinations of reads
                 read_seqs = generate_reads(read.query_sequence, snp_read_pos,
-                                           ref_alleles, alt_alleles, 0)
+                                           ref_alleles, alt_alleles)
             
             new_reads.append(read_seqs)
+            pair_snp_idx.append(snp_idx)
+            pair_snp_read_pos.append(snp_read_pos)
         else:
             # no SNPs or indels overlap this read
-            new_reads.append([])
-            
+            new_reads.append(set())
+            pair_snp_idx.append([])
+            pair_snp_read_pos.append([])
+
     if len(new_reads[0]) == 0 and len(new_reads[1]) == 0:
         # neither read overlapped SNPs or indels
         files.keep_bam.write(read1)
@@ -767,34 +860,29 @@ def process_paired_read(read1, read2, read_stats, files,
         read_stats.keep_pair += 1
     else:
         # add original version of both sides of pair
-        new_reads[0].append(read1.query_sequence)
-        new_reads[1].append(read2.query_sequence)
+        new_reads[0].add(read1.query_sequence)
+        new_reads[1].add(read2.query_sequence)
 
         if len(new_reads[0]) + len(new_reads[1]) > max_seqs:
             # quit now before generating a lot of read pairs
             read_stats.discard_excess_reads += 2
-            return 
+            return
 
-        # collect all unique combinations of read pairs
-        unique_pairs = set([])
-        n_unique_pairs = 0
-        for new_read1 in new_reads[0]:
-            for new_read2 in new_reads[1]:
-                pair = (new_read1, new_read2)
-                if pair in unique_pairs:
-                    pass
-                else:
-                    n_unique_pairs += 1
-                    if n_unique_pairs > max_seqs:
-                        read_stats.discard_excess_reads += 2
-                        return
-                    unique_pairs.add(pair)
+        # get all unique combinations of read pairs
+        unique_pairs = read_pair_combos(
+            (read1.query_sequence, read2.query_sequence), new_reads,
+            max_seqs, pair_snp_idx, pair_snp_read_pos
+        )
+        # if unique_pairs is None or False we should discard these reads
+        if unique_pairs is None:
+            read_stats.discard_discordant_shared_snp += 1
+            return
+        elif not unique_pairs:
+            read_stats.discard_excess_reads += 2
+            return
 
         # remove original read pair, if present
-        orig_pair = (read1.query_sequence, read2.query_sequence)
-                                 
-        if orig_pair in unique_pairs:
-            unique_pairs.remove(orig_pair)
+        unique_pairs.discard((read1.query_sequence, read2.query_sequence))
             
         # write read pair to fastqs for remapping
         write_pair_fastq(files.fastq1, files.fastq2, read1, read2,
@@ -850,22 +938,19 @@ def process_single_read(read, read_stats, files, snp_tab, max_seqs,
                                              snp_tab.haplotypes)
         else:
             read_seqs = generate_reads(read.query_sequence,  snp_read_pos,
-                                       ref_alleles, alt_alleles, 0)
+                                       ref_alleles, alt_alleles)
 
-        # make set of unique reads, we don't want to remap
-        # duplicates, or the read that matches original
-        unique_reads = set(read_seqs)
-        if read.query_sequence in unique_reads:
-            unique_reads.remove(read.query_sequence)
+        # we don't want the read that matches the original
+        read_seqs.discard(read.query_sequence)
         
-        if len(unique_reads) == 0:
+        if len(read_seqs) == 0:
             # only read generated matches original read,
             # so keep original
             files.keep_bam.write(read)
             read_stats.keep_single += 1
-        elif len(unique_reads) < max_seqs:
+        elif len(read_seqs) < max_seqs:
             # write read to fastq file for remapping
-            write_fastq(files.fastq_single, read, unique_reads)
+            write_fastq(files.fastq_single, read, read_seqs)
 
             # write read to 'to remap' BAM
             # this is probably not necessary with new implmentation

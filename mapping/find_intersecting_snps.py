@@ -196,6 +196,9 @@ class ReadStats(object):
         
         # number of reads discarded because too many allelic combinations
         self.discard_excess_reads = 0
+
+        # when read pairs share SNP locations but have different alleles there
+        self.discard_discordant_shared_snp = 0
         
         # reads where we expected to see other pair, but it was missing
         # possibly due to read-pairs with different names
@@ -223,6 +226,7 @@ class ReadStats(object):
                          "  supplementary alignment: %d\n"
                          "  excess overlapping snps: %d\n"
                          "  excess allelic combinations: %d\n"
+                         "  read pairs with discordant shared SNPs: %d\n"
                          "  missing pairs (e.g. mismatched read names): %d\n"
                          "KEEP reads:\n"
                          "  single-end: %d\n"
@@ -239,6 +243,7 @@ class ReadStats(object):
                           self.discard_supplementary,
                           self.discard_excess_snps,
                           self.discard_excess_reads,
+                          self.discard_discordant_shared_snp,
                           self.discard_missing_pair,
                           self.keep_single,
                           self.keep_pair,
@@ -724,18 +729,12 @@ def slice_read(read, indices):
     return "".join(np.array(list(read))[indices])
 
 
-def group_reads_by_snps(reads, snp_idx, snps, snp_read_pos):
+def group_reads_by_snps(reads, snp_read_pos):
     """
     group the reads by strings containing the combinations of ref/alt alleles
     among the reads at the shared_snps. return a list of sets of reads - one
     for each group
     """
-    # first, get the index of each snp_index in snp_idx
-    idx_idx = np.array([snp_idx.index(idx) for idx in snps], dtype=int)
-    # now, use the indices in idx_idx to get the relavent snp positions
-    snp_read_pos = np.array(snp_read_pos, dtype=int)[idx_idx]
-    # convert positions to indices
-    snp_read_pos = np.subtract(snp_read_pos, 1)
     # group the reads by the snp string and create a list to hold the groups
     return [
         set(reads) for hap, reads in
@@ -747,19 +746,46 @@ def group_reads_by_snps(reads, snp_idx, snps, snp_read_pos):
     ]
 
 
-def read_pair_combos(new_reads, max_seqs, snp_idx, snp_read_pos):
+def read_pair_combos(old_reads, new_reads, max_seqs, snp_idx, snp_read_pos):
     """
     collect all unique combinations of read pairs.
-    returns False before more than max_seqs pairs are created
+    returns False before more than max_seqs pairs are created and
+    None when the original read pair has discordant alleles at shared SNPs
+    Input:
+        old_reads - a tuple of length 2, containing the pair of original reads
+        new_reads - a list of two sets, each containing the reads generated
+                    from old_reads for remapping
+        snp_index - a list of two lists of the indices of SNPs that overlap
+                    with old_reads
+        snp_read_pos - a list of two lists of the positions in old_reads where
+                       SNPs are located
+    Output:
+        unique_pairs - a set of tuples, each representing a unique pair of
+                       new_reads
     """
-    unique_pairs = set()
-    # get the indices of the snps that are in both reads
+    # get the indices of the SNPs that are in both reads
     shared_snp_idxs = set(snp_idx[0]).intersection(snp_idx[1])
-    # get a grouping of the reads
+    # get the indices of the shared SNPs in old_reads
+    for i in range(len(snp_read_pos)):
+        # first, get the index of each snp_index in snp_idx
+        idx_idx = np.array([snp_idx[i].index(idx) for idx in shared_snp_idxs], dtype=int)
+        # now, use the indices in idx_idx to get the relavent snp positions
+        snp_read_pos[i] = np.array(snp_read_pos[i], dtype=int)[idx_idx]
+        # convert positions to indices
+        snp_read_pos[i] = np.subtract(snp_read_pos[i], 1)
+    # check: are there discordant alleles at the shared SNPs?
+    # if so, discard these reads
+    if (
+        slice_read(old_reads[0], snp_read_pos[0])
+        != slice_read(old_reads[1], snp_read_pos[1])
+    ):
+        return None
+    # group reads by their shared SNPs
     for i in range(len(new_reads)):
         new_reads[i] = group_reads_by_snps(
-            new_reads[i], snp_idx[i], shared_snp_idxs, snp_read_pos[i]
+            new_reads[i], snp_read_pos[i]
         )
+    unique_pairs = set()
     # calculate the unique combinations of read pairs only among the same group
     for group in range(len(new_reads[0])):
         for pair in product(new_reads[0][group], new_reads[1][group]):
@@ -844,9 +870,14 @@ def process_paired_read(read1, read2, read_stats, files,
 
         # get all unique combinations of read pairs
         unique_pairs = read_pair_combos(
-            new_reads, max_seqs, pair_snp_idx, pair_snp_read_pos
+            (read1.query_sequence, read2.query_sequence), new_reads,
+            max_seqs, pair_snp_idx, pair_snp_read_pos
         )
-        if not unique_pairs:
+        # if unique_pairs is None or False we should discard these reads
+        if unique_pairs is None:
+            read_stats.discard_discordant_shared_snp += 1
+            return
+        elif not unique_pairs:
             read_stats.discard_excess_reads += 2
             return
 

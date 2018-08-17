@@ -522,27 +522,23 @@ def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles):
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
-    # use a deque so that we can use the same object in memory when we get to
-    # the nested while loop (rather than recreating a new list every time)
+    # use a deque so that we can use the same object in memory after
+    # the nested for loop (rather than recreating a new list every time)
     reads = deque([read_seq])
-    i = 0
     # iterate through all snp locations
-    while i != len(read_pos):
+    for i in range(len(read_pos)):
         idx = read_pos[i]-1
-        j = len(reads)
         # for each read we've already created...
-        while j > 0:
+        for j in range(len(reads)):
             read = reads.popleft()
-            # create a new version of this read with both reference...
+            # create a new version of this read with both reference
+            # and alternative versions of the allele at this index
             reads.append(
               read[:idx] + ref_alleles[i].decode("utf-8") + read[idx+1:]
             )
-            # and alternative versions of the allele at this index
             reads.append(
               read[:idx] + alt_alleles[i].decode("utf-8") + read[idx+1:]
             )
-            j -= 1
-        i += 1
     return set(reads)
 
 
@@ -757,8 +753,8 @@ def read_pair_combos(new_reads, max_seqs, snp_idx, snp_read_pos):
     returns False before more than max_seqs pairs are created
     """
     unique_pairs = set()
-    # get a list of the snps that are in both reads
-    shared_snp_idxs = list(set(snp_idx[0]) & set(snp_idx[1]))
+    # get the indices of the snps that are in both reads
+    shared_snp_idxs = set(snp_idx[0]).intersection(snp_idx[1])
     # get a grouping of the reads
     for i in range(len(new_reads)):
         new_reads[i] = group_reads_by_snps(

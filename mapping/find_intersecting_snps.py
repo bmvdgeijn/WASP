@@ -748,9 +748,10 @@ def group_reads_by_snps(reads, snp_read_pos):
 
 def read_pair_combos(old_reads, new_reads, max_seqs, snp_idx, snp_read_pos):
     """
-    collect all unique combinations of read pairs.
-    returns False before more than max_seqs pairs are created and
-    None when the original read pair has discordant alleles at shared SNPs
+    Collects all unique combinations of read pairs. Handles the possibility of
+    shared SNPs among the pairs (ie doesn't treat them as independent).
+    Returns False before more than max_seqs pairs are created or None
+    when the original read pair has discordant alleles at shared SNPs.
     Input:
         old_reads - a tuple of length 2, containing the pair of original reads
         new_reads - a list of two sets, each containing the reads generated
@@ -780,13 +781,14 @@ def read_pair_combos(old_reads, new_reads, max_seqs, snp_idx, snp_read_pos):
         != slice_read(old_reads[1], snp_read_pos[1])
     ):
         return None
-    # group reads by their shared SNPs
+    # group reads by the alleles they have at shared SNPs
     for i in range(len(new_reads)):
         new_reads[i] = group_reads_by_snps(
             new_reads[i], snp_read_pos[i]
         )
     unique_pairs = set()
-    # calculate the unique combinations of read pairs only among the same group
+    # calculate unique combinations of read pairs only among reads that
+    # have the same alleles at shared SNPs (ie if they're in the correct group)
     for group in range(len(new_reads[0])):
         for pair in product(new_reads[0][group], new_reads[1][group]):
             if len(unique_pairs) <= max_seqs:

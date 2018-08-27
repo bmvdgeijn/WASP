@@ -427,28 +427,46 @@ def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
             read_stats.other_count += 1
             
 
-def list_duplicates(seq):
-    """get a dictionary with the indices of duplicate items from a list"""
-    tally = defaultdict(list)
-    for i, item in enumerate(seq):
-        tally[item].append(i)
-    return tally
-
-
-def index_phase_like_haps(snp_phase, indices):
-    return [
-        snp_phase[np.unique(np.floor_divide(indices[index], 2))].all()
-        for index in sorted(indices.keys())
-    ]
-
-
-def get_unique_haplotypes(haplotypes, phase, snp_idx):
+def get_unique_haplotypes(haplotypes, phasing, snp_idx):
     """
     returns list of vectors of unique haplotypes for this set of SNPs
-    along with their phase
     """
     haps = haplotypes[snp_idx,:].T
     
+    # get phasing of SNPs for each individual as bool array
+    # True = unphased and False = phased
+    if phasing is not None:
+        phasing = np.logical_not(phasing[snp_idx, :].T.astype(bool))
+    else:
+        # assume all SNPs are unphased
+        phasing = np.full((haps.shape[0]/2, haps.shape[1]), True)
+
+    # if a haplotype has unphased SNPs, generate all possible allelic
+    # combinations and add each combination as a new haplotype
+    new_haps = []
+    # iterate through each individual
+    for i in range(len(phasing)):
+        # get the haplotype data for this individual
+        hap_pair = haps[i*2:(i*2)+2]
+        # get bool index of cols in hap_pair that contain hets
+        hets = np.not_equal(hap_pair[0], hap_pair[1])
+        # get bool index of cols in hap_pair that are both unphased and hets
+        phase = np.logical_and(phasing[i], hets)
+        # get all combinations of indices at unphased cols
+        # then, index into hap_pair with each combination
+        for j in product([0, 1], repeat=sum(phase)):
+            # index into hap_pair using all ref genes at genotyped columns
+            ref = np.repeat(0, hap_pair.shape[1])
+            np.place(ref, phase, j)
+            new_haps.append(hap_pair[ref, range(len(ref))])
+            # index into hap_pair using all alt genes at genotyped columns
+            alt = np.repeat(1, hap_pair.shape[1])
+            np.place(alt, phase, j)
+            new_haps.append(hap_pair[alt, range(len(alt))])
+    # add new haps to old haps
+    haps = np.concatenate((haps, new_haps))
+
+
     # create view of data that joins all elements of column
     # into single void datatype
     h = np.ascontiguousarray(haps).view(np.dtype((np.void, haps.dtype.itemsize * haps.shape[1])))
@@ -456,14 +474,9 @@ def get_unique_haplotypes(haplotypes, phase, snp_idx):
     # get index of unique columns
     _, idx, inverse_idx = np.unique(h, return_index=True, return_inverse=True)
 
-    if phase:
-        phase = phase[snp_idx,:].T
-        indices = list_duplicates(inverse_index)
-        phase = np.apply_along_axis(
-            lambda snp_phase: index_phase_like_haps(snp_phase, indices), 0, phase
-        )
 
-    return (haps[idx,:], phase)
+    return haps[idx,:]
+
 
             
 def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
@@ -478,7 +491,7 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
                     indices corresponding to snp_index
       haplo_tab - a pytables node with haplotypes from haplotype.h5
     """
-    haps, phasing = get_unique_haplotypes(haplo_tab, phase_tab, snp_idx)
+    haps = get_unique_haplotypes(haplo_tab, phase_tab, snp_idx)
 
     # sys.stderr.write("UNIQUE haplotypes: %s\n"
     #                  "read_pos: %s\n"
@@ -489,14 +502,8 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
     new_read_list = set()
 
     # loop over haplotypes
-    for j in range(len(haps)):
-        hap = haps[j]
-        if phasing:
-            phase = phasing[j]
-        else:
-            phase = None
-
-        new_reads = [[]]
+    for hap in haps:
+        new_read = []
         cur_pos = 1
 
         missing_data = False
@@ -505,56 +512,45 @@ def generate_haplo_reads(read_seq, snp_idx, read_pos, ref_alleles, alt_alleles,
         for i in range(len(hap)):
             if read_pos[i] > cur_pos:
                 # add segment of read
-                for new_read in new_reads:
-                    new_read.append(read_seq[cur_pos-1:read_pos[i]-1])
-            if not phase or (phase and phase[i]):
-                # add segment for appropriate allele
-                if hap[i] == 0:
-                    for new_read in new_reads:
-                        # reference allele
-                        new_read.append(ref_alleles[i].decode("utf-8"))
-                elif hap[i] == 1:
-                    for new_read in new_reads:
-                        # alternate allele
-                        new_read.append(alt_alleles[i].decode("utf-8"))
-                else:
-                    # haplotype has unknown genotype so skip it...
-                    missing_data = True
-                    break
-            elif not phase[i]:
-                temp_new_reads = []
-                # hap is unphased. generate reads with both possible alleles
-                for new_read in new_reads:
-                    temp_new_reads.append(new_read + [ref_alleles[i].decode("utf-8")])
-                    new_read.append(alt_alleles[i].decode("utf-8"))
-                new_reads.extend(temp_new_reads)
+                new_read.append(read_seq[cur_pos-1:read_pos[i]-1])
+            # add segment for appropriate allele
+            if hap[i] == 0:
+                # reference allele
+                new_read.append(ref_alleles[i].decode("utf-8"))
+            elif hap[i] == 1:
+                # alternate allele
+                new_read.append(alt_alleles[i].decode("utf-8"))
+            else:
+                # haplotype has unknown genotype so skip it...
+                missing_data = True
+                break
             
+
             cur_pos = read_pos[i] + 1
+
 
         if read_len >= cur_pos:
             # add final segment
-            for new_read in new_reads:
-                new_read.append(read_seq[cur_pos-1:read_len])
+            new_read.append(read_seq[cur_pos-1:read_len])
             
         if not missing_data:
-            for new_read in new_reads:
-                new_seq = "".join(new_read)
+            new_seq = "".join(new_read)
 
-                # sanity check: read should be same length as original
-                if len(new_seq) != read_len:
-                    raise ValueError("Expected read len to be %d but "
-                                     "got %d.\n"
-                                     "ref_alleles: %s\n"
-                                     "alt_alleles: %s\n"
-                                     "read_pos: %s\n"
-                                     "snp_idx: %s\n"
-                                     "haps: %s\n" 
-                                     % (read_len, len(new_seq),
-                                        repr(ref_alleles), repr(alt_alleles),
-                                        repr(read_pos), repr(snp_idx),
-                                        repr(haps)))
+            # sanity check: read should be same length as original
+            if len(new_seq) != read_len:
+                raise ValueError("Expected read len to be %d but "
+                                 "got %d.\n"
+                                 "ref_alleles: %s\n"
+                                 "alt_alleles: %s\n"
+                                 "read_pos: %s\n"
+                                 "snp_idx: %s\n"
+                                 "haps: %s\n" 
+                                 % (read_len, len(new_seq),
+                                    repr(ref_alleles), repr(alt_alleles),
+                                    repr(read_pos), repr(snp_idx),
+                                    repr(haps)))
 
-                new_read_list.add("".join(new_seq))
+            new_read_list.add("".join(new_seq))
 
     return new_read_list
 

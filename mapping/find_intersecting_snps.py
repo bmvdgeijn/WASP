@@ -430,6 +430,7 @@ def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
 def get_unique_haplotypes(haplotypes, phasing, snp_idx):
     """
     returns list of vectors of unique haplotypes for this set of SNPs
+    all possible combinations of ref/alt are calculated at unphased sites
     """
     haps = haplotypes[snp_idx,:].T
     
@@ -439,7 +440,7 @@ def get_unique_haplotypes(haplotypes, phasing, snp_idx):
         phasing = np.logical_not(phasing[snp_idx, :].T.astype(bool))
     else:
         # assume all SNPs are unphased
-        phasing = np.full((haps.shape[0]/2, haps.shape[1]), True)
+        phasing = np.full((int(haps.shape[0]/2), haps.shape[1]), True)
 
     # if a haplotype has unphased SNPs, generate all possible allelic
     # combinations and add each combination as a new haplotype
@@ -472,7 +473,7 @@ def get_unique_haplotypes(haplotypes, phasing, snp_idx):
     h = np.ascontiguousarray(haps).view(np.dtype((np.void, haps.dtype.itemsize * haps.shape[1])))
 
     # get index of unique columns
-    _, idx, inverse_idx = np.unique(h, return_index=True, return_inverse=True)
+    _, idx = np.unique(h, return_index=True)
 
 
     return haps[idx,:]

@@ -562,15 +562,13 @@ def generate_reads(read_seq, read_pos, ref_alleles, alt_alleles):
     of alleles (i.e. 2^n combinations where n is the number of snps overlapping
     the reads)
     """
-    # use a deque so that we can use the same object in memory after
-    # the nested for loop (rather than recreating a new list every time)
-    reads = deque([read_seq])
+    reads = [read_seq]
     # iterate through all snp locations
     for i in range(len(read_pos)):
         idx = read_pos[i]-1
         # for each read we've already created...
         for j in range(len(reads)):
-            read = reads.popleft()
+            read = reads[j]
             # create a new version of this read with both reference
             # and alternative versions of the allele at this index
             reads.append(
@@ -799,14 +797,12 @@ def read_pair_combos(old_reads, new_reads, max_seqs, snp_idx, snp_read_pos):
         unique_pairs - a set of tuples, each representing a unique pair of
                        new_reads
     """
-    # get the indices of the SNPs that are in both reads
-    shared_snp_idxs = set(snp_idx[0]).intersection(snp_idx[1])
     # get the indices of the shared SNPs in old_reads
     for i in range(len(snp_read_pos)):
-        # first, get the index of each snp_index in snp_idx
-        idx_idx = np.array([snp_idx[i].index(idx) for idx in shared_snp_idxs], dtype=int)
-        # now, use the indices in idx_idx to get the indices of the
-        # shared SNPs in the actual reads. note that we subtract by 1 to
+        # get the indices of the SNP indices that are in both reads
+        idx_idxs = np.nonzero(np.in1d(snp_idx[i], snp_idx[(i+1) % 2]))[0]
+        # now, use the indices in idx_idxs to get the relevant snp positions
+        snp_read_pos[i] = np.array(snp_read_pos[i], dtype=int)[idx_idxs]
         # convert positions to indices
         snp_read_pos[i] = np.array(snp_read_pos[i], dtype=int)[idx_idx] - 1
     # check: are there discordant alleles at the shared SNPs?

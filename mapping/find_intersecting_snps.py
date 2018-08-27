@@ -802,9 +802,8 @@ def read_pair_combos(old_reads, new_reads, max_seqs, snp_idx, snp_read_pos):
         # get the indices of the SNP indices that are in both reads
         idx_idxs = np.nonzero(np.in1d(snp_idx[i], snp_idx[(i+1) % 2]))[0]
         # now, use the indices in idx_idxs to get the relevant snp positions
-        snp_read_pos[i] = np.array(snp_read_pos[i], dtype=int)[idx_idxs]
-        # convert positions to indices
-        snp_read_pos[i] = np.array(snp_read_pos[i], dtype=int)[idx_idx] - 1
+        # and convert positions to indices
+        snp_read_pos[i] = np.array(snp_read_pos[i], dtype=int)[idx_idxs] - 1
     # check: are there discordant alleles at the shared SNPs?
     # if so, discard these reads
     if (

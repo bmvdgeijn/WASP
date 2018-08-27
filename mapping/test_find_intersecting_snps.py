@@ -41,7 +41,7 @@ class Data(object):
                  snp_list = [['test_chrom', 1, "A", "C"]],
                  hap_samples = ["samp1", "samp2", "samp3", "samp4"],
                  haplotypes = [[0, 1, 0, 1]],
-                 haplotypes_phase = None):
+                 haplotypes_phase = False):
 
         if output_prefix is None:
             self.output_prefix = prefix
@@ -66,7 +66,7 @@ class Data(object):
 
         self.hap_samples = hap_samples
         self.haplotypes = haplotypes
-        if not haplotypes_phase:
+        if haplotypes_phase == False:
             # if the haplotypes_phase arg was not defined,
             # assume all are phased
             haplotypes_phase = []
@@ -344,13 +344,22 @@ class Data(object):
         snp_index = 0
 
         # group haplotypes by chromosome
-        for snp, hap, phase in zip(self.snp_list, self.haplotypes, self.haplotypes_phase):
-            if snp[0] in chrom_haps:
-                chrom_haps[snp[0]].append(hap)
-                chrom_haps_phase[snp[0]].append(phase)
-            else:
-                chrom_haps[snp[0]] = [hap]
-                chrom_haps_phase[snp[0]] = [phase]
+        # include phase information if it exists
+        if self.haplotypes_phase:
+            for snp, hap, phase in zip(self.snp_list, self.haplotypes, self.haplotypes_phase):
+                if snp[0] in chrom_haps:
+                    chrom_haps[snp[0]].append(hap)
+                    chrom_haps_phase[snp[0]].append(phase)
+                else:
+                    chrom_haps[snp[0]] = [hap]
+                    chrom_haps_phase[snp[0]] = [phase]
+        else:
+            for snp, hap in zip(self.snp_list, self.haplotypes):
+                if snp[0] in chrom_haps:
+                    chrom_haps[snp[0]].append(hap)
+                else:
+                    chrom_haps[snp[0]] = [hap]
+            chrom_haps_phase = None
         
         for chrom, haps in list(chrom_haps.items()):
             # add haplotypes
@@ -360,12 +369,13 @@ class Data(object):
                                          filters=zlib_filter)
             carray[:] = haps
 
-            # also add phase information
-            phase_shape = (hap_array.shape[0], int(hap_array.shape[1]/2))
-            phase_carray = hap_h5.create_carray(
-                hap_h5.root, "phase_"+chrom, atom, phase_shape, filters=zlib_filter
-            )
-            phase_carray[:] = chrom_haps_phase[chrom]
+            # also add phase information if it exists
+            if chrom_haps_phase:
+                phase_shape = (hap_array.shape[0], int(hap_array.shape[1]/2))
+                phase_carray = hap_h5.create_carray(
+                    hap_h5.root, "phase_"+chrom, atom, phase_shape, filters=zlib_filter
+                )
+                phase_carray[:] = chrom_haps_phase[chrom]
             
         self.write_hap_samples(hap_h5)
 

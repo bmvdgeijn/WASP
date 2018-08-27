@@ -4,7 +4,6 @@ import gzip
 import argparse
 import numpy as np
 from itertools import product, groupby
-from collections import deque, defaultdict
 
 import pysam
 

@@ -58,8 +58,7 @@ class ReadStats:
     def write(self):
         sys.stderr.write("keep_reads: %d\n" % self.keep)
         sys.stderr.write("bad_reads: %d\n" % self.bad)
-        sys.stderr.write("discard_reads: %d\n" % self.discard)
-        sys.stderr.write("\tof those, %d\n reads remapped with a different cigar" % self.cigar_discard)
+        sys.stderr.write("discard_reads: {} (of which {} remapped with a different cigar)".format(self.discard, self.cigar_discard))
 
 
 def filter_reads(remap_bam):

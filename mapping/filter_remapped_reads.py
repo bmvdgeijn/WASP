@@ -44,6 +44,21 @@ def parse_options():
     return parser.parse_args()
 
 
+class ReadStats:
+    """Track information about what the program is doing with reads"""
+    def __init__(self):
+        self.keep = 0
+        self.bad = 0
+        self.discard = 0
+
+        # reads that were discarded because they (or their pair) remapped with
+        # a different cigar string
+        self.cigar_discard = 0
+
+    def write(self):
+        sys.stderr.write("keep_reads: %d\n" % self.keep)
+        sys.stderr.write("bad_reads: %d\n" % self.bad)
+        sys.stderr.write("discard_reads: {} (of which {} remapped with a different cigar)\n".format(self.discard, self.cigar_discard))
 
 
 def filter_reads(remap_bam):
@@ -155,15 +170,13 @@ def filter_reads(remap_bam):
 def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
     """writes reads but also checks cigar strings"""
 
-    keep_count = 0
-    bad_count = 0
-    discard_count = 0
+    stats = ReadStats()
 
     read_pair_cache = {}
 
     for read in to_remap_bam:
         if read.qname in bad_reads:
-            bad_count += 1
+            stats.bad += 1
         elif read.qname in keep_reads:
             # check that the cigar strings match up
             # and that all alternative versions of this read had the same CIGAR
@@ -178,22 +191,22 @@ def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
                         keep_bam.write(read_pair_cache[read.qname])
                         del read_pair_cache[read.qname]
                         keep_bam.write(read)
-                        keep_count += 2
+                        stats.keep += 2
                     else:
                         read_pair_cache[read.qname] = read
                 else:
                     keep_bam.write(read)
-                    keep_count += 1
+                    stats.keep += 1
             else:
-                discard_count += 1
+                stats.discard += 1
+                stats.cigar_discard += 1
         else:
-            discard_count += 1
+            stats.discard += 1
     # any reads remaining in the cache have been discarded
-    discard_count += len(read_pair_cache)
+    stats.discard += len(read_pair_cache)
+    stats.cigar_discard += len(read_pair_cache)
 
-    sys.stderr.write("keep_reads: %d\n" % keep_count)
-    sys.stderr.write("bad_reads: %d\n" % bad_count)
-    sys.stderr.write("discard_reads: %d\n" % discard_count)
+    stats.write()
     
 
     

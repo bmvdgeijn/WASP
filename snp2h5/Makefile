@@ -24,4 +24,4 @@ fasta2h5: fasta2h5.o $(objects)
 all: snp2h5 fasta2h5 $(objects)
 
 clean:
-	rm -f $(objects) snp2h5 fasta2h5
+	rm -f $(objects) snp2h5.o fasta2h5.o snp2h5 fasta2h5

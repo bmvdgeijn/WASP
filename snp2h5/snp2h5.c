@@ -1055,6 +1055,7 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
   long i, j;
   float *geno_probs;
   char *haplotypes;
+  char *haplotypes_phase;
   long *snp_index;
   SNP snp;
   hsize_t row;
@@ -1062,6 +1063,10 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
   Chromosome *chrom;
   SampleTab *samp_tab;
   char **vcf_by_chrom;
+
+  /* create matrix to hold phase info */
+  H5MatrixInfo haplotype_phase_info;
+  haplotype_phase_info.h5file = haplotype_info->h5file;
   
   vcf = vcf_info_new();
 
@@ -1137,6 +1142,12 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	samp_tab = sample_tab_from_names(haplotype_info->h5file, chrom->name,
 					 vcf->sample_names, vcf->n_sample);
 	sample_tab_free(samp_tab);
+
+  /* initialize the phase matrix */
+  haplotypes_phase = my_malloc(vcf->n_sample * sizeof(char));
+  init_h5matrix(&haplotype_phase_info, haplotype_info->n_row,
+          vcf->n_sample,
+          HAPLOTYPE_DATATYPE, util_str_concat("phase_", chrom->name, NULL));
       }
     } else {
       haplotypes = NULL;
@@ -1168,13 +1179,14 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
     int done = FALSE;
     
     while(!done && vcf_read_line(gzf, vcf, &snp,
-				 geno_probs, haplotypes) != -1) {
+				 geno_probs, haplotypes, haplotypes_phase) != -1) {
       
       if(geno_probs) {
 	write_h5matrix_row(gprob_info, row, geno_probs);
       }
       if(haplotypes) {
 	write_h5matrix_row(haplotype_info, row, haplotypes);
+  write_h5matrix_row(&haplotype_phase_info, row, haplotypes_phase);
       }
 
       /*  set snp_index element at this chromosome position
@@ -1226,6 +1238,10 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
     if(haplotypes) {
       my_free(haplotypes);
       close_h5matrix(haplotype_info);
+    }
+    if(haplotypes_phase) {
+      my_free(haplotypes_phase);
+      close_h5matrix(&haplotype_phase_info);
     }
     if(snp_index) {
       my_free(snp_index);

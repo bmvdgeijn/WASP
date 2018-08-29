@@ -39,6 +39,7 @@ class SNPTable(object):
         self.snp_allele1 = np.array([], dtype="|S10")
         self.snp_allele2 = np.array([], dtype="|S10")
         self.haplotypes = None
+        self.phase = None
         self.n_snp = 0
         self.samples = []
         
@@ -49,6 +50,7 @@ class SNPTable(object):
         """read in SNPs and indels from HDF5 input files"""
 
         node_name = "/%s" % chrom_name
+        phase_node_name = "/phase_%s" % chrom_name
         
         if node_name not in snp_tab_h5:
             sys.stderr.write("WARNING: chromosome %s is not "
@@ -70,6 +72,8 @@ class SNPTable(object):
             self.n_snp = self.snp_pos.shape[0]
             self.samples = self.get_h5_samples(hap_h5, chrom_name)
             self.haplotypes = hap_h5.get_node(node_name)
+            if phase_node_name in hap_h5:
+                self.phase = hap_h5.get_node(phase_node_name)
             
             if samples:
                 # reduce set of SNPs and indels to ones that are
@@ -91,6 +95,8 @@ class SNPTable(object):
                 hap_idx[0::2] = samp_idx*2
                 hap_idx[1::2] = samp_idx*2 + 1
                 haps = self.haplotypes[:, hap_idx]
+                if self.phase:
+                    phase = self.phase[:, samp_idx]
 
                 # count number of ref and non-ref alleles,
                 # ignoring undefined (-1s)
@@ -113,6 +119,8 @@ class SNPTable(object):
                 self.samples = [x[0] for x in sorted_samps]
                 
                 self.haplotypes = haps[is_polymorphic,]
+                if self.phase:
+                    self.phase = phase[is_polymorphic,]
                 self.snp_pos = self.snp_pos[is_polymorphic]
                 self.snp_allele1 = self.snp_allele1[is_polymorphic]
                 self.snp_allele2 = self.snp_allele2[is_polymorphic]

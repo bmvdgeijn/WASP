@@ -171,7 +171,7 @@ def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
     """writes reads but also checks cigar strings"""
 
     stats = ReadStats()
-
+    
     read_pair_cache = {}
 
     for read in to_remap_bam:

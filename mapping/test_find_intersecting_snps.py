@@ -367,9 +367,7 @@ class Data(object):
             carray = hap_h5.create_carray(hap_h5.root,
                                          chrom, atom, hap_array.shape,
                                          filters=zlib_filter)
-            carray[:] = haps
-
-            # also add phase information if it exists
+            carray[:] = ha            # also add phase information if it exists
             if chrom_haps_phase:
                 phase_shape = (hap_array.shape[0], int(hap_array.shape[1]/2))
                 phase_carray = hap_h5.create_carray(
@@ -385,6 +383,7 @@ class Data(object):
                 
     def write_snp_index_h5(self):
         atom = tables.Int16Atom(dflt=0)
+    
         zlib_filter = tables.Filters(complevel=1, complib="zlib")
         
         snp_index_h5 = tables.open_file(self.snp_index_filename, "w")    
@@ -2634,10 +2633,6 @@ class TestHaplotypesSingleEnd:
         test_data.cleanup()
 
 
-
-
-
-
 class TestHaplotypesPairedEnd:
 	
     def test_haplotypes_paired_two_reads_two_snps(self):
@@ -3266,12 +3261,13 @@ class TestFiltering:
                                     snp_dir=test_data.snp_dir, is_paired_end=False,
                                     is_sorted=False)
 
+
         # now, the keep file shouldn't have any reads
         lines = read_bam(test_data.bam_keep_filename)
         assert len(lines) == 1
         assert lines[0] == ''
-
-
+        
+        
 class TestOverlappingPEReads:
     """tests that bad reads are filtered correctly"""
 
@@ -3925,3 +3921,4 @@ class TestUnphasedHaplotypes:
         assert lines[0] == ''
         
         test_data.cleanup()
+

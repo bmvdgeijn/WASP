@@ -367,7 +367,9 @@ class Data(object):
             carray = hap_h5.create_carray(hap_h5.root,
                                          chrom, atom, hap_array.shape,
                                          filters=zlib_filter)
-            carray[:] = ha            # also add phase information if it exists
+            carray[:] = haps
+
+            # also add phase information if it exists
             if chrom_haps_phase:
                 phase_shape = (hap_array.shape[0], int(hap_array.shape[1]/2))
                 phase_carray = hap_h5.create_carray(

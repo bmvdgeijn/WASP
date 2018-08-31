@@ -985,13 +985,42 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 
 
 
+int match_chrom(Chromosome *all_chroms, char *input_filename, char *chrom_name,
+		char **file_by_chrom, int n_chrom) {
+  int found_match;
+  long j;
+
+
+  found_match = FALSE;
+  for(j = 0; j < n_chrom; j++) {
+    if(strcmp(all_chroms[j].name, chrom_name) == 0) {
+      if(found_match) {
+	my_warn("chromosome %s from input file %s matches multiple chromosomes",
+		chrom_name, input_filename);
+      } else {
+	found_match = TRUE;
+      }
+      
+      if(file_by_chrom[j]) {
+	/* file already set */
+	my_err("multiple input files for chromosome %s: %s and %s",
+	       chrom_name, input_filename, file_by_chrom[j]);
+      } else {
+	file_by_chrom[j] = util_str_dup(input_filename);
+      }	  
+    } 
+  }
+
+  return found_match;
+}
+
 
 char **group_vcf_by_chromosome(Arguments *args, Chromosome *all_chroms,
 			       int n_chrom) {
   char **file_by_chrom;
   char *chrom_name;
   int found_match;
-  long i, j;
+  long i;
 
   /* make array of filenames, same length as chromosomes */
   file_by_chrom = my_malloc(sizeof(char *) * n_chrom);
@@ -1004,47 +1033,44 @@ char **group_vcf_by_chromosome(Arguments *args, Chromosome *all_chroms,
 
     if(chrom_name == NULL) {
       my_warn("  input file %s is empty", args->input_files[i]);
-    }
-
+    } else {
+      found_match = match_chrom(all_chroms, args->input_files[i],
+				chrom_name, file_by_chrom, n_chrom);
     
-    if(chrom_name) {
-      found_match = FALSE;
-      
-      for(j = 0; j < n_chrom; j++) {
-	if(strcmp(all_chroms[j].name, chrom_name) == 0) {
-
-	  if(found_match) {
-	    my_warn("  chromosome %s from input file %s\n"
-		    "matches multiple chromosomes",
-		    chrom_name, args->input_files[i]);
-	  } else {
-	    found_match = TRUE;
-	  }
-	  
-	  if(file_by_chrom[j]) {
-	    /* file already set */
-	    my_err("  multiple input files for chromosome %s: %s and %s",
-		   chrom_name, args->input_files[i], file_by_chrom[j]);
-	  } else {
-	    file_by_chrom[j] = util_str_dup(args->input_files[i]);
-	  }	  
-	}
-      }
-
       if(!found_match) {
-	/* could not find chromosome matching the one in this file */
-	my_err("%s:%d  could not find chromosome matching name '%s' in "
-	       "for input file %s", __FILE__, __LINE__,
-	       chrom_name, args->input_files[i]);
-	       
+	char *new_name;
+	
+	if(util_str_starts_with(chrom_name, "chr")) {
+	  /* try removing leading 'chr' to see if that helps */
+	  new_name = util_str_dup(&chrom_name[3]);
+	} else {
+	  /* try prepending a 'chr' to the chromosome name to see if 
+	   * we can find a match that way
+	   */
+	  new_name = util_str_concat("chr", chrom_name, NULL);
+	}
+	
+	my_warn("did not find chromosome matching name '%s', "
+		"trying again with name '%s'", chrom_name, new_name);
+	
+	found_match = match_chrom(all_chroms, args->input_files[i],
+				  new_name, file_by_chrom, n_chrom);
+	
+	if(!found_match) {
+	  my_err("%s:%d  could not find chromosome matching names "
+		 "'%s' or '%s'", __FILE__, __LINE__,
+		 chrom_name, new_name);
+	  
+	}
+	my_free(new_name);
       }
-
       my_free(chrom_name);
-    } 
+    }
   }
   
   return file_by_chrom;
 }
+
 
 void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	       H5MatrixInfo *gprob_info, H5MatrixInfo *haplotype_info,

@@ -51,7 +51,6 @@ do
 	      --snp_index $DATA_DIR/snp_index.h5 \
 	      --snp_tab $DATA_DIR/snp_tab.h5 \
 	      --haplotype $DATA_DIR/haps.h5 \
-	      --samples $ALL_SAMPLES_FILE \
 	      --individual $INDIVIDUAL \
 	      --ref_as_counts $DATA_DIR/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
 	      --alt_as_counts $DATA_DIR/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \

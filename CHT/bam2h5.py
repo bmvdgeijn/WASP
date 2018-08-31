@@ -66,17 +66,11 @@ Input Options:
        counts are randomly assigned to ONE of overlapping SNPs (regardless of
        their genotype).
 
-     --samples SAMPLES_TXT_FILE [optional]
-       Path to text file containing a list of individual identifiers. The
-       ordering of individuals must be consistent with the haplotype
-       file. The samples file is assumed to have one identifier per line
-       in the first column (other columns are ignored).
-
      --individual INDIVIDUAL [optional]
        Identifier for individual, used to determine which
        SNPs are heterozygous. Must be provided
        if --haplotype argument is provided and must match one of the
-       individuals in the file provided with --samples argument.
+       samples in the haplotype HDF5 file.
 
 Output Options:
      --data_type uint8|uint16
@@ -122,6 +116,9 @@ import chromosome
 import chromstat
 import util
 
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__))+"/../mapping/")
+import snptable
+
 # codes used by pysam for aligned read CIGAR strings
 BAM_CMATCH     = 0 # M
 BAM_CINS       = 1 # I
@@ -147,6 +144,8 @@ BAM_CIGAR_DICT = {0 : "M",
 SNP_UNDEF = -1
 MAX_UINT8_COUNT = 255
 MAX_UINT16_COUNT = 65535
+
+unimplemented_CIGAR = [0, set()]
 
 
 
@@ -283,9 +282,11 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             # in read and not used in alignment
             pass
         else:
-            sys.stderr.write("skipping because contains CIGAR code %s "
-                             " which is not currently implemented\n" %
-                             BAM_CIGAR_DICT[op])
+            unimplemented_CIGAR[0] += 1
+            unimplemented_CIGAR[1].add(BAM_CIGAR_DICT[op])
+            # sys.stderr.write("skipping because contains CIGAR code %s "
+            #                  " which is not currently implemented\n" %
+            #                  BAM_CIGAR_DICT[op])
 
     # are any of the SNPs indels? If so, discard.
     for i in snp_idx:
@@ -466,22 +467,11 @@ def parse_args():
                         metavar="HAPLOTYPE_H5_FILE",
                         default=None)
 
-    parser.add_argument("--samples",
-                        help="Path to text file containing a list of "
-                        "individual identifiers. The ordering of individuals "
-                        "must be consistent with the haplotype file. The "
-                        "samples file is assumed to have one identifier per "
-                        "line in the first column (other columns are "
-                        "ignored).",
-                        metavar="SAMPLES_TXT_FILE",
-                        default=None)
-
     parser.add_argument("--individual",
                         help="Identifier for individual, used to determine "
-                        "which SNPs are heterozygous. Must be provided "
-                        "if --haplotype argument is provided and must "
-                        "match one of the individuals in the file provided "
-                        "with --samples argument.",
+                        "which SNPs are heterozygous. Must be provided if "
+                        "--haplotype argument is provided and must match one "
+                        "of the samples in the haplotype HDF5 file.",
                         metavar="INDIVIDUAL",
                         default=None)
 
@@ -538,60 +528,13 @@ def parse_args():
 
     args = parser.parse_args()
 
-    if args.haplotype and (args.individual is None or args.samples is None):
-            parser.error("--indidivual and --samples arguments "
+    if args.haplotype and (args.individual is None):
+            parser.error("--indidivual argument "
                          "must also be provided when --haplotype argument "
                          "is provided")
 
 
     return args
-
-
-
-
-def lookup_individual_index(samples_file, ind_name, population=None):
-    """Gets the index of individual that is used
-    to lookup information in the genotype and haplotype tables"""
-    f = open(samples_file, "rt")
-
-    if population:
-        p = population.lower()
-    else:
-        p = None
-
-    idx = 0
-    for line in f:
-        if line.startswith("samples"):
-            # header line
-            continue
-
-        words = line.rstrip().split()
-        name = words[0].replace("NA", "")
-
-        if len(words) > 1:
-            pop = words[1].lower()
-        else:
-            pop = ""
-
-        if len(words) > 2:
-            group = words[2].lower()
-        else:
-            group = ""
-
-        # if specified, only consider a single population or group
-        if p and pop != p and group != p:
-            continue
-
-        if name == ind_name:
-            f.close()
-            return idx
-
-        idx += 1
-
-
-    raise ValueError("individual %s (with population=%s) "
-                     "is not in samples file %s" %
-                     (ind_name, population, samples_file))
 
 
 
@@ -612,10 +555,8 @@ def main():
 
     if args.haplotype:
         hap_h5 = tables.open_file(args.haplotype, "r")
-        ind_idx = lookup_individual_index(args.samples, args.individual)
     else:
         hap_h5 = None
-        ind_idx = None
 
     ref_count_h5 = tables.open_file(args.ref_as_counts, "w")
     alt_count_h5 = tables.open_file(args.alt_as_counts, "w")
@@ -645,10 +586,12 @@ def main():
     else:
         raise NotImplementedError("unsupported datatype %s" % args.data_type)
 
-    # create a list to hold the counts that will be later written
-    # to a txt file
-    if args.text_counts is not None:
-        txt_counts = list()
+    # create a txt file to also holds the counts
+    if args.txt_counts is not None:
+        if os.path.splitext(args.txt_counts)[1] == ".gz":
+            txt_counts = gzip.open(args.txt_counts, 'a+')
+        else:
+            txt_counts = open(args.txt_counts, 'a+')
 
     for chrom in chrom_list:
         sys.stderr.write("%s\n" % chrom.name)
@@ -666,8 +609,18 @@ def main():
         snp_index_array = snp_index_h5.get_node("/%s" % chrom.name)[:]
         if hap_h5:
             hap_tab = hap_h5.get_node("/%s" % chrom.name)
+            ind_idx = snptable.SNPTable().get_h5_sample_indices(
+                hap_h5, chrom, [args.individual]
+            )[1]
+            if len(ind_idx) != 0:
+                ind_idx = ind_idx[0]
+            else:
+                hap_tab = None
+                ind_idx = None
         else:
             hap_tab = None
+            ind_idx = None
+
 
         # initialize count arrays for this chromosome to 0
         ref_carray = get_carray(ref_count_h5, chrom)
@@ -709,7 +662,7 @@ def main():
             # file later
             # columns are:
             # chrom, pos, ref, alt, genotype, ref_count, alt_count, other_count
-            if args.text_counts is not None:
+            if args.txt_counts is not None:
                 chrom = np.tile(chrom.name, len(snp_tab))
                 pos = np.array([snp['pos'] for snp in snp_tab])
                 ref = np.array([snp['allele1'] for snp in snp_tab])
@@ -719,22 +672,26 @@ def main():
                                          for hap in hap_tab])
                 else:
                     genotype = np.empty((len(snp_tab), 0))
-                txt_counts.append(
+                # write an np array to a txt file
+                np.savetxt(
+                    txt_counts,
                     np.column_stack((chrom, pos, ref, alt, genotype,
-                                     ref_array[pos-1],
-                                     alt_array[pos-1],
-                                     other_array[pos-1]))
+                                    ref_array[pos-1],
+                                    alt_array[pos-1],
+                                    other_array[pos-1])),
+                    fmt="%1s",
+                    delimiter=" "
                 )
 
 
             samfile.close()
 
-    # write the txt_counts np arrays to a txt file
-    if args.text_counts is not None:
-        # we use vstack to combine np arrays row-wise into a multi-dimensional
-        # array
-        np.savetxt(args.text_counts, np.vstack(tuple(txt_counts)),
-                   fmt="%1s", delimiter=" ")
+    if args.txt_counts:
+        # close the open txt file handler
+        txt_counts.close()
+
+    # check if any of the reads contained an unimplemented CIGAR
+    sys.stderr.write("WARNING: Encountered "+str(unimplemented_CIGAR[0])+" instances of any of the following CIGAR codes: "+str(unimplemented_CIGAR[1])+". The regions of reads with these CIGAR codes were skipped because these CIGAR codes are currently unimplemented.\n")
 
     # set track statistics and close HDF5 files
 

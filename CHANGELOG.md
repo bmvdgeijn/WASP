@@ -1,3 +1,15 @@
+Version 0.3.1 - August 31, 2018
+-----------
+This release makes several improvements/fixes to read filtering by the mapping pipeline. Several of these improvements were suggested by Alex Dobin for using WASP with the STAR mapper.
+
+Changes include:
+* find_intersecting_snps.py was modified to handle dependence of alleles when both reads from a read pair overlap the same variant(s). Previously the reads that were generated for remapping were treated independently, however if read1 has alternate allele for a given SNP, so should read2 if it overlaps the same SNPs. 
+* snp2h5 was altered to add a new phase carray to haplotype.h5 containing phase information from the VCF. find_intersecting_snps.py will now use the phase information from haplotype.h5 to calculate new haplotypes with all possible allelic combinations at unphased sites, resulting in more reads being generated for remapping. If phase information is not provided in haplotype.h5, all sites will be assumed unphased.
+* Supplementary and secondary alignments are now filtered by find_intersecting_snps and filter_remapped_reads
+* Reads whose CIGAR flags change after the remapping step are now discarded, even if they map to the same start position.
+* snp2h5 will now try to add/remove 'chr' from the chromosome name read from the VCF file if the original name does not match any chromosomes in the chromInfo file.
+
+
 Version 0.3.0 - July 3, 2018
 -----------
 This release moves the codebase from Python2 to Python3 and includes several additional improvements.

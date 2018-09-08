@@ -155,7 +155,7 @@ class SNPTable(object):
                 node_name = "/samples_%s" % chrom_name[3:]
             # try to add chr prefix
             else:
-                node_name = "/samples_%s" % chrom_name
+                node_name = "/samples_chr%s" % chrom_name
             # if it still doesn't work, raise an error
             if node_name not in h5f:
                 raise ValueError("Cannot retrieve haplotypes for "
@@ -168,7 +168,7 @@ class SNPTable(object):
         node = h5f.get_node(node_name)
         samples = [row["name"].decode("utf-8") for row in node]
 
-        sys.stderr.write("SAMPLES: %s\n" % samples)
+        # sys.stderr.write("SAMPLES: %s\n" % samples)
         
         return samples
 

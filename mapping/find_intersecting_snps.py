@@ -415,10 +415,13 @@ def count_ref_alt_matches(read, read_stats, snp_tab, snp_idx, read_pos):
     alt_alleles = snp_tab.snp_allele2[snp_idx]
     
     for i in range(len(snp_idx)):
-        if ref_alleles[i] == read.query_sequence[read_pos[i]-1]:
+        ref = ref_alleles[i].decode("utf-8")
+        alt = alt_alleles[i].decode("utf-8")
+        
+        if ref == read.query_sequence[read_pos[i]-1]:
             # read matches reference allele
             read_stats.ref_count += 1
-        elif alt_alleles[i] == read.query_sequence[read_pos[i]-1]:
+        elif alt == read.query_sequence[read_pos[i]-1]:
             # read matches non-reference allele
             read_stats.alt_count += 1
         else:

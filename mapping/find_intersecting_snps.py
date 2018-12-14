@@ -1078,6 +1078,7 @@ if __name__ == '__main__':
 
     util.check_pysam_version()
     util.check_pytables_version()
+    util.check_python_version()
         
     options = parse_options()
     samples = parse_samples(options.samples)

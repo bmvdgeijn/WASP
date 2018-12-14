@@ -117,7 +117,19 @@ def check_pytables_version():
 
     return 0
 
-                    
+
+
+def check_python_version():
+    """Checks that Python version 3 is being used. Previous versions of 
+    WASP used python2.7, but version 3 is now required."""
+    python_ver = int(sys.version.split()[0].split(".")[0])
+
+    if python_ver < 3:
+        raise ImportWarning("python version is %s, but version "
+                            ">=3 is required" % (sys.version))
+
+    return 0
+
     
     
                                 

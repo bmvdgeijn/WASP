@@ -822,7 +822,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
       if(snp.pos > chrom->len || snp.pos < 1) {
 	my_err("%s:%d: SNP position (%ld) is outside of "
 	       "chromomosome %s range:1-%ld", __FILE__, __LINE__,
-	       snp.pos, chrom->len);
+	       snp.pos, chrom->name, chrom->len);
       }
 
       /* set value in snp_index array to point to current row */
@@ -908,7 +908,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	  if(snp.pos > chrom->len || snp.pos < 1) {
 	    my_err("%s:%d: SNP position (%ld) is outside of "
 		   "chromomosome %s range:1-%ld", __FILE__, __LINE__,
-		   snp.pos, chrom->len);
+		   snp.pos, chrom->name, chrom->len);
 	  }
 	    
 	  row = snp_index[snp.pos-1];

@@ -277,6 +277,12 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             # end of read is soft-clipped, which means it is
             # present in read, but not used in alignment
             read_start_idx += op_len
+        elif op == BAM_CINS:
+            # Dealing with insertion
+            read_start_idx += op_len
+        elif op == BAM_CDEL:
+            # Dealing with deletion
+            genome_start_idx += op_len
         elif op == BAM_CHARD_CLIP:
             # end of read is hard-clipped, so not present
             # in read and not used in alignment

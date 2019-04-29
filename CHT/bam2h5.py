@@ -105,6 +105,8 @@ Output Options:
 import sys
 import os
 import gzip
+import warnings
+
 
 import tables
 import argparse
@@ -115,6 +117,7 @@ import pysam
 import chromosome
 import chromstat
 import util
+
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__))+"/../mapping/")
 import snptable
@@ -549,6 +552,11 @@ def main():
 
     util.check_pysam_version()
     util.check_pytables_version()
+
+    # disable warnings that come from pytables when chromosome
+    # names are like 1, 2, 3 (instead of chr1, chr2, chr3)
+    warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
+
     
     snp_tab_h5 = tables.open_file(args.snp_tab, "r")
     snp_index_h5 = tables.open_file(args.snp_index, "r")
@@ -601,6 +609,8 @@ def main():
         # fetch SNP info for this chromosome
         if chrom.name not in snp_tab_h5.root:
             # no SNPs for this chromosome
+            sys.stderr.write("skipping %s because chromosome with this name "
+                             "not found in SNP table\n" % chrom.name)
             continue
 
         sys.stderr.write("fetching SNPs\n")
@@ -691,7 +701,12 @@ def main():
         txt_counts.close()
 
     # check if any of the reads contained an unimplemented CIGAR
-    sys.stderr.write("WARNING: Encountered "+str(unimplemented_CIGAR[0])+" instances of any of the following CIGAR codes: "+str(unimplemented_CIGAR[1])+". The regions of reads with these CIGAR codes were skipped because these CIGAR codes are currently unimplemented.\n")
+    if unimplemented_CIGAR[0] > 0:
+        sys.stderr.write("WARNING: Encountered " + str(unimplemented_CIGAR[0])
+                         + " instances of any of the following CIGAR codes: "
+                         + str(unimplemented_CIGAR[1]) + ". Reads with these "
+                         "CIGAR codes were skipped because these CIGAR "
+                         "codes are currently unimplemented.\n")
 
     # set track statistics and close HDF5 files
 

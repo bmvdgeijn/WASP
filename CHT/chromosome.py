@@ -205,20 +205,38 @@ def get_all_chromosomes(filename):
 
         lc_name = chrom.name.lower()
 
-        # determine whether this is autosome, sex or mitochondrial chrom
-        if re.match('^chr(\d+)', lc_name):
-            chrom.is_auto=True
-        elif re.match("^chr[W-Zw-z]", lc_name):
-            chrom.is_sex = True
-        elif lc_name.startswith("chrm"):
-            chrom.is_mito = True
-        elif lc_name.startswith("chrun") or lc_name.startswith("chrur"):
-            chrom.is_rand = True
+        if lc_name.startswith("chr"):
+            # determine whether this is autosome, sex or mitochondrial chrom
+            if re.match('^chr(\d+)', lc_name):
+                chrom.is_auto=True
+            elif re.match("^chr[W-Zw-z]", lc_name):
+                chrom.is_sex = True
+            elif lc_name.startswith("chrm"):
+                chrom.is_mito = True
+            elif lc_name.startswith("chrun") or lc_name.startswith("chrur"):
+                chrom.is_rand = True
+            else:
+                sys.stderr.write("WARNING: could not determine chromosome type "
+                                 "(autosome, sex, mitochondrial) from name "
+                                 "'%s'. Assuming 'random'\n" % chrom.name)
+                chrom.is_rand = True
         else:
-            sys.stderr.write("WARNING: could not determine chromosome type "
-                             "(autosome, sex, mitochondrial) from name "
-                             "'%s'. Assuming 'random'\n" % chrom.name)
-            chrom.is_rand = True
+           if re.match("^\d+", lc_name):
+                chrom.is_auto=True
+           elif re.match("^[W-Zw-z]", lc_name):
+                chrom.is_sex = True
+           elif lc_name.startswith("m"):
+                chrom.is_mito = True
+           elif(lc_name.startswith("un") or
+                lc_name.startswith("ur") or
+                lc_name.startswith("gl") or
+                lc_name.startswith("nc")):
+                chrom.is_rand = True
+           else:
+                sys.stderr.write("WARNING: could not determine chromosome type "
+                                 "(autosome, sex, mitochondrial) from name "
+                                 "'%s'. Assuming 'random'\n" % chrom.name)
+                chrom.is_rand = True
 
         if "rand" in chrom.name:
             # random chromosome

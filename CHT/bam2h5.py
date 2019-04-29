@@ -445,6 +445,11 @@ def parse_args():
                         required=True)
 
 
+    parser.add_argument("--test_chrom",
+                        help="Run only on this chromosome",
+                        metavar="CHROM_NAME",
+                        required=False)
+
     parser.add_argument("--snp_index",
                         help="Path to HDF5 file containing SNP index. The "
                         "SNP index is used to convert the genomic position "
@@ -604,6 +609,11 @@ def main():
     for chrom in chrom_list:
         sys.stderr.write("%s\n" % chrom.name)
 
+        if args.test_chrom:
+            if chrom.name != args.test_chrom:
+                sys.stderr.write("skipping because not test chrom\n")
+                continue
+
         warned_pos = {}
 
         # fetch SNP info for this chromosome
@@ -619,12 +629,18 @@ def main():
         snp_index_array = snp_index_h5.get_node("/%s" % chrom.name)[:]
         if hap_h5:
             hap_tab = hap_h5.get_node("/%s" % chrom.name)
-            ind_idx = snptable.SNPTable().get_h5_sample_indices(
-                hap_h5, chrom, [args.individual]
-            )[1]
-            if len(ind_idx) != 0:
+            ind_dict, ind_idx = snptable.SNPTable().get_h5_sample_indices(
+                hap_h5, chrom, [args.individual])
+
+            if len(ind_idx) == 1:
                 ind_idx = ind_idx[0]
+                sys.stderr.write("index for individual %s is %d\n" %
+                                 (args.individual, ind_idx))
             else:
+                raise ValueError("got sample indices for %d individuals, "
+                                 "but expected to get index for one "
+                                 "individual (%s)" % (len(ind_idx),
+                                                      args.individual))
                 hap_tab = None
                 ind_idx = None
         else:
@@ -674,14 +690,18 @@ def main():
             # chrom, pos, ref, alt, genotype, ref_count, alt_count, other_count
             if args.txt_counts is not None:
                 chrom = np.tile(chrom.name, len(snp_tab))
-                pos = np.array([snp['pos'] for snp in snp_tab])
-                ref = np.array([snp['allele1'] for snp in snp_tab])
-                alt = np.array([snp['allele2'] for snp in snp_tab])
+                snps = snp_tab[:]
+                pos = snps['pos']
+                ref = snps['allele1']
+                alt = snps['allele2']
+
+                # get out genotypes for this individual
+                hap = hap_tab[:, (ind_idx*2, ind_idx*2+1)]
+                
                 if hap_tab is not None:
-                    genotype = np.array([str(hap[0])+"|"+str(hap[1])
-                                         for hap in hap_tab])
+                    genotype = np.array([str(h[0])+"|"+str(h[1]) for h in hap])
                 else:
-                    genotype = np.empty((len(snp_tab), 0))
+                    genotype = np.tile("NA", len(snp_tab), 0)
                 # write an np array to a txt file
                 np.savetxt(
                     txt_counts,
@@ -703,10 +723,10 @@ def main():
     # check if any of the reads contained an unimplemented CIGAR
     if unimplemented_CIGAR[0] > 0:
         sys.stderr.write("WARNING: Encountered " + str(unimplemented_CIGAR[0])
-                         + " instances of any of the following CIGAR codes: "
+                         + " instances of CIGAR codes: "
                          + str(unimplemented_CIGAR[1]) + ". Reads with these "
-                         "CIGAR codes were skipped because these CIGAR "
-                         "codes are currently unimplemented.\n")
+                         "CIGAR codes were skipped because they "
+                         "are currently unimplemented.\n")
 
     # set track statistics and close HDF5 files
 

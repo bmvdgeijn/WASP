@@ -1,3 +1,23 @@
+
+Version 0.3.3 - April 30, 2019
+-----------
+This release fixes some issues with the bam2h5.py script.
+
+Changes to bam2h5.py include:
+* Correct counting of reads with indels in bam2h5.py (pull request from MingshiGao)
+* Fix txtfile output from bam2h5.py, which was outputting incorrect genotypes when multiple samples present
+in haplotype file. Note that this txt file was added as a way to get human-readible allele-specific counts
+and the incorrect genotypes in the file were not actually used by the WASP pipeline.
+* Default to uint16 datatype rather than uint8 so that counts are no longer thresholded at 255
+* Silence warnings printed when using chromosomes that do not start with 'chr'
+
+
+Version 0.3.2 - September 14, 2018
+-----------
+This release contains a single bugfix:
+* Fixes to ref/alt/other allele match reporting in find_intersecting_snps.py which was broken during py2 to py3 conversion.
+
+
 Version 0.3.1 - August 31, 2018
 -----------
 This release makes several improvements/fixes to read filtering by the mapping pipeline. Several of these improvements were suggested by Alex Dobin for using WASP with the STAR mapper.

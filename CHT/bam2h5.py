@@ -548,7 +548,7 @@ def parse_args():
 
 
 def write_txt_file(out_file, chrom, snp_tab, hap_tab, ind_idx,
-                   ref_array, alt_array):
+                   ref_array, alt_array, other_array):
     i = 0
 
     # get out genotypes for this individual
@@ -564,12 +564,13 @@ def write_txt_file(out_file, chrom, snp_tab, hap_tab, ind_idx,
         pos = row['pos']
         
         out_file.write(" ".join([chrom.name,
-                                "%d" % pos,
-                                row['allele1'].decode("utf-8"),
-                                row['allele2'].decode("utf-8"),
-                                geno,
-                                "%d" % ref_array[pos-1],
-                                 "%d" % alt_array[pos-1]]) + "\n")
+                                 "%d" % pos,
+                                 row['allele1'].decode("utf-8"),
+                                 row['allele2'].decode("utf-8"),
+                                 geno,
+                                 "%d" % ref_array[pos-1],
+                                 "%d" % alt_array[pos-1],
+                                 "%d" % other_array[pos-1]]) + "\n")
 
         i += 1
     
@@ -719,7 +720,7 @@ def main():
             # chrom, pos, ref, alt, genotype, ref_count, alt_count, other_count
             if args.txt_counts is not None:
                 write_txt_file(txt_counts, chrom, snp_tab, hap_tab, ind_idx,
-                               ref_array, alt_array)
+                               ref_array, alt_array, other_array)
             samfile.close()
 
     if args.txt_counts:

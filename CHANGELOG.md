@@ -1,5 +1,5 @@
 
-Version 0.3.3 - April 30, 2019
+Version 0.3.4 - April 30, 2019
 -----------
 This release fixes some issues with the bam2h5.py script.
 
@@ -12,10 +12,15 @@ and the incorrect genotypes in the file were not actually used by the WASP pipel
 * Silence warnings printed when using chromosomes that do not start with 'chr'
 
 
-Version 0.3.2 - September 14, 2018
+Version 0.3.3 - September 14, 2018
 -----------
 This release contains a single bugfix:
 * Fixes to ref/alt/other allele match reporting in find_intersecting_snps.py which was broken during py2 to py3 conversion.
+
+
+Version 0.3.2 - September 13, 2018
+-----------
+This release fixes a minor bug in snp2h5 that could occur if haplotypes were not specified.
 
 
 Version 0.3.1 - August 31, 2018

@@ -75,7 +75,7 @@ Input Options:
 Output Options:
      --data_type uint8|uint16
        Data type of stored counts; uint8 takes up less disk
-       space but has a maximum value of 255 (default=uint8).
+       space but has a maximum value of 255 (default=uint16).
 
      --ref_as_counts REF_AS_COUNT_H5_FILE [required]
        Path to HDF5 file to write counts of reads that match reference allele.
@@ -488,7 +488,7 @@ def parse_args():
                         "uint8 requires less disk space but has a "
                         "maximum value of 255."
                         "(default=uint8)", choices=("uint8", "uint16"),
-                        default="uint8")
+                        default="uint16")
 
     parser.add_argument("--ref_as_counts",
                         help="Path to HDF5 file to write counts of reads "
@@ -547,6 +547,35 @@ def parse_args():
 
 
 
+def write_txt_file(out_file, chrom, snp_tab, hap_tab, ind_idx,
+                   ref_array, alt_array):
+    i = 0
+
+    # get out genotypes for this individual
+    hap = hap_tab[:, (ind_idx*2, ind_idx*2+1)]
+        
+    for row in snp_tab:
+        if (hap[i,0] > -1) and (hap[i,1] > -1):
+            # genotype is defined
+            geno = "%d|%d" % (hap[i,0], hap[i,1])
+        else:
+            geno = "NA"
+
+        pos = row['pos']
+        
+        out_file.write(" ".join([chrom.name,
+                                "%d" % pos,
+                                row['allele1'].decode("utf-8"),
+                                row['allele2'].decode("utf-8"),
+                                geno,
+                                "%d" % ref_array[pos-1],
+                                 "%d" % alt_array[pos-1]]) + "\n")
+
+        i += 1
+    
+
+
+
 def main():
     args = parse_args()
 
@@ -602,9 +631,9 @@ def main():
     # create a txt file to also holds the counts
     if args.txt_counts is not None:
         if os.path.splitext(args.txt_counts)[1] == ".gz":
-            txt_counts = gzip.open(args.txt_counts, 'a+')
+            txt_counts = gzip.open(args.txt_counts, 'w+')
         else:
-            txt_counts = open(args.txt_counts, 'a+')
+            txt_counts = open(args.txt_counts, 'w+')
 
     for chrom in chrom_list:
         sys.stderr.write("%s\n" % chrom.name)
@@ -689,31 +718,8 @@ def main():
             # columns are:
             # chrom, pos, ref, alt, genotype, ref_count, alt_count, other_count
             if args.txt_counts is not None:
-                chrom = np.tile(chrom.name, len(snp_tab))
-                snps = snp_tab[:]
-                pos = snps['pos']
-                ref = snps['allele1']
-                alt = snps['allele2']
-
-                # get out genotypes for this individual
-                hap = hap_tab[:, (ind_idx*2, ind_idx*2+1)]
-                
-                if hap_tab is not None:
-                    genotype = np.array([str(h[0])+"|"+str(h[1]) for h in hap])
-                else:
-                    genotype = np.tile("NA", len(snp_tab), 0)
-                # write an np array to a txt file
-                np.savetxt(
-                    txt_counts,
-                    np.column_stack((chrom, pos, ref, alt, genotype,
-                                    ref_array[pos-1],
-                                    alt_array[pos-1],
-                                    other_array[pos-1])),
-                    fmt="%1s",
-                    delimiter=" "
-                )
-
-
+                write_txt_file(txt_counts, chrom, snp_tab, hap_tab, ind_idx,
+                               ref_array, alt_array)
             samfile.close()
 
     if args.txt_counts:

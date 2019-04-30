@@ -296,6 +296,7 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             # sys.stderr.write("skipping because contains CIGAR code %s "
             #                  " which is not currently implemented\n" %
             #                  BAM_CIGAR_DICT[op])
+            return (None, None, is_split, overlap_indel)
 
     # are any of the SNPs indels? If so, discard.
     for i in snp_idx:
@@ -319,9 +320,8 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
 
             if ind_idx*2 > hap_tab.shape[1]:
                 raise ValueError("index of individual (%d) is >= number of "
-                                 "individuals in haplotype_tab (%d). probably "
-                                 "need to specify --population or use a different "
-                                 "--samples_tab" % (ind_idx, hap_tab.shape[1]/2))
+                                 "individuals in haplotype_tab (%d)."
+                                 % (ind_idx, hap_tab.shape[1]/2))
 
             if haps[0] != haps[1]:
                 # this is a het

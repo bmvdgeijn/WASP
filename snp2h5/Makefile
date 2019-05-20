@@ -1,12 +1,12 @@
 # Edit the following variables as needed
-HDF_INSTALL=$(HOME)/anaconda2
+HDF_INSTALL=$(HOME)/anaconda3
 EXTLIB=-L$(HDF_INSTALL)/lib
 CC=gcc
 LIB=-lz -lm -lhdf5 -lhdf5_hl
 
 INCLUDE=-I$(HDF_INSTALL)/include
 LIBSHDF=$(EXTLIB)
-CFLAGS=-DH5_USE_16_API $(INCLUDE) -Wall
+CFLAGS=-DH5_USE_16_API $(INCLUDE) -Wall -g
 
 objects=vcf.o impute.o util.o memutil.o err.o chrom.o snptab.o seq.o nuc.o sampletab.o
 

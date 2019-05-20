@@ -75,7 +75,7 @@ Input Options:
 Output Options:
      --data_type uint8|uint16
        Data type of stored counts; uint8 takes up less disk
-       space but has a maximum value of 255 (default=uint8).
+       space but has a maximum value of 255 (default=uint16).
 
      --ref_as_counts REF_AS_COUNT_H5_FILE [required]
        Path to HDF5 file to write counts of reads that match reference allele.
@@ -105,6 +105,8 @@ Output Options:
 import sys
 import os
 import gzip
+import warnings
+
 
 import tables
 import argparse
@@ -115,6 +117,7 @@ import pysam
 import chromosome
 import chromstat
 import util
+
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__))+"/../mapping/")
 import snptable
@@ -277,6 +280,12 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             # end of read is soft-clipped, which means it is
             # present in read, but not used in alignment
             read_start_idx += op_len
+        elif op == BAM_CINS:
+            # Dealing with insertion
+            read_start_idx += op_len
+        elif op == BAM_CDEL:
+            # Dealing with deletion
+            genome_start_idx += op_len
         elif op == BAM_CHARD_CLIP:
             # end of read is hard-clipped, so not present
             # in read and not used in alignment
@@ -287,6 +296,7 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
             # sys.stderr.write("skipping because contains CIGAR code %s "
             #                  " which is not currently implemented\n" %
             #                  BAM_CIGAR_DICT[op])
+            return (None, None, is_split, overlap_indel)
 
     # are any of the SNPs indels? If so, discard.
     for i in snp_idx:
@@ -310,9 +320,8 @@ def choose_overlap_snp(read, snp_tab, snp_index_array, hap_tab, ind_idx):
 
             if ind_idx*2 > hap_tab.shape[1]:
                 raise ValueError("index of individual (%d) is >= number of "
-                                 "individuals in haplotype_tab (%d). probably "
-                                 "need to specify --population or use a different "
-                                 "--samples_tab" % (ind_idx, hap_tab.shape[1]/2))
+                                 "individuals in haplotype_tab (%d)."
+                                 % (ind_idx, hap_tab.shape[1]/2))
 
             if haps[0] != haps[1]:
                 # this is a het
@@ -442,6 +451,11 @@ def parse_args():
                         required=True)
 
 
+    parser.add_argument("--test_chrom",
+                        help="Run only on this chromosome",
+                        metavar="CHROM_NAME",
+                        required=False)
+
     parser.add_argument("--snp_index",
                         help="Path to HDF5 file containing SNP index. The "
                         "SNP index is used to convert the genomic position "
@@ -480,7 +494,7 @@ def parse_args():
                         "uint8 requires less disk space but has a "
                         "maximum value of 255."
                         "(default=uint8)", choices=("uint8", "uint16"),
-                        default="uint8")
+                        default="uint16")
 
     parser.add_argument("--ref_as_counts",
                         help="Path to HDF5 file to write counts of reads "
@@ -539,6 +553,36 @@ def parse_args():
 
 
 
+def write_txt_file(out_file, chrom, snp_tab, hap_tab, ind_idx,
+                   ref_array, alt_array, other_array):
+    i = 0
+
+    # get out genotypes for this individual
+    hap = hap_tab[:, (ind_idx*2, ind_idx*2+1)]
+        
+    for row in snp_tab:
+        if (hap[i,0] > -1) and (hap[i,1] > -1):
+            # genotype is defined
+            geno = "%d|%d" % (hap[i,0], hap[i,1])
+        else:
+            geno = "NA"
+
+        pos = row['pos']
+        
+        out_file.write(" ".join([chrom.name,
+                                 "%d" % pos,
+                                 row['allele1'].decode("utf-8"),
+                                 row['allele2'].decode("utf-8"),
+                                 geno,
+                                 "%d" % ref_array[pos-1],
+                                 "%d" % alt_array[pos-1],
+                                 "%d" % other_array[pos-1]]) + "\n")
+
+        i += 1
+    
+
+
+
 def main():
     args = parse_args()
 
@@ -549,6 +593,11 @@ def main():
 
     util.check_pysam_version()
     util.check_pytables_version()
+
+    # disable warnings that come from pytables when chromosome
+    # names are like 1, 2, 3 (instead of chr1, chr2, chr3)
+    warnings.filterwarnings('ignore', category=tables.NaturalNameWarning)
+
     
     snp_tab_h5 = tables.open_file(args.snp_tab, "r")
     snp_index_h5 = tables.open_file(args.snp_index, "r")
@@ -589,18 +638,25 @@ def main():
     # create a txt file to also holds the counts
     if args.txt_counts is not None:
         if os.path.splitext(args.txt_counts)[1] == ".gz":
-            txt_counts = gzip.open(args.txt_counts, 'a+')
+            txt_counts = gzip.open(args.txt_counts, 'w+')
         else:
-            txt_counts = open(args.txt_counts, 'a+')
+            txt_counts = open(args.txt_counts, 'w+')
 
     for chrom in chrom_list:
         sys.stderr.write("%s\n" % chrom.name)
+
+        if args.test_chrom:
+            if chrom.name != args.test_chrom:
+                sys.stderr.write("skipping because not test chrom\n")
+                continue
 
         warned_pos = {}
 
         # fetch SNP info for this chromosome
         if chrom.name not in snp_tab_h5.root:
             # no SNPs for this chromosome
+            sys.stderr.write("skipping %s because chromosome with this name "
+                             "not found in SNP table\n" % chrom.name)
             continue
 
         sys.stderr.write("fetching SNPs\n")
@@ -609,12 +665,18 @@ def main():
         snp_index_array = snp_index_h5.get_node("/%s" % chrom.name)[:]
         if hap_h5:
             hap_tab = hap_h5.get_node("/%s" % chrom.name)
-            ind_idx = snptable.SNPTable().get_h5_sample_indices(
-                hap_h5, chrom, [args.individual]
-            )[1]
-            if len(ind_idx) != 0:
+            ind_dict, ind_idx = snptable.SNPTable().get_h5_sample_indices(
+                hap_h5, chrom, [args.individual])
+
+            if len(ind_idx) == 1:
                 ind_idx = ind_idx[0]
+                sys.stderr.write("index for individual %s is %d\n" %
+                                 (args.individual, ind_idx))
             else:
+                raise ValueError("got sample indices for %d individuals, "
+                                 "but expected to get index for one "
+                                 "individual (%s)" % (len(ind_idx),
+                                                      args.individual))
                 hap_tab = None
                 ind_idx = None
         else:
@@ -663,27 +725,8 @@ def main():
             # columns are:
             # chrom, pos, ref, alt, genotype, ref_count, alt_count, other_count
             if args.txt_counts is not None:
-                chrom = np.tile(chrom.name, len(snp_tab))
-                pos = np.array([snp['pos'] for snp in snp_tab])
-                ref = np.array([snp['allele1'] for snp in snp_tab])
-                alt = np.array([snp['allele2'] for snp in snp_tab])
-                if hap_tab is not None:
-                    genotype = np.array([str(hap[0])+"|"+str(hap[1])
-                                         for hap in hap_tab])
-                else:
-                    genotype = np.empty((len(snp_tab), 0))
-                # write an np array to a txt file
-                np.savetxt(
-                    txt_counts,
-                    np.column_stack((chrom, pos, ref, alt, genotype,
-                                    ref_array[pos-1],
-                                    alt_array[pos-1],
-                                    other_array[pos-1])),
-                    fmt="%1s",
-                    delimiter=" "
-                )
-
-
+                write_txt_file(txt_counts, chrom, snp_tab, hap_tab, ind_idx,
+                               ref_array, alt_array, other_array)
             samfile.close()
 
     if args.txt_counts:
@@ -691,7 +734,12 @@ def main():
         txt_counts.close()
 
     # check if any of the reads contained an unimplemented CIGAR
-    sys.stderr.write("WARNING: Encountered "+str(unimplemented_CIGAR[0])+" instances of any of the following CIGAR codes: "+str(unimplemented_CIGAR[1])+". The regions of reads with these CIGAR codes were skipped because these CIGAR codes are currently unimplemented.\n")
+    if unimplemented_CIGAR[0] > 0:
+        sys.stderr.write("WARNING: Encountered " + str(unimplemented_CIGAR[0])
+                         + " instances of CIGAR codes: "
+                         + str(unimplemented_CIGAR[1]) + ". Reads with these "
+                         "CIGAR codes were skipped because they "
+                         "are currently unimplemented.\n")
 
     # set track statistics and close HDF5 files
 

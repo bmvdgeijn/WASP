@@ -822,7 +822,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
       if(snp.pos > chrom->len || snp.pos < 1) {
 	my_err("%s:%d: SNP position (%ld) is outside of "
 	       "chromomosome %s range:1-%ld", __FILE__, __LINE__,
-	       snp.pos, chrom->len);
+	       snp.pos, chrom->name, chrom->len);
       }
 
       /* set value in snp_index array to point to current row */
@@ -908,7 +908,7 @@ void parse_impute(Arguments *args, Chromosome *all_chroms, int n_chrom,
 	  if(snp.pos > chrom->len || snp.pos < 1) {
 	    my_err("%s:%d: SNP position (%ld) is outside of "
 		   "chromomosome %s range:1-%ld", __FILE__, __LINE__,
-		   snp.pos, chrom->len);
+		   snp.pos, chrom->name, chrom->len);
 	  }
 	    
 	  row = snp_index[snp.pos-1];
@@ -1169,14 +1169,16 @@ void parse_vcf(Arguments *args, Chromosome *all_chroms, int n_chrom,
 					 vcf->sample_names, vcf->n_sample);
 	sample_tab_free(samp_tab);
 
-  /* initialize the phase matrix */
-  haplotypes_phase = my_malloc(vcf->n_sample * sizeof(char));
-  init_h5matrix(&haplotype_phase_info, haplotype_info->n_row,
-          vcf->n_sample,
-          HAPLOTYPE_DATATYPE, util_str_concat("phase_", chrom->name, NULL));
+	/* initialize the phase matrix */
+	haplotypes_phase = my_malloc(vcf->n_sample * sizeof(char));
+	init_h5matrix(&haplotype_phase_info, haplotype_info->n_row,
+		      vcf->n_sample,
+		      HAPLOTYPE_DATATYPE,
+		      util_str_concat("phase_", chrom->name, NULL));
       }
     } else {
       haplotypes = NULL;
+      haplotypes_phase = NULL;
     }
     if(args->snp_index_file) {
       /* SNP index vector is same length as chromosome,

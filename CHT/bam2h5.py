@@ -638,7 +638,7 @@ def main():
     # create a txt file to also holds the counts
     if args.txt_counts is not None:
         if os.path.splitext(args.txt_counts)[1] == ".gz":
-            txt_counts = gzip.open(args.txt_counts, 'w+')
+            txt_counts = gzip.open(args.txt_counts, 'wt+')
         else:
             txt_counts = open(args.txt_counts, 'w+')
 

@@ -58,8 +58,11 @@ Chromosome *chrom_guess_from_file(char *path,
     }
   }
 
-  fprintf(stderr, "best matching chromosome: %s\n", match_chrom->name);
-
+  if(match_chrom) {
+    fprintf(stderr, "best matching chromosome: %s\n", match_chrom->name);
+  } else {
+    fprintf(stderr, "could not find matching chromosome\n");
+  }
   
   return match_chrom;
 }

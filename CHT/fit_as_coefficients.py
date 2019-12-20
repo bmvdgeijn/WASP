@@ -93,7 +93,7 @@ def open_input_files(in_filename):
 def main():
     options = parse_options()
 
-    sys.stderr.write("reading input filenames from %s\n")
+    sys.stderr.write("reading input filenames from %s\n" % options.infile_list)
     infiles = open_input_files(options.infile_list)
     outfile = open(options.out_file, "wt")
     dup_snp_warn = True

@@ -162,7 +162,8 @@ class SNPTable(object):
                                  "specified samples, because haplotype "
                                  "file %s does not contain '%s' table. "
                                  "May need to regenerate haplotype HDF5 file "
-                                 "using snp2h5" % (h5f.filename, node_name))
+                                 "using snp2h5 with --samples option" %
+                                 (h5f.filename, node_name))
                 return samples
 
         node = h5f.get_node(node_name)

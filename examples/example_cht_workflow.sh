@@ -16,6 +16,7 @@ $WASP/snp2h5/snp2h5 --chrom $DATA_DIR/chromInfo.hg19.txt \
 	      --snp_index $DATA_DIR/snp_index.h5 \
 	      --snp_tab $DATA_DIR/snp_tab.h5 \
 	      --haplotype $DATA_DIR/haps.h5 \
+	      --samples $DATA_DIR/genotypes/YRI_samples.txt \
 	      $DATA_DIR/genotypes/chr*.hg19.impute2.gz \
 	      $DATA_DIR/genotypes/chr*.hg19.impute2_haps.gz
 
@@ -103,7 +104,7 @@ for INDIVIDUAL in $(cat $H3K27AC_SAMPLES_FILE)
        --ref_as_counts $DATA_DIR/H3K27ac/ref_as_counts.$INDIVIDUAL.h5 \
        --alt_as_counts $DATA_DIR/H3K27ac/alt_as_counts.$INDIVIDUAL.h5 \
        --other_as_counts $DATA_DIR/H3K27ac/other_as_counts.$INDIVIDUAL.h5 \
-       --read_counts $DATA_DIT/H3K27ac/read_counts.$INDIVIDUAL.h5 \
+       --read_counts $DATA_DIR/H3K27ac/read_counts.$INDIVIDUAL.h5 \
        $DATA_DIR/H3K27ac/chr22.peaks.txt.gz \
        | gzip > $DATA_DIR/H3K27ac/haplotype_read_counts.$INDIVIDUAL.txt.gz
 

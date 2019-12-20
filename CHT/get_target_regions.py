@@ -465,8 +465,8 @@ def write_target_regions(out_f, args, chrom_list, combined_files, snp_files):
         n_region = 0
                             
         for i in idx:
-            start = max(1, i+1 - args.target_region_size/2)
-            end = min(chrom.length, i+1 + args.target_region_size/2)
+            start = int(max(1, i+1 - args.target_region_size/2))
+            end = int(min(chrom.length, i+1 + args.target_region_size/2))
 
             n_reads = np.sum(read_counts[start-1:end])
             n_as_reads = np.sum(as_read_counts[start-1:end])

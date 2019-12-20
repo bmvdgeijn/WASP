@@ -21,7 +21,7 @@ import argparse
 import numpy as np
 import sys
 import gzip
-
+import re
 import tables
 
 
@@ -481,8 +481,8 @@ def get_target_regions(args, chrom, words):
     """Parse start and end positions and return list of Coord "
     objects representing arget region(s)."""
 
-    start_words = words[7].split(";")
-    end_words = words[8].split(";")
+    start_words = re.split(";|,", words[7])
+    end_words = re.split(";|,", words[8])
     
     if len(start_words) != len(end_words):
         raise coord.CoordError("number of start (%d) and end (%d) positions "

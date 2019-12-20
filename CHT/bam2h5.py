@@ -666,7 +666,7 @@ def main():
         if hap_h5:
             hap_tab = hap_h5.get_node("/%s" % chrom.name)
             ind_dict, ind_idx = snptable.SNPTable().get_h5_sample_indices(
-                hap_h5, chrom, [args.individual])
+                hap_h5, chrom.name, [args.individual])
 
             if len(ind_idx) == 1:
                 ind_idx = ind_idx[0]

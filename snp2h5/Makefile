@@ -1,6 +1,6 @@
 # Edit the following variables as needed
-HDF_INSTALL=$(HOME)/anaconda3
-EXTLIB=-L$(HDF_INSTALL)/lib
+HDF_INSTALL=$(CONDA_PREFIX)
+EXTLIB=-L$(HDF_INSTALL)/lib -Wl,-rpath,$(HDF_INSTALL)/lib
 CC=gcc
 LIB=-lz -lm -lhdf5 -lhdf5_hl
 

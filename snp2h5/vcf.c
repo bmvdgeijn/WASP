@@ -50,7 +50,9 @@ void vcf_info_free(VCFInfo *vcf_info) {
     for(i = 0; i < vcf_info->n_sample; i++) {
       my_free(vcf_info->sample_names[i]);
     }
-    my_free(vcf_info->sample_names);
+    if(vcf_info->sample_names) {
+      my_free(vcf_info->sample_names);
+    }
   }
 
   
@@ -80,7 +82,11 @@ char *vcf_get_chrom_name(const char *filename) {
 
   /* read header */
   vcf_read_header(gzf, vcf_info);
-
+  
+  if(vcf_info->n_sample == 0) {
+    return NULL;
+  }
+  
   /* read first line */
   ret = vcf_read_line(gzf, vcf_info, &snp, NULL, NULL, NULL);
 
@@ -175,7 +181,15 @@ void vcf_read_header(gzFile vcf_fh, VCFInfo *vcf_info) {
       }
       my_free(line);
       break;
-    } 
+    } else {
+      /* VCF did not appear to contain any header lines starting with '#' */
+      my_warn("VCF file did not contain any header lines. "
+	      "Expected final header line to start with '#CHROM' "
+	      "and to contain sample names.\n");
+      vcf_info->n_sample = 0;
+      vcf_info->has_format = FALSE;
+      break;
+    }
   }
 }
 

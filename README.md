@@ -86,9 +86,9 @@ and do `conda install pysam`, or download and install
 
 3. Make sure that the HDF5 library is in your library path. For example 
 on Linux or OSX you can add the following to your .bashrc or .profile (replace
-$HOME/anaconda with your Anaconda installation directory):
+$CONDA_PREFIX with your Anaconda installation directory if CONDA_PREFIX is not defined):
 
-		export LD_LIBRARY_PATH=$HOME/anaconda/lib:$LD_LIBRARY_PATH
+		export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
 4. Clone or download the WASP repository from github:
 
@@ -104,7 +104,7 @@ Anaconda (or HDF5) installation directory. For example open
 [snp2h5/Makefile](snp2h5/Makefile) with a text editor and modify the
 HDF_INSTALL variable to point to your Anaconda installation directory:
 
-		HDF_INSTALL = $(HOME)/anaconda
+		HDF_INSTALL = $(CONDA_PREFIX)
 
 	Now compile snp2h5 using make:
 

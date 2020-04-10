@@ -1054,12 +1054,17 @@ FILE *util_must_fopen(const char *path, const char *mode) {
 gzFile util_must_gzopen(const char *path, const char *mode) {
   gzFile f;
 
+  if(strcmp(ZLIB_VERSION, zlibVersion()) != 0) {
+    my_warn("zlib compilation (%s) and runtime (%s) versions do not match.\n",
+	    ZLIB_VERSION, zlibVersion());
+  }
+  
   if((strcmp(mode, "wb") == 0) && !util_str_ends_with(path, ".gz")) {
     my_warn("%s:%d: file '%s' does not end with '.gz' but "
 	    "opening with gzopen anyway\n", __FILE__, __LINE__,
 	    path);
   }
-
+  
   errno = 0;
   
   f = gzopen(path, mode);

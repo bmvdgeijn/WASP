@@ -491,9 +491,14 @@ void vcf_parse_geno_probs(VCFInfo *vcf_info, float *geno_probs, char *cur) {
   /* get index of GP and GL tokens in format string */
   gp_idx = get_format_index(vcf_info->format, "GP");
   gl_idx = get_format_index(vcf_info->format, "GL");
-  
+
+  if(gl_idx == -1) {
+    /* PL is same as GL, but rounded to nearest integer */
+    gl_idx = get_format_index(vcf_info->format, "PL");
+  }
+
   if((gl_idx == -1) && (gp_idx == -1)) {
-    my_err("%s:%d: VCF format string does not specify GL or GP token "
+    my_err("%s:%d: VCF format string does not specify GL, GP, or PL token "
 	   "so cannot obtain genotype probabilities. Format string: '%s'.\n"
 	   "To use this file, you must run snp2h5 without "
 	   "the --geno_prob option.", __FILE__, __LINE__,

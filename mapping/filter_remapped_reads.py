@@ -47,18 +47,36 @@ def parse_options():
 class ReadStats:
     """Track information about what the program is doing with reads"""
     def __init__(self):
+        # reads from original file that were kept:
         self.keep = 0
+
+        # reads from original file that were labeled as 'bad' e.g.
+        # due to remapping issues
         self.bad = 0
+
+        # reads from original file that were discarded
         self.discard = 0
 
+        # reads that were not present in original file
+        self.not_present = 0
+        
+        # paired read where only one read was observed
+        self.pair_missing = 0
+        
         # reads that were discarded because they (or their pair) remapped with
         # a different cigar string
-        self.cigar_discard = 0
+        self.cigar_mismatch = 0
+        self.cigar_missing = 0
+        
 
     def write(self):
-        sys.stderr.write("keep_reads: %d\n" % self.keep)
-        sys.stderr.write("bad_reads: %d\n" % self.bad)
-        sys.stderr.write("discard_reads: {} (of which {} remapped with a different cigar)\n".format(self.discard, self.cigar_discard))
+        sys.stderr.write("keep reads: %d\n" % self.keep)
+        sys.stderr.write("bad reads: %d\n" % self.bad)
+        sys.stderr.write("not present reads: %d\n" % self.not_present)
+        sys.stderr.write("discard reads: {}\n".format(self.discard))
+        sys.stderr.write("  CIGAR mismatch {}\n".format(self.cigar_mismatch))
+        sys.stderr.write("  CIGAR missing or multiple: {}\n".format(self.cigar_missing))
+        sys.stderr.write("  mate pair missing: {}\n".format(self.pair_missing))
 
 
 def filter_reads(remap_bam):
@@ -73,12 +91,7 @@ def filter_reads(remap_bam):
     # each list contains two sets of CIGAR strings, one for each pair
     cigar_strings = {}
     
-    for read in remap_bam:
-        # only keep primary alignments and discard 'secondary'
-        # and 'supplementary' alignments
-        if read.is_secondary or read.is_supplementary:
-            continue
-        
+    for read in remap_bam:        
         # parse name of read, which should contain:
         # 1 - the original name of the read
         # 2 - the coordinate that it should map to
@@ -99,11 +112,29 @@ def filter_reads(remap_bam):
         num = int(num_str)
         total = int(total_str)
 
+
+        # only keep primary alignments and discard 'secondary'
+        # and 'supplementary' alignments
+        if read.is_secondary or read.is_supplementary:
+            bad_reads.add(orig_name)
+            continue
+        
         # add the cigars for this read
-        # use setdefault to initialize the list of sets if it doesn't exist yet
-        cigar_strings \
-            .setdefault(orig_name, [set(), set()])[read.is_read2] \
-            .add(read.cigarstring)
+
+        # pysam used to give back read1 and read2 flagged consistently,
+        # however something now seems broken with the flags. Not sure if
+        # this reflects a change in pysam HTSeqLib or elsewhere. Regardless
+        # to make WASP robust to this issue, no longer tracking whether a
+        # CIGAR corresponds to read1 or read2. This could
+        # potentially result in a mapping bias for a very small number of reads
+        # (i.e. if read1 and read2 remap to same location with new CIGARs,
+        # but the new read1 CIGAR happens to match the old read2 CIGAR and
+        # vice-versa, but number is likely to be miniscule.
+
+        if(orig_name in cigar_strings):
+            cigar_strings[orig_name].add(read.cigarstring)
+        else:
+            cigar_strings[orig_name] = set([read.cigarstring])
 
         correct_map = False
         
@@ -164,6 +195,9 @@ def filter_reads(remap_bam):
             # read maps to different location
             bad_reads.add(orig_name)
 
+    #sys.stderr.write("keep_reads: %d, bad_reads: %d\n" % (len(keep_reads), len(bad_reads)))
+    #sys.stderr.write("%d reads did not have all versions map\n" % (len(read_counts)))
+            
     return keep_reads, bad_reads, cigar_strings
 
 
@@ -178,33 +212,80 @@ def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
         if read.qname in bad_reads:
             stats.bad += 1
         elif read.qname in keep_reads:
-            # check that the cigar strings match up
-            # and that all alternative versions of this read had the same CIGAR
-            if (
-                read.cigarstring in cigar_strings[read.qname][read.is_read2]
-                and len(cigar_strings[read.qname][read.is_read2]) == 1
-            ):
-                if read.is_paired:
-                    # cache reads until you see their pair
-                    # then, write both of them to file together
-                    if read.qname in read_pair_cache:
-                        keep_bam.write(read_pair_cache[read.qname])
-                        del read_pair_cache[read.qname]
-                        keep_bam.write(read)
-                        stats.keep += 2
+            if read.is_paired:
+                # cache reads until you see their pair
+                # then, write both of them to file together
+                if read.qname in read_pair_cache:
+                    #
+                    # check that the CIGAR strings match up
+                    # for both reads.
+                    # NOTE: 2/8/2021 Code used to assume that read1 and read2 stayed defined as
+                    # read1 and read2 following re-alignment. Observed that read1 and read2 sometimes
+                    # switch. Changed code to allow for this possibility.
+                    r1 = read_pair_cache[read.qname]
+                    r2 = read
+
+                    # remove read from cache
+                    del read_pair_cache[read.qname]
+
+                    cigs = cigar_strings[read.qname]
+
+
+                    if len(cigs) == 1:
+                        # both reads had same CIGAR in original mapping
+                        if (r1.cigarstring == r2.cigarstring) and \
+                           (r1.cigarstring in cigs):
+                            # Both R1 and R2 cigar strings are the same
+                            # and match CIGAR from original mapping
+                            stats.keep += 2
+                            keep_bam.write(r1)
+                            keep_bam.write(r2)
+                        else:
+                            stats.cigar_mismatch += 1
+                            stats.discard += 1
+                    elif len(cigs) == 2:
+                        # both reads had different CIGAR in original mapping
+                        if (r1.cigarstring != r2.cigarstring) and \
+                           (r1.cigarstring in cigs) and \
+                           (r2.cigarstring in cigs):
+                            # verified CIGARs are different and 
+                            # were both present in original mapping
+                            stats.keep += 2
+                            keep_bam.write(r1)
+                            keep_bam.write(r2)
+                        else:
+                            stats.cigar_mismatch += 1
+                            stats.discard += 1
                     else:
-                        read_pair_cache[read.qname] = read
+                        # There were no CIGARs or >2 CIGARs in original mapping
+                        # This is unexpected and we don't handle this case.
+                        stats.cigar_missing += 1
+                        stats.discard += 1
+                        
                 else:
-                    keep_bam.write(read)
-                    stats.keep += 1
+                    # cache this read
+                    read_pair_cache[read.qname] = read
             else:
-                stats.discard += 1
-                stats.cigar_discard += 1
+                # single-end read
+                if (len(cigar_strings[read.qname]) != 1):
+                    # currently don't handle missing/multiple CIGARs
+                    stats.cigar_missing += 1
+                    stats.discard += 1
+                else:
+                    if (read.cigarstring in cigar_strings[read.qname][0]):
+                        keep_bam.write(read)
+                        stats.keep += 1
+                    else:
+                        stats.cigar_mismatch += 1
+                        stats.discard += 1
         else:
-            stats.discard += 1
+            # read was not labeled as 'keep' or 'bad' in original file
+            stats.not_present += 1
+
     # any reads remaining in the cache have been discarded
+    stats.pair_missing += len(read_pair_cache)
     stats.discard += len(read_pair_cache)
-    stats.cigar_discard += len(read_pair_cache)
+    
 
     stats.write()
     

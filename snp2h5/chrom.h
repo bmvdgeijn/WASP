@@ -9,6 +9,11 @@ typedef struct {
 } Chromosome;
 
 
+
+Chromosome *chrom_guess_from_string(char *str,
+				  Chromosome *chroms,
+				  int n_chrom);
+
 Chromosome *chrom_guess_from_file(char *filename,
 				  Chromosome *chroms,
 				  int n_chrom);

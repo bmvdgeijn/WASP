@@ -58,15 +58,15 @@ void usage(char **argv) {
 	  "  genome sequence\n"
 	  "\n"
 	  "Input Files:\n"
-	  "     A separate FASTA file must be provided\n"
-	  "     for each chromosome. The filename must contain the\n"
-	  "     name of the chromosome. Chromosome names should\n"
+	  "     One or more FASTA files must be provided that contain\n"
+	  "     the sequences for each chromosome. The header line for each sequence\n"
+	  "     must contain the name of the chromosome. Chromosome names should\n"
 	  "     match those in the CHROM_FILE, which is provided by\n"
 	  "     the --chrom option.\n"
 	  "\n"
 	  "Input Options:\n"
 	  "  --chrom CHROM_FILE [required]\n"
-	  "     Path to chromInfo.txt file (may be gzipped) with\n"
+	  "     Path to chromInfo.txt or chrom.sizes file (may be gzipped) with\n"
 	  "     list of chromosomes for the relevant genome\n"
 	  "     assembly. Each line in file should contain\n"
 	  "     tab-separated chromosome name and chromosome length\n"
@@ -233,6 +233,8 @@ void parse_fasta(Arguments *args, H5VectorInfo *seq_vec_info) {
   Chromosome *chrom, *all_chroms;
   char *seq_str;
   int i, n_chrom;
+  long seq_len;
+  gzFile gzf;
 
   seq = seq_new();
   
@@ -240,37 +242,47 @@ void parse_fasta(Arguments *args, H5VectorInfo *seq_vec_info) {
   all_chroms = chrom_read_file(args->chrom_file, &n_chrom);
 
   for(i = 0; i < args->n_input_files; i++) {
-    chrom = chrom_guess_from_file(args->input_files[i],
-				  all_chroms, n_chrom);
-        
-    if(chrom == NULL) {
-      my_err("%s:%d: could not guess chromosome from filename "
-	     "%s\n", __FILE__, __LINE__, args->input_files[i]);
+
+    /* read all sequences present in each file */
+    gzf = util_must_gzopen(args->input_files[i], "rb");
+
+    seq_len = seq_read_fasta_record(seq, gzf);
+    
+    while(seq_len > 0) {
+      fprintf(stderr, "read sequence for %s from file\n", seq->name);
+      
+      /* TODO: still using the 'guess from filename' as kind of a hack
+       * might be better to write dedicated function
+       */
+      chrom = chrom_guess_from_string(seq->name, all_chroms, n_chrom);
+      
+      if(chrom == NULL) {
+	my_err("%s:%d: could not guess chromosome from seqname "
+	       "%s\n", __FILE__, __LINE__, seq->name);
+      }
+      
+      if(chrom->len != seq->len) {
+	my_err("%s:%d: chromosome length %ld does not match sequence "
+	       "length %ld", __FILE__, __LINE__, chrom->len, seq->len);
+      }
+
+      init_h5vector(seq_vec_info, chrom->len, SEQ_DATATYPE,
+		    chrom->name);
+
+      seq_str = seq_get_seqstr(seq);
+    
+      /* write sequence to HDF5 */
+      fprintf(stderr, "writing to HDF5 file\n");
+      write_seq(seq_vec_info, seq_str);
+
+      my_free(seq_str);
+
+      close_h5vector(seq_vec_info);
+
+      seq_len = seq_read_fasta_record(seq, gzf);
     }
 
-    fprintf(stderr, "chromosome: %s, length: %ldbp\n",
-	    chrom->name, chrom->len);
-
-    /* seq sequence from fasta file */
-    seq_read_fasta_from_file(seq, args->input_files[i]);
-    
-    if(chrom->len != seq->len) {
-      my_err("%s:%d: chromosome length %ld does not match sequence "
-	     "length %ld", __FILE__, __LINE__, chrom->len, seq->len);
-    }
-
-    init_h5vector(seq_vec_info, chrom->len, SEQ_DATATYPE,
-		  chrom->name);
-
-    seq_str = seq_get_seqstr(seq);
-    
-    /* write sequence to HDF5 */
-    fprintf(stderr, "writing to HDF5 file\n");
-    write_seq(seq_vec_info, seq_str);
-
-    my_free(seq_str);
-
-    close_h5vector(seq_vec_info);
+    gzclose(gzf);
   }
 
   seq_free(seq);

@@ -272,7 +272,7 @@ def write_reads(to_remap_bam, keep_bam, keep_reads, bad_reads, cigar_strings):
                     stats.cigar_missing += 1
                     stats.discard += 1
                 else:
-                    if (read.cigarstring in cigar_strings[read.qname][0]):
+                    if (read.cigarstring in cigar_strings[read.qname]):
                         keep_bam.write(read)
                         stats.keep += 1
                     else:
